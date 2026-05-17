@@ -36,6 +36,8 @@ MODULE_MAP: dict[str, str] = {
     "tech_cve": "cyberloka.passive.tech_cve",
     "error_disclosure": "cyberloka.passive.error_disclosure",
     "csp_audit": "cyberloka.passive.csp_audit",
+    "debug_endpoint": "cyberloka.passive.debug_endpoint",
+    "outdated_js": "cyberloka.passive.outdated_js",
     # active
     "sqli": "cyberloka.active.sqli",
     "xss": "cyberloka.active.xss",
@@ -58,6 +60,13 @@ MODULE_MAP: dict[str, str] = {
     "crlf": "cyberloka.active.crlf",
     "voucher": "cyberloka.active.voucher",
     "auth_bypass": "cyberloka.active.auth_bypass",
+    "session_audit": "cyberloka.active.session_audit",
+    "password_policy": "cyberloka.active.password_policy",
+    "account_enum": "cyberloka.active.account_enum",
+    "otp_audit": "cyberloka.active.otp_audit",
+    "api_pagination": "cyberloka.active.api_pagination",
+    "excessive_data": "cyberloka.active.excessive_data",
+    "business_logic": "cyberloka.active.business_logic",
     # simulate
     "rate_limit": "cyberloka.simulate.rate_limit",
     "burst": "cyberloka.simulate.burst",

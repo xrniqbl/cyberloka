@@ -71,6 +71,15 @@ MODULE_HUMAN: dict[str, str] = {
     "crlf": "CRLF / HTTP header injection (Set-Cookie palsu, response splitting)",
     "voucher": "Alur voucher/promo bermasalah (CSRF, discount client-controlled, code bocor)",
     "auth_bypass": "Halaman/endpoint dapat diakses tanpa login (broken access control)",
+    "session_audit": "Session ID tidak aman (predictable / di URL / static)",
+    "password_policy": "Password policy lemah (minlength rendah / tidak ada validasi)",
+    "account_enum": "Account enumeration (login membocorkan user valid)",
+    "otp_audit": "OTP/2FA bermasalah (tidak rate-limit / tidak state-bound)",
+    "debug_endpoint": "Debug/dev endpoint ter-ekspos di production",
+    "outdated_js": "Library frontend versi usang (jQuery/lodash/dll. dengan CVE)",
+    "api_pagination": "API pagination tanpa cap → data dump abuse",
+    "excessive_data": "API mengembalikan field sensitif (password/cvv/internal note)",
+    "business_logic": "Alur bisnis (cart/order/referral/upload) perlu test manual",
 }
 
 

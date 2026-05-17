@@ -64,6 +64,8 @@ class ScanConfig:
         "tech_cve",
         "error_disclosure",
         "csp_audit",
+        "debug_endpoint",
+        "outdated_js",
     )
     ACTIVE_MODULES = (
         "sqli",
@@ -87,6 +89,13 @@ class ScanConfig:
         "crlf",
         "voucher",
         "auth_bypass",
+        "session_audit",
+        "password_policy",
+        "account_enum",
+        "otp_audit",
+        "api_pagination",
+        "excessive_data",
+        "business_logic",
     )
     # Backward-compat: union semua modul recon
     RECON_MODULES = PASSIVE_RECON + ACTIVE_RECON + ("crawler",)

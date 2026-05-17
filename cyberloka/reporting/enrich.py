@@ -1117,6 +1117,400 @@ _BASE: dict[str, dict] = {
             "Cek ?debug=1 / ?admin=true / ?bypass=1 di URL.",
         ],
     },
+    "session_audit": {
+        "impact": (
+            "Session ID yang predictable atau di-passing di URL → session hijacking "
+            "(attacker pakai session korban). Static session → session fixation "
+            "(attacker set session sebelum korban login, lalu pakai session yang sama)."
+        ),
+        "attack_scenario": (
+            "1. Attacker observe pattern session ID di akun sendiri.\n"
+            "2. Pattern terlihat sequential / pendek → coba ID di sekitar untuk session aktif.\n"
+            "3. Bila session ID di URL: monitoring referrer ke domain pihak ketiga "
+            "atau curi dari log proxy → langsung session takeover.\n"
+            "4. Session fixation: kirim link login dengan ?sid=XXX ke korban → "
+            "korban login → session XXX sekarang otentikasi → attacker pakai XXX."
+        ),
+        "fix_examples": {
+            "Python (Flask)":
+                "import secrets\n\n"
+                "session_id = secrets.token_urlsafe(32)  # 256-bit random\n\n"
+                "# Flask: pakai itsdangerous-signed session by default\n"
+                "app.config['SESSION_COOKIE_HTTPONLY'] = True\n"
+                "app.config['SESSION_COOKIE_SECURE'] = True\n"
+                "app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'\n\n"
+                "# Rotate session ID setelah login:\n"
+                "from flask import session\n"
+                "session.clear()           # invalidate old session\n"
+                "session['user_id'] = ...  # new session",
+            "Node (Express)":
+                "const session = require('express-session');\n"
+                "const crypto = require('crypto');\n\n"
+                "app.use(session({\n"
+                "  genid: () => crypto.randomBytes(32).toString('hex'),  // 256-bit\n"
+                "  secret: process.env.SESSION_SECRET,\n"
+                "  cookie: { secure: true, httpOnly: true, sameSite: 'lax', maxAge: 15*60*1000 },\n"
+                "  resave: false,\n"
+                "  saveUninitialized: false,\n"
+                "}));\n\n"
+                "// rotate setelah login:\n"
+                "req.session.regenerate(() => { req.session.userId = user.id; });",
+            "PHP":
+                "ini_set('session.use_only_cookies', '1');  // tidak passing di URL\n"
+                "ini_set('session.cookie_httponly', '1');\n"
+                "ini_set('session.cookie_secure', '1');\n"
+                "ini_set('session.cookie_samesite', 'Lax');\n\n"
+                "// regenerate setelah login:\n"
+                "session_regenerate_id(true);  // delete old\n"
+                "$_SESSION['user_id'] = $user->id;",
+        },
+        "manual_steps": [
+            "Login, copy session cookie. Logout. Pakai cookie yang dikopi - server harus reject.",
+            "Login, ganti password. Cek apakah session lain (di device lain) di-invalidate.",
+            "Idle timeout: tinggalkan tab login >2 jam tanpa aktivitas - cek session expire.",
+            "Test session fixation: set cookie sembarang sebelum login, login, "
+            "cek apakah cookie berubah jadi nilai baru.",
+        ],
+    },
+    "password_policy": {
+        "impact": (
+            "Password lemah → brute-force / credential stuffing mudah. Statistik: "
+            "60% breach 2024 melibatkan password yang sudah ada di leak publik. "
+            "Akun admin dengan password default = full takeover."
+        ),
+        "attack_scenario": (
+            "1. Attacker dapat daftar email user dari leak / scraping.\n"
+            "2. Coba login dengan password yang ada di top-1000 password list.\n"
+            "3. Tanpa lockout/rate-limit + tanpa policy yang baik → 0.5-2% akun "
+            "kena (credential stuffing rate average industri).\n"
+            "4. Akun yang berhasil masuk = identity takeover."
+        ),
+        "fix_examples": {
+            "Have-I-Been-Pwned check (Python)":
+                "import hashlib, requests\n\n"
+                "def is_pwned(password):\n"
+                "    h = hashlib.sha1(password.encode()).hexdigest().upper()\n"
+                "    prefix, suffix = h[:5], h[5:]\n"
+                "    r = requests.get(f'https://api.pwnedpasswords.com/range/{prefix}', timeout=5)\n"
+                "    return any(line.split(':')[0] == suffix for line in r.text.splitlines())\n\n"
+                "# Pakai k-anonymity API → password TIDAK dikirim ke HIBP, hanya prefix hash.",
+            "zxcvbn (estimasi kekuatan)":
+                "// Node:\n"
+                "const zxcvbn = require('zxcvbn');\n"
+                "const r = zxcvbn(password);\n"
+                "if (r.score < 3) reject('password terlalu lemah');\n"
+                "// score 0-4: 4 = sangat kuat, 3 = aman untuk online attack",
+            "Server-side validation (Django)":
+                "# settings.py:\n"
+                "AUTH_PASSWORD_VALIDATORS = [\n"
+                "    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',\n"
+                "     'OPTIONS': {'min_length': 12}},\n"
+                "    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},\n"
+                "    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},\n"
+                "]",
+        },
+        "manual_steps": [
+            "Coba register dengan password '12345678' — server harus reject.",
+            "Coba register dengan password yang sama dengan email/username — reject.",
+            "Test rate-limit login: 100 attempt dengan password salah — server harus 429.",
+            "Cek apakah pakai HIBP/leaked password check — kalau tidak, tambahkan.",
+        ],
+    },
+    "account_enum": {
+        "impact": (
+            "Attacker dapat membangun daftar user/email yang valid untuk dipakai "
+            "credential stuffing, phishing yang sangat tertarget, atau social "
+            "engineering."
+        ),
+        "attack_scenario": (
+            "1. Attacker punya 10 juta email dari leak publik.\n"
+            "2. Pakai script: kirim ke /forgot-password, /login. Cek pesan: "
+            "'email tidak terdaftar' = bukan user, 'email terdaftar' = user valid.\n"
+            "3. Filter jadi 100 ribu user yang valid di target.com.\n"
+            "4. Lanjut credential stuffing dengan password leaked → 1-2% kena = 1000 akun."
+        ),
+        "fix_examples": {
+            "Generic response (Express)":
+                "// SALAH:\n"
+                "if (!user) return res.status(404).json({error: 'user not found'});\n"
+                "if (!verifyPassword(...)) return res.status(401).json({error: 'wrong password'});\n\n"
+                "// BENAR:\n"
+                "if (!user || !verifyPassword(...)) {\n"
+                "  return res.status(401).json({error: 'invalid credentials'});\n"
+                "}",
+            "Forgot password (selalu success-look)":
+                "@app.route('/forgot', methods=['POST'])\n"
+                "def forgot():\n"
+                "    user = User.query.filter_by(email=request.form['email']).first()\n"
+                "    if user:\n"
+                "        send_reset_email(user)\n"
+                "    # SELALU return pesan sama:\n"
+                "    return 'Bila email terdaftar, instruksi akan dikirim'",
+            "Constant-time response":
+                "import time\n"
+                "def login(email, password):\n"
+                "    start = time.monotonic()\n"
+                "    user = User.find(email)\n"
+                "    valid = user and verify_hash(user.password_hash, password)\n"
+                "    # paksa minimum 200ms supaya timing tidak membedakan user-ada vs tidak\n"
+                "    elapsed = time.monotonic() - start\n"
+                "    if elapsed < 0.2:\n"
+                "        time.sleep(0.2 - elapsed)\n"
+                "    if not valid: return 401",
+        },
+        "manual_steps": [
+            "Test pesan: 'user tidak ada' vs 'password salah' — harus seragam.",
+            "Cek timing attack: ukur waktu response untuk user valid vs tidak — beda < 50ms.",
+            "Test endpoint register: 'email sudah terdaftar' juga membocorkan info.",
+            "Test endpoint API enumerate: /api/users?email=test → harus 403 untuk anonim.",
+        ],
+    },
+    "otp_audit": {
+        "impact": (
+            "OTP yang tidak rate-limit → SMS bombing (biaya & spam) atau brute-force "
+            "untuk dapat OTP yang valid. OTP verify yang tidak state-bound → bypass "
+            "2FA. Total dampak: takeover akun lewat 2FA bypass."
+        ),
+        "attack_scenario": (
+            "Skenario brute-force OTP 6 digit (1 juta kemungkinan):\n"
+            "1. Tanpa rate-limit, attacker kirim 1 juta tebakan dalam 1 jam.\n"
+            "2. Server menerima OTP yang benar di percobaan ke-N. Login sukses.\n"
+            "3. Skenario tanpa state-bind: attacker langsung POST /verify-otp tanpa "
+            "session — tebak 6 digit untuk akun korban target."
+        ),
+        "fix_examples": {
+            "Rate-limit OTP send (Redis)":
+                "# Python (redis):\n"
+                "def send_otp(phone):\n"
+                "    key_hour = f'otp:hour:{phone}'\n"
+                "    if redis.incr(key_hour) > 5:\n"
+                "        raise RateLimit('Maks 5 OTP per jam')\n"
+                "    redis.expire(key_hour, 3600)\n"
+                "    \n"
+                "    key_min = f'otp:min:{phone}'\n"
+                "    if redis.incr(key_min) > 1:\n"
+                "        raise RateLimit('Tunggu 60 detik')\n"
+                "    redis.expire(key_min, 60)",
+            "OTP verify state-bound":
+                "# Saat send OTP:\n"
+                "session_token = secrets.token_urlsafe(32)\n"
+                "redis.setex(f'otp_session:{session_token}', 300, json.dumps({\n"
+                "    'phone': phone, 'otp': otp_code, 'attempts': 0\n"
+                "}))\n"
+                "return {'session_token': session_token}\n\n"
+                "# Saat verify:\n"
+                "data = redis.get(f'otp_session:{token}')\n"
+                "if not data: return 'session expired or invalid'\n"
+                "if data['attempts'] >= 3: return 'too many attempts'\n"
+                "redis.hincrby(f'otp_session:{token}', 'attempts', 1)\n"
+                "if not constant_time_compare(otp_input, data['otp']):\n"
+                "    return 'wrong otp'\n"
+                "redis.delete(f'otp_session:{token}')  # one-time use",
+        },
+        "manual_steps": [
+            "OTP brute-force: kirim 100 OTP dalam 1 menit — server harus lockout setelah 5.",
+            "OTP reuse: pakai OTP yang sudah berhasil — harus reject (one-time).",
+            "OTP timing: ukur response time untuk OTP benar vs salah — beda < 10ms.",
+            "OTP cross-account: dapat OTP akun A, pakai di session login akun B.",
+        ],
+    },
+    "debug_endpoint": {
+        "impact": (
+            "Debug endpoint sering memuat: env variables (DB password, API key, "
+            "JWT secret), heap dump (in-memory tokens & data), thread dump (kode "
+            "internal & stack trace), atau memberi akses langsung ke admin DB / "
+            "queue browser."
+        ),
+        "attack_scenario": (
+            "1. Attacker akses /actuator/env (Spring Boot) → JSON dengan semua env "
+            "variable termasuk DATABASE_PASSWORD, AWS_SECRET_KEY.\n"
+            "2. Pakai DATABASE_PASSWORD untuk koneksi DB direct (kalau port DB juga "
+            "terbuka) atau dump via /actuator/heapdump.\n"
+            "3. /phpmyadmin/ → web UI ke database — login dengan creds yang dapat "
+            "dari env atau brute-force."
+        ),
+        "fix_examples": {
+            "Spring Boot":
+                "# application.yml (production):\n"
+                "management:\n"
+                "  endpoints:\n"
+                "    web:\n"
+                "      exposure:\n"
+                "        include: health  # hanya health, sisanya di-disable\n"
+                "  endpoint:\n"
+                "    env:\n"
+                "      enabled: false\n"
+                "    heapdump:\n"
+                "      enabled: false",
+            "Symfony":
+                "# .env.local.php (production):\n"
+                "APP_ENV=prod\n"
+                "APP_DEBUG=0\n"
+                "# Hapus symfony/debug-bundle dari composer.json prod-deps",
+            "Django":
+                "# settings.py production:\n"
+                "DEBUG = False\n"
+                "ALLOWED_HOSTS = ['target.com', 'www.target.com']\n"
+                "# JANGAN deploy django-debug-toolbar di production",
+            "Nginx (block path debug)":
+                "location ~ ^/(actuator|_profiler|debug|trace|phpmyadmin|adminer) {\n"
+                "    allow 10.0.0.0/8;  # internal only\n"
+                "    deny all;\n"
+                "    return 404;\n"
+                "}",
+        },
+        "manual_steps": [
+            "Audit semua /admin* /debug* /trace endpoint dengan tester eksternal.",
+            "Untuk Spring Boot: cek `management.endpoints.web.exposure.include` di config.",
+            "Untuk PHP: hapus phpinfo.php / info.php sebelum production.",
+            "Pasang WAF rule untuk block path-path debug umum.",
+        ],
+    },
+    "outdated_js": {
+        "impact": (
+            "Library JS dengan CVE → XSS langsung exploitable, prototype pollution "
+            "→ RCE di Node SSR, deserialisasi tidak aman → eksekusi kode."
+        ),
+        "attack_scenario": (
+            "1. Attacker scan halaman, dapat 'jQuery 2.1.0 + lodash 4.17.10'.\n"
+            "2. lodash 4.17.10 punya CVE-2018-16487 prototype pollution.\n"
+            "3. Cari endpoint yang pakai lodash.merge dengan input user → exploit "
+            "prototype pollution → mass-set property `__proto__.isAdmin = true` "
+            "→ user biasa jadi admin di middleware authn."
+        ),
+        "fix_examples": {
+            "package.json (lock dengan dependabot)":
+                "// .github/dependabot.yml:\n"
+                "version: 2\n"
+                "updates:\n"
+                "  - package-ecosystem: 'npm'\n"
+                "    directory: '/'\n"
+                "    schedule:\n"
+                "      interval: 'weekly'\n"
+                "    open-pull-requests-limit: 10",
+            "CI: npm audit":
+                "# .github/workflows/audit.yml\n"
+                "- name: npm audit\n"
+                "  run: npm audit --audit-level=high\n"
+                "  continue-on-error: false  # gagal CI bila ada high CVE",
+        },
+        "manual_steps": [
+            "Run `npm audit` lokal — fix semua advisory level high+.",
+            "Setup Dependabot/Renovate untuk auto-PR update.",
+            "Pin versi minor (^1.2 bukan ^1) untuk stabilitas.",
+            "Cek manually di https://snyk.io/advisor/ untuk library yang dipakai.",
+        ],
+    },
+    "api_pagination": {
+        "impact": (
+            "Attacker dapat dump seluruh dataset (mis. seluruh user, semua produk, "
+            "semua transaksi) dalam beberapa request. Resource consumption pada DB → "
+            "DoS potensial."
+        ),
+        "attack_scenario": (
+            "1. Endpoint /api/users return 20 user per request, ada total 1 juta user.\n"
+            "2. Attacker coba ?limit=1000000 → server return seluruh user.\n"
+            "3. Attacker dapat database user lengkap dalam 1 request — "
+            "untuk phishing/credential stuffing/data harvest."
+        ),
+        "fix_examples": {
+            "Express (cap limit)":
+                "app.get('/api/users', async (req, res) => {\n"
+                "  const limit = Math.min(parseInt(req.query.limit) || 20, 100);  // cap 100\n"
+                "  const offset = parseInt(req.query.offset) || 0;\n"
+                "  const users = await db.user.findAll({ limit, offset });\n"
+                "  res.json({ data: users, hasMore: users.length === limit });\n"
+                "});",
+            "Cursor-based pagination":
+                "# Lebih scalable + tidak ada offset abuse:\n"
+                "GET /api/users?cursor=eyJpZCI6MTAw&limit=50\n\n"
+                "# Server decode cursor (base64 of {id: 100}) → query WHERE id > 100",
+            "Django REST":
+                "# settings.py:\n"
+                "REST_FRAMEWORK = {\n"
+                "    'DEFAULT_PAGINATION_CLASS': "
+                "'rest_framework.pagination.LimitOffsetPagination',\n"
+                "    'PAGE_SIZE': 20,\n"
+                "    'MAX_PAGE_SIZE': 100,\n"
+                "}",
+        },
+        "manual_steps": [
+            "Test ?limit=1, ?limit=99999, ?limit=-1, ?limit=abc — server harus konsisten.",
+            "Test ?offset=-1, ?offset=99999999.",
+            "Test loop request: bisa scrape seluruh dataset dalam waktu wajar?",
+        ],
+    },
+    "excessive_data": {
+        "impact": (
+            "Field sensitif yang ter-expose → kompromi langsung. Password hash → "
+            "offline crack. Internal note → social engineering. CVV → credit card abuse. "
+            "API key → akses backend service."
+        ),
+        "attack_scenario": (
+            "1. Attacker GET /api/users → response berisi field 'password_hash' "
+            "untuk semua user.\n"
+            "2. Crack hash offline (kalau pakai algoritma cepat seperti MD5/SHA1) → "
+            "dapat password plaintext.\n"
+            "3. Login ke akun user / coba creds di service lain (credential stuffing)."
+        ),
+        "fix_examples": {
+            "Mongoose (hide field)":
+                "const userSchema = new Schema({\n"
+                "  email: String,\n"
+                "  password: { type: String, select: false },  // tidak ikut di query default\n"
+                "  isAdmin: { type: Boolean, select: false },\n"
+                "});\n\n"
+                "// Akses password hanya saat butuh:\n"
+                "User.findById(id).select('+password').exec();",
+            "Django REST Framework":
+                "class UserSerializer(serializers.ModelSerializer):\n"
+                "    class Meta:\n"
+                "        model = User\n"
+                "        fields = ['id', 'email', 'name']  # eksplisit\n"
+                "        # JANGAN: fields = '__all__'",
+            "TypeScript (class-transformer)":
+                "import { Exclude, Expose } from 'class-transformer';\n\n"
+                "class UserDto {\n"
+                "  @Expose() id: number;\n"
+                "  @Expose() email: string;\n"
+                "  @Exclude() password: string;\n"
+                "  @Exclude() internalNote: string;\n"
+                "}\n\n"
+                "// res.json(plainToClass(UserDto, user, {excludeExtraneousValues: true}));",
+        },
+        "manual_steps": [
+            "Audit setiap endpoint API — list field di response, cocokkan dengan kebutuhan UI.",
+            "Field internal (createdAt, updatedAt OK; internalNote, deletedReason TIDAK).",
+            "Cek nested object — User → Order → Payment punya field cardNumber? Strip.",
+        ],
+    },
+    "business_logic": {
+        "impact": (
+            "Business logic flaw langsung berdampak finansial atau operasional. "
+            "Tergantung jenisnya: kerugian dana, abuse promo, scraping kompetitor, "
+            "dump data. Tidak ada satu fix universal — setiap flow butuh review domain."
+        ),
+        "attack_scenario": (
+            "Setiap business flow punya skenario unik. Lihat 'evidence' untuk daftar "
+            "test spesifik yang harus dilakukan tester."
+        ),
+        "fix_examples": {
+            "Pendekatan umum":
+                "1. Map setiap flow user yang men-state-change (cart, order, refer, claim).\n"
+                "2. Untuk tiap flow, identifikasi invariants (mis. 'qty harus > 0', "
+                "'satu user satu trial', 'voucher single-use').\n"
+                "3. Enforce invariants di server-side dengan database constraint + "
+                "middleware validation.\n"
+                "4. Audit log per state change untuk deteksi anomali.\n"
+                "5. Test E2E dengan akun simulasi user nakal.",
+        },
+        "manual_steps": [
+            "Lihat field 'evidence' dari finding ini untuk daftar test spesifik per flow.",
+            "Setiap flow harus dipetest dengan akun: user biasa, user lama, user banned.",
+            "Pasang monitoring: alert bila > X transaksi/menit dari akun yang sama, "
+            "atau > Y referral di-claim dalam jam yang sama.",
+        ],
+    },
 }
 
 
