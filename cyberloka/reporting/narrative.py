@@ -63,6 +63,12 @@ MODULE_HUMAN: dict[str, str] = {
     "host_header": "Host header injection (link reset password dapat dipalsukan)",
     "mass_assign": "Mass Assignment (field privileged dapat di-set lewat body)",
     "hpp": "HTTP Parameter Pollution (parameter ganda menyebabkan inkonsistensi)",
+    "sri": "Subresource Integrity hilang (script CDN bisa di-tamper supply-chain)",
+    "pii_leak": "Kebocoran PII / kredensial di response publik",
+    "tech_cve": "Versi software/framework usang dengan CVE publik",
+    "error_disclosure": "Stack trace / debug info bocor di error response",
+    "csp_audit": "Content-Security-Policy ada tapi memuat directive lemah",
+    "crlf": "CRLF / HTTP header injection (Set-Cookie palsu, response splitting)",
 }
 
 
@@ -447,13 +453,37 @@ def _section_vulns(findings_sorted: list[Finding]) -> list[str]:
             out.append(f"    Referensi  : {f.cwe}")
         if f.description:
             out.append(f"    Penjelasan : {_wrap(f.description, 80, indent=17)}")
+        if getattr(f, "impact", ""):
+            out.append(f"    Dampak     : {_wrap(f.impact, 80, indent=17)}")
+        if getattr(f, "attack_scenario", ""):
+            out.append(f"    Skenario serangan:")
+            for line in f.attack_scenario.split("\n"):
+                if line.strip():
+                    out.append(f"      {line}")
         if f.remediation:
             out.append(f"    Cara fix   : {_wrap(f.remediation, 80, indent=17)}")
+        fix_ex = getattr(f, "fix_examples", {}) or {}
+        if fix_ex:
+            out.append(f"    Contoh kode perbaikan:")
+            for stack, snippet in fix_ex.items():
+                out.append(f"      [{stack}]")
+                for line in snippet.split("\n"):
+                    out.append(f"        {line}")
+                out.append("")
+        manual = getattr(f, "manual_steps", []) or []
+        if manual:
+            out.append(f"    Langkah verifikasi manual:")
+            for step in manual:
+                out.append(f"      - {_wrap(step, 75, indent=8)}")
         if f.evidence:
             ev = f.evidence.replace("\n", " | ")
             if len(ev) > 200:
                 ev = ev[:200] + "..."
             out.append(f"    Bukti      : {ev}")
+        if f.references:
+            out.append(f"    Referensi tambahan:")
+            for r in f.references[:3]:
+                out.append(f"      - {r}")
     out.append("")
     return out
 

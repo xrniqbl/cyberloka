@@ -201,6 +201,10 @@ def main(argv: list[str] | None = None) -> int:
 
     findings = run_scan(target, cfg)
 
+    # Perkaya finding dengan impact / attack scenario / fix examples / manual steps
+    from cyberloka.reporting.enrich import enrich_findings
+    findings = enrich_findings(findings)
+
     console.print()
     console_report.render_findings(findings)
     console.print()

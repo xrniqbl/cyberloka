@@ -31,6 +31,11 @@ MODULE_MAP: dict[str, str] = {
     "sensitive_files": "cyberloka.passive.sensitive_files",
     "robots": "cyberloka.passive.robots",
     "csrf": "cyberloka.passive.csrf",
+    "sri": "cyberloka.passive.sri",
+    "pii_leak": "cyberloka.passive.pii_leak",
+    "tech_cve": "cyberloka.passive.tech_cve",
+    "error_disclosure": "cyberloka.passive.error_disclosure",
+    "csp_audit": "cyberloka.passive.csp_audit",
     # active
     "sqli": "cyberloka.active.sqli",
     "xss": "cyberloka.active.xss",
@@ -50,6 +55,7 @@ MODULE_MAP: dict[str, str] = {
     "host_header": "cyberloka.active.host_header",
     "mass_assign": "cyberloka.active.mass_assign",
     "hpp": "cyberloka.active.hpp",
+    "crlf": "cyberloka.active.crlf",
     # simulate
     "rate_limit": "cyberloka.simulate.rate_limit",
     "burst": "cyberloka.simulate.burst",

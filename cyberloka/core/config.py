@@ -59,6 +59,11 @@ class ScanConfig:
         "sensitive_files",
         "robots",
         "csrf",
+        "sri",
+        "pii_leak",
+        "tech_cve",
+        "error_disclosure",
+        "csp_audit",
     )
     ACTIVE_MODULES = (
         "sqli",
@@ -79,6 +84,7 @@ class ScanConfig:
         "idor",
         "mass_assign",
         "payment",
+        "crlf",
     )
     # Backward-compat: union semua modul recon
     RECON_MODULES = PASSIVE_RECON + ACTIVE_RECON + ("crawler",)
