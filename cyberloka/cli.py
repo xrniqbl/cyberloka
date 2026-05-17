@@ -119,6 +119,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Subcommand: cyberloka diff <old.json> <new.json> [--json out.json]
+    raw = list(sys.argv[1:] if argv is None else argv)
+    if raw and raw[0] == "diff":
+        return _diff_main(raw[1:])
+
     args = build_parser().parse_args(argv)
     console = get_console()
     log = get_logger()
@@ -219,3 +224,33 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+
+
+def _diff_main(argv: list[str]) -> int:
+    """Subcommand: cyberloka diff <old.json> <new.json> [--json out.json]"""
+    parser = argparse.ArgumentParser(
+        prog="cyberloka diff",
+        description="Bandingkan dua report JSON Cyberloka.",
+    )
+    parser.add_argument("old", help="Path report JSON sebelumnya")
+    parser.add_argument("new", help="Path report JSON terbaru")
+    parser.add_argument("--json", dest="json_out", help="Tulis hasil diff sebagai JSON")
+    parser.add_argument("--fail-on-new", action="store_true",
+                        help="Exit code != 0 bila ada finding baru")
+    args = parser.parse_args(argv)
+
+    from cyberloka.reporting.diff import diff_files, render_text
+
+    diff = diff_files(args.old, args.new)
+    console = get_console()
+    console.print(render_text(diff))
+    if args.json_out:
+        import json as _json
+        with open(args.json_out, "w", encoding="utf-8") as fp:
+            _json.dump(diff.to_dict(), fp, indent=2, ensure_ascii=False)
+        console.print(f"[green]Diff JSON ditulis ke {args.json_out}[/green]")
+    if args.fail_on_new and diff.new:
+        return 2
+    return 0

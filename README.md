@@ -22,6 +22,7 @@ penyebabnya, serta memberikan rekomendasi perbaikan.
 - Subdomain enumeration (wordlist-based)
 - Technology fingerprinting (server, framework, CMS) dari header & body
 - **Crawler / Spider** in-scope untuk auto-discover endpoint, form, JS file, dan parameter
+- **OpenAPI/Swagger importer** — auto-discover spec di `/openapi.json`, `/swagger.json`, dll. dan import endpoint sebagai target tambahan
 
 ### 2. Passive Vulnerability Checks
 - Security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy)
@@ -32,6 +33,7 @@ penyebabnya, serta memberikan rekomendasi perbaikan.
 - HTTP method enumeration (TRACE, PUT, DELETE, OPTIONS)
 - Sensitive file exposure (`.git/`, `.env`, `backup.zip`, `phpinfo.php`, dll.)
 - robots.txt / sitemap.xml inspection
+- **CSRF audit** — form state-changing tanpa anti-CSRF token (memakai data crawler)
 
 ### 3. Active Vulnerability Checks
 - SQL Injection (error-based & boolean-based)
@@ -42,6 +44,11 @@ penyebabnya, serta memberikan rekomendasi perbaikan.
 - Directory Listing exposure
 - **Server-Side Request Forgery (SSRF)** — termasuk deteksi cloud metadata (AWS IMDS, GCP, Azure)
 - **JWT auditor** — alg=none, weak HMAC secret (offline dictionary), expiry, kid/jku/jwk attacks
+- **XXE** (XML External Entity) — read-only, file:// signature
+- **SSTI** (Server-Side Template Injection) — Jinja2/Twig/Freemarker/Velocity/ERB
+- **NoSQL Injection** (MongoDB) — operator probe + JSON body
+- **GraphQL audit** — introspection, batching, alias overload, GET-method
+- **WebSocket scanner** — handshake, cross-origin, ws:// vs wss://, token in URL
 
 ### 4. Authenticated Scan
 - Form login dengan **CSRF token auto-extract**
@@ -58,6 +65,10 @@ penyebabnya, serta memberikan rekomendasi perbaikan.
 - Output CLI berwarna (severity-coded) menggunakan `rich`
 - Export JSON terstruktur
 - Export HTML report (rapi, lengkap dengan remediasi per finding)
+- **Diff scan** — bandingkan dua report JSON untuk track regresi:
+  ```bash
+  cyberloka diff old.json new.json --json diff.json --fail-on-new
+  ```
 
 ### 7. Test Lab
 - Direktori [`lab/`](lab/README.md) berisi `docker-compose.yml` dengan

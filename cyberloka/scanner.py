@@ -20,6 +20,7 @@ MODULE_MAP: dict[str, str] = {
     "subdomains": "cyberloka.recon.subdomains",
     "fingerprint": "cyberloka.recon.fingerprint",
     "crawler": "cyberloka.recon.crawler",
+    "openapi": "cyberloka.recon.openapi",
     # passive
     "headers": "cyberloka.passive.headers",
     "tls": "cyberloka.passive.tls_check",
@@ -29,6 +30,7 @@ MODULE_MAP: dict[str, str] = {
     "methods": "cyberloka.passive.methods",
     "sensitive_files": "cyberloka.passive.sensitive_files",
     "robots": "cyberloka.passive.robots",
+    "csrf": "cyberloka.passive.csrf",
     # active
     "sqli": "cyberloka.active.sqli",
     "xss": "cyberloka.active.xss",
@@ -38,13 +40,18 @@ MODULE_MAP: dict[str, str] = {
     "dirlist": "cyberloka.active.dirlist",
     "ssrf": "cyberloka.active.ssrf",
     "jwt": "cyberloka.active.jwt_audit",
+    "xxe": "cyberloka.active.xxe",
+    "ssti": "cyberloka.active.ssti",
+    "nosqli": "cyberloka.active.nosqli",
+    "graphql": "cyberloka.active.graphql_audit",
+    "websocket": "cyberloka.active.websocket",
     # simulate
     "rate_limit": "cyberloka.simulate.rate_limit",
     "burst": "cyberloka.simulate.burst",
 }
 
 # Modul-modul yang HARUS jalan sebelum modul lain (untuk menyiapkan state)
-PREREQ_MODULES = ("crawler",)
+PREREQ_MODULES = ("crawler", "openapi")
 
 
 def _run_module(name: str, target: Target, config: ScanConfig) -> list[Finding]:
