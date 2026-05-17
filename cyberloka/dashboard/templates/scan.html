@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+{% block title %}Scan - {{ bundle.target.host }}{% endblock %}
+{% block content %}
+
+{% set exec_summary = bundle.executive_summary %}
+
+<header class="page-head">
+  <div>
+    <a class="muted" href="{{ url_for('index') }}">&larr; back</a>
+    <h1 class="mono">{{ bundle.target.base_url }}</h1>
+    <div class="muted">{{ bundle.generated_at }} - mode {{ bundle.scan.mode }}</div>
+  </div>
+  <div class="grade-card grade-{{ exec_summary.grade }} static">
+    <div class="grade-letter">{{ exec_summary.grade }}</div>
+    <div class="grade-score">{{ '%.1f' % exec_summary.overall_score }}/100</div>
+  </div>
+</header>
+
+<section>
+  <h2>Executive Summary</h2>
+  <div class="card">
+    <p>{{ exec_summary.posture }}</p>
+    <div class="sev-strip">
+      {% for s in ['critical','high','medium','low','info'] %}
+      <div class="cell {{ s }}">
+        <div class="num">{{ exec_summary.by_severity[s] }}</div>
+        <div class="lbl">{{ s }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+{% if exec_summary.top_priorities %}
+<section>
+  <h2>Top 5 Prioritas Perbaikan</h2>
+  <div class="card">
+    <table class="data-table">
+      <thead><tr><th>#</th><th>Risk</th><th>Severity</th><th>Module</th><th>Issue</th></tr></thead>
+      <tbody>
+      {% for p in exec_summary.top_priorities %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td class="num"><strong>{{ '%.1f' % p.score }}</strong></td>
+          <td><span class="badge {{ p.severity }}">{{ p.severity }}</span></td>
+          <td>{{ p.module }}</td>
+          <td>{{ p.title }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if bundle.scan.module_stats %}
+<section>
+  <h2>Module Execution</h2>
+  <div class="card">
+    <table class="data-table module-stats-table">
+      <thead>
+        <tr><th>Module</th><th>Status</th><th>Findings</th><th>Duration</th><th>Note</th></tr>
+      </thead>
+      <tbody>
+      {% for s in bundle.scan.module_stats %}
+        <tr>
+          <td><span class="badge muted">{{ s.module }}</span></td>
+          <td class="status-{{ s.status }}">{{ s.status | upper }}</td>
+          <td class="num">{{ s.findings if s.status == 'ok' else '-' }}</td>
+          <td class="num">{{ s.duration_ms }} ms</td>
+          <td>
+            {% if s.error %}
+              <span class="muted small">{{ s.error }}</span>
+            {% elif s.status == 'ok' and s.findings == 0 %}
+              <span class="muted small">tidak ada finding -- target mungkin sudah aman</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted small" style="margin-top:8px;">
+      Modul dengan status OK + 0 findings berarti pengecekan dilakukan tapi target sudah aman untuk kategori itu. Modul ERROR/SKIPPED tidak menjalankan deteksi.
+    </p>
+  </div>
+</section>
+{% endif %}
+
+<section>
+  <h2>Compliance Mapping</h2>
+  {% set fw_titles = {
+    'owasp_2021': 'OWASP Top 10 2021',
+    'pci_dss_v4': 'PCI-DSS v4.0',
+    'iso_27001':  'ISO/IEC 27001:2022',
+    'nist_csf':   'NIST CSF 2.0',
+    'cis_v8':     'CIS Controls v8',
+    'uu_pdp':     'UU PDP Indonesia (UU 27/2022)'
+  } %}
+  <div class="compliance-grid">
+    {% for fw, rows in bundle.compliance_summary.items() %}
+      {% if rows %}
+      <div class="card compact">
+        <h3>{{ fw_titles[fw] }}</h3>
+        <table class="data-table compact">
+          <thead><tr><th>Clause</th><th>Findings</th><th>Description</th></tr></thead>
+          <tbody>
+          {% for r in rows %}
+            <tr>
+              <td>
+                <a href="?framework={{ fw }}&clause={{ r.id }}">
+                  <span class="badge muted">{{ r.id }}</span>
+                </a>
+              </td>
+              <td class="num">{{ r.count }}</td>
+              <td>{{ r.label }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+</section>
+
+<section>
+  <h2>Findings ({{ findings | length }} / {{ total_unfiltered }})</h2>
+
+  <form method="get" class="filter-row card">
+    <label>
+      Severity
+      <select name="severity">
+        <option value="">- all -</option>
+        {% for s in ['critical','high','medium','low','info'] %}
+          <option value="{{ s }}" {% if current_filters.severity == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Module
+      <select name="module">
+        <option value="">- all -</option>
+        {% for m in modules_present %}
+          <option value="{{ m }}" {% if current_filters.module == m %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Search
+      <input type="search" name="q" value="{{ current_filters.q }}" placeholder="title / desc / evidence">
+    </label>
+    <label>
+      Verification
+      <select name="verification">
+        <option value="">- all -</option>
+        {% for v in ['confirmed','firm','tentative','false_positive'] %}
+          <option value="{{ v }}" {% if current_filters.verification == v %}selected{% endif %}>{{ v | replace('_',' ') }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% if current_filters.framework %}
+      <input type="hidden" name="framework" value="{{ current_filters.framework }}">
+      <input type="hidden" name="clause" value="{{ current_filters.clause }}">
+      <span class="badge muted">{{ current_filters.framework }} = {{ current_filters.clause }}</span>
+    {% endif %}
+    <button type="submit">Apply</button>
+    <a class="btn-link" href="{{ url_for('scan_detail', scan_id=scan_id) }}">reset</a>
+  </form>
+
+  {% for f in findings %}
+    <div class="finding {{ f.severity }}">
+      <div class="finding-head">
+        <span class="badge {{ f.severity }}">{{ f.severity }}</span>
+        <span class="badge muted">Risk {{ '%.1f' % f.risk_score }}/10</span>
+        <span class="badge muted">{{ f.module }}</span>
+        {% if f.cwe %}<span class="badge muted">{{ f.cwe }}</span>{% endif %}
+        {% if f.verification %}
+          <span class="badge verify-{{ f.verification.status }}">
+            {{ f.verification.status | replace('_', ' ') }}
+          </span>
+        {% endif %}
+        <div class="finding-title">{{ f.title }}</div>
+      </div>
+      <div class="muted small mono">{{ f.target }}</div>
+      <p>{{ f.description }}</p>
+      {% if f.evidence %}
+        <div class="lbl">Evidence</div>
+        <pre>{{ f.evidence }}</pre>
+      {% endif %}
+      {% if f.remediation %}
+        <div class="lbl">Remediasi</div>
+        <p>{{ f.remediation }}</p>
+      {% endif %}
+      {% if f.compliance_tags %}
+        <div class="lbl">Compliance</div>
+        <div class="row-wrap">
+          {% for tag in f.compliance_tags %}
+            <span class="badge muted">{{ tag }}</span>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% if f.references %}
+        <div class="lbl">Referensi</div>
+        <ul class="ref-list">
+          {% for r in f.references %}
+            <li><a href="{{ r }}" target="_blank" rel="noopener">{{ r }}</a></li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      {% if f.threat_intel %}
+        <details class="threat-intel-block" open>
+          <summary class="threat-heading">[!] Cara Hacker Mengeksploitasi Celah Ini</summary>
+          <div class="ti-section">
+            <div class="ti-label">Apa itu kelemahan ini?</div>
+            <p>{{ f.threat_intel.what_it_is }}</p>
+          </div>
+          <div class="ti-section">
+            <div class="ti-label">Mengapa berbahaya?</div>
+            <p>{{ f.threat_intel.why_dangerous }}</p>
+          </div>
+          {% if f.threat_intel.attack_scenarios %}
+          <div class="ti-section">
+            <div class="ti-label">Skenario serangan</div>
+            <ul class="ti-list">
+            {% for s in f.threat_intel.attack_scenarios %}
+              <li>{{ s }}</li>
+            {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+          {% if f.threat_intel.attack_chain %}
+          <div class="ti-section">
+            <div class="ti-label">Kill chain (langkah hacker)</div>
+            <ol class="ti-chain">
+            {% for s in f.threat_intel.attack_chain %}
+              <li>{{ s }}</li>
+            {% endfor %}
+            </ol>
+          </div>
+          {% endif %}
+          {% if f.threat_intel.real_world_impact %}
+          <div class="ti-section">
+            <div class="ti-label">Dampak di dunia nyata</div>
+            <p>{{ f.threat_intel.real_world_impact }}</p>
+          </div>
+          {% endif %}
+          {% if f.threat_intel.who_is_at_risk %}
+          <div class="ti-section">
+            <div class="ti-label">Siapa yang biasa jadi korban</div>
+            <p>{{ f.threat_intel.who_is_at_risk }}</p>
+          </div>
+          {% endif %}
+          {% if f.threat_intel.mitre_techniques %}
+          <div class="ti-section">
+            <div class="ti-label">MITRE ATT&amp;CK</div>
+            <div class="row-wrap">
+              {% for t in f.threat_intel.mitre_techniques %}
+                <span class="badge muted">{{ t }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+        </details>
+      {% endif %}
+      {% if f.verification %}
+        <div class="lbl">Verification</div>
+        <div class="verify-block">
+          <div>
+            <span class="badge verify-{{ f.verification.status }}">{{ f.verification.status | replace('_', ' ') }}</span>
+            <span class="muted small">{{ f.verification.verified_at }}</span>
+          </div>
+          {% if f.verification.evidence_strong %}
+            <p style="margin:6px 0 0;">{{ f.verification.evidence_strong }}</p>
+          {% endif %}
+          {% if f.verification.attempts %}
+            <ul class="attempts">
+            {% for a in f.verification.attempts %}
+              <li class="{{ 'ok' if a.success else 'fail' }}">
+                <code>{{ a.technique }}</code>
+                {% if a.detail %} - {{ a.detail }}{% endif %}
+              </li>
+            {% endfor %}
+            </ul>
+          {% endif %}
+          {% if f.verification.poc %}
+            <div class="lbl">PoC</div>
+            <pre>{{ f.verification.poc }}</pre>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  {% else %}
+    <p class="muted">Tidak ada finding yang cocok dengan filter.</p>
+  {% endfor %}
+</section>
+
+{% endblock %}

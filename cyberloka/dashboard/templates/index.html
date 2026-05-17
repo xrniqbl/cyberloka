@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Cyberloka - Scan History{% endblock %}
+{% block content %}
+
+<header class="page-head">
+  <h1>Scan History</h1>
+  <form method="get" class="filter-row">
+    <label>
+      Host
+      <select name="host" onchange="this.form.submit()">
+        <option value="">- semua host -</option>
+        {% for h in hosts %}
+          <option value="{{ h }}" {% if h == host_filter %}selected{% endif %}>{{ h }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </form>
+</header>
+
+{% if latest_per_host %}
+<section>
+  <h2>Latest Grade per Host</h2>
+  <div class="grade-cards">
+    {% for host, scan in latest_per_host.items() %}
+      <a class="grade-card grade-{{ scan.grade }}" href="{{ url_for('host_view', host=host) }}">
+        <div class="grade-letter">{{ scan.grade }}</div>
+        <div class="grade-host">{{ host }}</div>
+        <div class="grade-score">{{ '%.1f' % scan.score }}/100</div>
+        <div class="grade-meta muted">{{ scan.total_findings }} findings</div>
+      </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section>
+  <h2>All Scans ({{ scans | length }})</h2>
+  {% if not scans %}
+    <p class="muted">Belum ada laporan. Jalankan: <code>cyberloka -t https://example.com --reports-dir {{ reports_dir }}</code></p>
+  {% else %}
+  <div class="card">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Generated</th><th>Host</th><th>Mode</th>
+          <th>Grade</th><th>Score</th><th>Findings</th>
+          <th>Severity Mix</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for s in scans %}
+        <tr>
+          <td class="mono">{{ s.generated_at }}</td>
+          <td><a href="{{ url_for('host_view', host=s.host) }}">{{ s.host }}</a></td>
+          <td>{{ s.mode }}</td>
+          <td><span class="badge grade grade-{{ s.grade }}">{{ s.grade }}</span></td>
+          <td class="num">{{ '%.1f' % s.score }}</td>
+          <td class="num">{{ s.total_findings }}</td>
+          <td>
+            {% set sv = s.by_severity %}
+            <span class="sev-pip critical" title="critical">{{ sv.critical | default(0) }}</span>
+            <span class="sev-pip high" title="high">{{ sv.high | default(0) }}</span>
+            <span class="sev-pip medium" title="medium">{{ sv.medium | default(0) }}</span>
+            <span class="sev-pip low" title="low">{{ sv.low | default(0) }}</span>
+            <span class="sev-pip info" title="info">{{ sv.info | default(0) }}</span>
+          </td>
+          <td><a class="btn-link" href="{{ url_for('scan_detail', scan_id=s.scan_id) }}">view</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+
+{% endblock %}
