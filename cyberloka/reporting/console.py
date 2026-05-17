@@ -145,9 +145,14 @@ def render_finding_detail(f: Finding, idx: int) -> None:
                 ("\n".join("- " + r for r in f.references), "blue"),
             )
         )
-    # Threat intelligence: penjelasan celah + cara hacker eksploitasi
-    from cyberloka.core.threat_intel import get_threat_profile
-    profile = get_threat_profile(f.module, f.cwe)
+    # Threat intelligence: penjelasan celah + cara hacker eksploitasi.
+    # Defensif terhadap cache stale: kalau modul belum ter-load (mis. user
+    # belum reinstall setelah git pull), kita skip block ini dengan diam-diam.
+    try:
+        from cyberloka.core.threat_intel import get_threat_profile
+        profile = get_threat_profile(f.module, f.cwe)
+    except ImportError:
+        profile = None
     if profile is not None:
         body_parts.append(Text(""))
         body_parts.append(

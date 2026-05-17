@@ -70,9 +70,14 @@ def build_bundle(
         counts[f.severity.value] += 1
 
     # Per-module execution stats from most recent run_scan() call.
-    # Imported lazily to avoid circular import.
-    from cyberloka.scanner import get_last_module_stats
-    module_stats = get_last_module_stats()
+    # Imported lazily to avoid circular import. If the scanner module hasn't
+    # been initialised (e.g. report being built outside a scan context), we
+    # fall back to an empty list so the bundle still renders cleanly.
+    try:
+        from cyberloka.scanner import get_last_module_stats
+        module_stats = get_last_module_stats()
+    except (ImportError, AttributeError):
+        module_stats = []
 
     return {
         "tool": "cyberloka",

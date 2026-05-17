@@ -372,9 +372,19 @@ def _emit_reports(
     log,
 ) -> int:
     """Render console output + write JSON/HTML/TXT/PDF if requested."""
-    # Module execution stats — supaya jelas modul mana yang jalan vs skip
-    from cyberloka.scanner import get_last_module_stats
-    module_stats = get_last_module_stats()
+    # Module execution stats — supaya jelas modul mana yang jalan vs skip.
+    # Ditangkap dengan defensif: kalau ada cache stale dari versi lama yang
+    # belum punya `get_last_module_stats`, kita degrade gracefully tanpa
+    # bikin crash di sisi user.
+    try:
+        from cyberloka.scanner import get_last_module_stats
+        module_stats = get_last_module_stats()
+    except (ImportError, AttributeError):
+        log.warning(
+            "Module execution stats tidak tersedia. "
+            "Coba: hapus folder __pycache__ lalu reinstall: pip install -e ."
+        )
+        module_stats = []
     if module_stats:
         console.print()
         console_report.render_module_stats(module_stats)
