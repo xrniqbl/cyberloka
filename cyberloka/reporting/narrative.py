@@ -322,13 +322,26 @@ def _section_payment(findings: list[Finding]) -> list[str]:
                 )
         out.append("")
 
-    # Masalah konfigurasi yang langsung relevan
+    # Masalah konfigurasi yang langsung relevan — tampilkan detail lengkap
     issues = [f for f in pay_findings if f.severity != Severity.INFO]
     if issues:
-        out.append("Masalah konfigurasi pada alur pembayaran:")
-        for f in issues:
-            out.append(f"   [{SEVERITY_LABEL[f.severity]}] {f.title}")
+        out.append("Masalah pada alur pembayaran (lengkap dengan cara amankan):")
         out.append("")
+        for i, f in enumerate(issues, 1):
+            out.append(f"   ({i}) [{SEVERITY_LABEL[f.severity]}] {f.title}")
+            out.append(f"       Lokasi    : {f.target}")
+            if f.cwe:
+                out.append(f"       Referensi : {f.cwe}")
+            if f.description:
+                out.append(f"       Apa itu   : {_wrap(f.description, 75, indent=19)}")
+            if f.remediation:
+                out.append(f"       Cara aman : {_wrap(f.remediation, 75, indent=19)}")
+            if f.evidence:
+                ev = f.evidence.replace("\n", " | ")
+                if len(ev) > 160:
+                    ev = ev[:160] + "..."
+                out.append(f"       Bukti     : {ev}")
+            out.append("")
 
     # Daftar test manual
     manual = next(
