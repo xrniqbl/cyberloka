@@ -179,6 +179,37 @@ def render_txt(target: Target, config: ScanConfig, findings: list[Finding]) -> s
             out.append("  Referensi:")
             for r in f["references"]:
                 out.append(f"    - {r}")
+        if f.get("threat_intel"):
+            ti = f["threat_intel"]
+            out.append("")
+            out.append("  [!] CARA HACKER MENGEKSPLOITASI:")
+            out.append("")
+            out.append("  Apa itu kelemahan ini?")
+            out.append(_wrap(ti.get("what_it_is", "")))
+            out.append("")
+            out.append("  Mengapa berbahaya?")
+            out.append(_wrap(ti.get("why_dangerous", "")))
+            if ti.get("attack_scenarios"):
+                out.append("")
+                out.append("  Skenario serangan:")
+                for s in ti["attack_scenarios"]:
+                    out.append(_wrap("- " + s))
+            if ti.get("attack_chain"):
+                out.append("")
+                out.append("  Kill chain (langkah hacker):")
+                for s in ti["attack_chain"]:
+                    out.append(_wrap(s))
+            if ti.get("real_world_impact"):
+                out.append("")
+                out.append("  Dampak di dunia nyata:")
+                out.append(_wrap(ti["real_world_impact"]))
+            if ti.get("who_is_at_risk"):
+                out.append("")
+                out.append("  Siapa yang biasa jadi korban:")
+                out.append(_wrap(ti["who_is_at_risk"]))
+            if ti.get("mitre_techniques"):
+                out.append("")
+                out.append("  MITRE ATT&CK: " + ", ".join(ti["mitre_techniques"]))
         if f.get("verification"):
             v = f["verification"]
             out.append("")

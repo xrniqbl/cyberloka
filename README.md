@@ -100,7 +100,34 @@ cyberloka -t https://example.com --mode full --authorized --verify-after-scan
 cyberloka --verify reports/example.com-20260101T120000Z.json --authorized
 ```
 
-### 9. Reporting (4 format) *(baru)*
+### 9. Threat Intelligence — Penjelasan Celah & Cara Hacker Eksploitasi *(baru)*
+Setiap finding di laporan & dashboard sekarang dilengkapi block penjelasan:
+
+- **Apa itu kelemahan ini?** — bahasa awam untuk non-teknis
+- **Mengapa berbahaya?** — dampak kalau tidak diperbaiki
+- **Skenario serangan** — cara hacker eksploitasi (3-5 contoh teknis)
+- **Kill chain** — step-by-step urutan attacker
+- **Dampak di dunia nyata** — contoh insiden besar (TalkTalk, Equifax, dll.)
+- **Siapa yang biasa jadi korban** — profil target umum
+- **MITRE ATT&CK** — mapping ke technique IDs (T1190, T1539, dll.)
+
+Cocok untuk: laporan ke manajemen (mereka tahu "kenapa ini penting"),
+training awareness (developer paham dampaknya), atau bukti audit (link
+ke MITRE ATT&CK).
+
+### 10. Module Execution Visibility *(baru)*
+Setelah scan, sebuah tabel "Module Execution" menunjukkan setiap modul:
+status (OK/ERROR/SKIPPED), berapa finding yang ditemukan, dan durasi.
+
+Kalau hasil scan kelihatan sedikit, tabel ini menjelaskan **kenapa**:
+- `OK + 0 findings` → modulnya jalan tapi target memang aman untuk
+  kategori itu (good news!)
+- `ERROR` → ada bug atau dependency missing — info di kolom Note
+- `SKIPPED` → modul tidak terdaftar atau tidak dipanggil di mode tersebut
+
+Lihat semua module dengan: `cyberloka --list-modules`.
+
+### 11. Reporting (4 format)
 
 | Format | Use case | Flag |
 |--------|----------|------|
@@ -112,7 +139,7 @@ cyberloka --verify reports/example.com-20260101T120000Z.json --authorized
 `--reports-dir reports/` otomatis menulis JSON+HTML; tambah `--txt`/`--pdf`
 untuk format ekstra (file akan diberi nama bertanggal otomatis).
 
-### 10. Web Dashboard
+### 12. Web Dashboard
 - Flask web UI: history scan, trend grade per host, filter findings interaktif
 - Compare dua scan side-by-side (resolved / new / unchanged)
 - Filter: severity, module, full-text, status verifikasi, drill-down clause compliance

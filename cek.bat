@@ -118,9 +118,10 @@ echo   3. Full Scan    - recon + passive + active, butuh izin
 echo   4. Buka Dashboard di browser
 echo   5. Lihat laporan HTML terakhir
 echo   6. Tampilkan --help
+echo   7. Daftar semua module deteksi
 echo   0. Keluar
 echo.
-set /p choice="Pilih [0-6]: "
+set /p choice="Pilih [0-7]: "
 
 if "%choice%"=="1" goto :run_menu
 if "%choice%"=="2" goto :run_quick
@@ -128,6 +129,7 @@ if "%choice%"=="3" goto :run_full
 if "%choice%"=="4" goto :run_dashboard
 if "%choice%"=="5" goto :run_view
 if "%choice%"=="6" goto :run_help
+if "%choice%"=="7" goto :run_modules
 if "%choice%"=="0" goto :end
 echo Pilihan tidak dikenal.
 goto :menu
@@ -173,6 +175,11 @@ goto :menu
 :run_help
 echo.
 python -m cyberloka --help
+goto :menu
+
+:run_modules
+echo.
+python -m cyberloka --list-modules
 goto :menu
 
 REM --- Helper subroutine: check_dep <module> <description> ---------------

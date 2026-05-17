@@ -129,6 +129,54 @@ section h2 {
 .verify-block ul.attempts li.ok::before    { content: "[+] "; color: var(--ok);  font-weight: 700; }
 .verify-block ul.attempts li.fail::before  { content: "[-] "; color: var(--info); }
 
+/* Threat intel block — "Cara hacker mengeksploitasi" */
+.threat-intel-block {
+  background: linear-gradient(180deg, rgba(239,68,68,0.08), rgba(239,68,68,0.02));
+  border: 1px solid rgba(239,68,68,0.3);
+  border-left: 4px solid var(--crit);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-top: 10px;
+}
+.threat-intel-block .threat-heading,
+.threat-intel-block summary.threat-heading {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--crit);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  list-style: none;
+}
+.threat-intel-block summary::-webkit-details-marker { display: none; }
+.threat-intel-block summary::before { content: "v "; color: var(--crit); }
+.threat-intel-block[open] summary::before { content: "^ "; }
+.threat-intel-block .ti-section { margin-top: 8px; }
+.threat-intel-block .ti-label {
+  font-weight: 700;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--high);
+  margin-bottom: 4px;
+}
+.threat-intel-block p { margin: 0 0 4px; }
+.threat-intel-block .ti-list { margin: 4px 0 0 18px; padding: 0; }
+.threat-intel-block .ti-list li { margin-bottom: 4px; }
+.threat-intel-block .ti-chain {
+  margin: 4px 0 0 0; padding: 0; list-style: none;
+}
+.threat-intel-block .ti-chain li {
+  margin-bottom: 4px; padding-left: 10px;
+  border-left: 2px solid var(--accent);
+  font-family: ui-monospace, monospace; font-size: 0.85rem;
+  color: var(--text);
+}
+
+/* Module execution stats table */
+.module-stats-table .status-ok { color: var(--ok); font-weight: 700; }
+.module-stats-table .status-error { color: var(--crit); font-weight: 700; }
+.module-stats-table .status-skipped { color: var(--muted); }
+
 .badge.grade { font-size: 0.85rem; padding: 3px 10px; }
 
 /* grade cards */

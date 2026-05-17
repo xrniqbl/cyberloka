@@ -418,6 +418,7 @@ def _print_menu(console) -> None:
     table.add_row("3", "Buka Web Dashboard", "Lihat semua scan + grade trend di browser")
     table.add_row("4", "Lihat Laporan Terakhir", "Buka laporan HTML di browser")
     table.add_row("5", "Setup Login Session", "Buat login.json untuk authenticated scan")
+    table.add_row("6", "Daftar Module", "Lihat semua modul deteksi & mode mana yang menjalankan")
     table.add_row("0", "Keluar", "")
     console.print(Panel(table, title="[bold]Menu Utama[/bold]", border_style="cyan"))
 
@@ -429,7 +430,7 @@ def run_menu(run_cli: Callable[[list[str]], int]) -> int:
     while True:
         _print_menu(console)
         try:
-            choice = IntPrompt.ask("Pilih [0-5]", default=1)
+            choice = IntPrompt.ask("Pilih [0-6]", default=1)
         except (EOFError, KeyboardInterrupt):
             console.print("\n[dim]Keluar.[/dim]")
             return 0
@@ -444,6 +445,8 @@ def run_menu(run_cli: Callable[[list[str]], int]) -> int:
                 rc = _action_view_last_report(console)
             elif choice == 5:
                 rc = _action_login_config(console)
+            elif choice == 6:
+                rc = run_cli(["--list-modules"])
             elif choice == 0:
                 console.print("[dim]Keluar.[/dim]")
                 return 0

@@ -53,6 +53,39 @@
 </section>
 {% endif %}
 
+{% if bundle.scan.module_stats %}
+<section>
+  <h2>Module Execution</h2>
+  <div class="card">
+    <table class="data-table module-stats-table">
+      <thead>
+        <tr><th>Module</th><th>Status</th><th>Findings</th><th>Duration</th><th>Note</th></tr>
+      </thead>
+      <tbody>
+      {% for s in bundle.scan.module_stats %}
+        <tr>
+          <td><span class="badge muted">{{ s.module }}</span></td>
+          <td class="status-{{ s.status }}">{{ s.status | upper }}</td>
+          <td class="num">{{ s.findings if s.status == 'ok' else '-' }}</td>
+          <td class="num">{{ s.duration_ms }} ms</td>
+          <td>
+            {% if s.error %}
+              <span class="muted small">{{ s.error }}</span>
+            {% elif s.status == 'ok' and s.findings == 0 %}
+              <span class="muted small">tidak ada finding -- target mungkin sudah aman</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted small" style="margin-top:8px;">
+      Modul dengan status OK + 0 findings berarti pengecekan dilakukan tapi target sudah aman untuk kategori itu. Modul ERROR/SKIPPED tidak menjalankan deteksi.
+    </p>
+  </div>
+</section>
+{% endif %}
+
 <section>
   <h2>Compliance Mapping</h2>
   {% set fw_titles = {
@@ -173,6 +206,61 @@
             <li><a href="{{ r }}" target="_blank" rel="noopener">{{ r }}</a></li>
           {% endfor %}
         </ul>
+      {% endif %}
+      {% if f.threat_intel %}
+        <details class="threat-intel-block" open>
+          <summary class="threat-heading">[!] Cara Hacker Mengeksploitasi Celah Ini</summary>
+          <div class="ti-section">
+            <div class="ti-label">Apa itu kelemahan ini?</div>
+            <p>{{ f.threat_intel.what_it_is }}</p>
+          </div>
+          <div class="ti-section">
+            <div class="ti-label">Mengapa berbahaya?</div>
+            <p>{{ f.threat_intel.why_dangerous }}</p>
+          </div>
+          {% if f.threat_intel.attack_scenarios %}
+          <div class="ti-section">
+            <div class="ti-label">Skenario serangan</div>
+            <ul class="ti-list">
+            {% for s in f.threat_intel.attack_scenarios %}
+              <li>{{ s }}</li>
+            {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+          {% if f.threat_intel.attack_chain %}
+          <div class="ti-section">
+            <div class="ti-label">Kill chain (langkah hacker)</div>
+            <ol class="ti-chain">
+            {% for s in f.threat_intel.attack_chain %}
+              <li>{{ s }}</li>
+            {% endfor %}
+            </ol>
+          </div>
+          {% endif %}
+          {% if f.threat_intel.real_world_impact %}
+          <div class="ti-section">
+            <div class="ti-label">Dampak di dunia nyata</div>
+            <p>{{ f.threat_intel.real_world_impact }}</p>
+          </div>
+          {% endif %}
+          {% if f.threat_intel.who_is_at_risk %}
+          <div class="ti-section">
+            <div class="ti-label">Siapa yang biasa jadi korban</div>
+            <p>{{ f.threat_intel.who_is_at_risk }}</p>
+          </div>
+          {% endif %}
+          {% if f.threat_intel.mitre_techniques %}
+          <div class="ti-section">
+            <div class="ti-label">MITRE ATT&amp;CK</div>
+            <div class="row-wrap">
+              {% for t in f.threat_intel.mitre_techniques %}
+                <span class="badge muted">{{ t }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+        </details>
       {% endif %}
       {% if f.verification %}
         <div class="lbl">Verification</div>

@@ -160,8 +160,64 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--quiet", action="store_true")
     p.add_argument("--yes", action="store_true", help="Lewati prompt konfirmasi")
+    p.add_argument(
+        "--list-modules",
+        action="store_true",
+        help="Tampilkan daftar semua module dan mode mana yang menjalankan masing-masing, lalu keluar.",
+    )
     p.add_argument("--version", action="version", version=f"cyberloka {__version__}")
     return p
+
+
+def _print_module_list() -> int:
+    """Tampilkan tabel module + mode yang menjalankan + threat-intel availability."""
+    from cyberloka.core.threat_intel import list_supported_modules
+    from rich.table import Table
+    console = get_console()
+    ti_modules = set(list_supported_modules())
+    passive = set(ScanConfig.PASSIVE_MODULES)
+    active = set(ScanConfig.ACTIVE_MODULES)
+    recon = set(ScanConfig.RECON_MODULES)
+
+    table = Table(title="Daftar Module Cyberloka", expand=True)
+    table.add_column("Module", style="cyan")
+    table.add_column("Kategori")
+    table.add_column("Passive", justify="center")
+    table.add_column("Active", justify="center")
+    table.add_column("Full", justify="center")
+    table.add_column("Threat Intel", justify="center")
+
+    def _mark(b: bool) -> str:
+        return "[green]YES[/green]" if b else "[dim]-[/dim]"
+
+    for name in sorted(MODULE_MAP):
+        if name in passive:
+            cat = "passive"
+        elif name in active:
+            cat = "active"
+        elif name in recon:
+            cat = "recon"
+        elif name in ("burst", "rate_limit"):
+            cat = "simulate"
+        else:
+            cat = "?"
+        in_passive = name in passive
+        in_active = name in passive or name in active  # active mode = passive + active
+        in_full = True if name in (passive | active | recon) else False
+        table.add_row(
+            name,
+            cat,
+            _mark(in_passive),
+            _mark(in_active),
+            _mark(in_full),
+            _mark(name in ti_modules),
+        )
+    console.print(table)
+    console.print(
+        "\n[dim]Catatan: Mode 'simulate' (burst, rate_limit) hanya jalan kalau "
+        "--simulate-attack diaktifkan dan --login-url diset.[/dim]"
+    )
+    return 0
 
 
 def _resolve_outputs(
@@ -316,6 +372,12 @@ def _emit_reports(
     log,
 ) -> int:
     """Render console output + write JSON/HTML/TXT/PDF if requested."""
+    # Module execution stats — supaya jelas modul mana yang jalan vs skip
+    from cyberloka.scanner import get_last_module_stats
+    module_stats = get_last_module_stats()
+    if module_stats:
+        console.print()
+        console_report.render_module_stats(module_stats)
     console.print()
     console_report.render_executive_summary(findings)
     console.print()
@@ -409,6 +471,10 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     console = get_console()
     log = get_logger()
+
+    # --list-modules: tampilkan tabel module dan exit (tidak butuh target)
+    if args.list_modules:
+        return _print_module_list()
 
     console.print(ETHICS_NOTICE)
     console.print()

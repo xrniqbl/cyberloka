@@ -464,6 +464,46 @@ def write_pdf(
                     )
                 )
 
+        if f.get("threat_intel"):
+            ti = f["threat_intel"]
+            ti_heading = ParagraphStyle(
+                "ThreatHead",
+                parent=base,
+                fontName="Helvetica-Bold",
+                fontSize=11,
+                textColor=colors.HexColor(_PALETTE["critical"]),
+                spaceBefore=10,
+                spaceAfter=4,
+            )
+            body_blocks.append(
+                Paragraph("[!] Cara Hacker Mengeksploitasi Celah Ini", ti_heading)
+            )
+            body_blocks.append(Paragraph("Apa itu kelemahan ini?", label))
+            body_blocks.append(Paragraph(_escape(ti.get("what_it_is", "")), base))
+            body_blocks.append(Paragraph("Mengapa berbahaya?", label))
+            body_blocks.append(Paragraph(_escape(ti.get("why_dangerous", "")), base))
+            if ti.get("attack_scenarios"):
+                body_blocks.append(Paragraph("Skenario serangan", label))
+                for s in ti["attack_scenarios"]:
+                    body_blocks.append(Paragraph(f"&bull; {_escape(s)}", base))
+            if ti.get("attack_chain"):
+                body_blocks.append(Paragraph("Kill chain (langkah hacker)", label))
+                for s in ti["attack_chain"]:
+                    body_blocks.append(
+                        Paragraph(f"<font face='Courier' size=8>{_escape(s)}</font>", base)
+                    )
+            if ti.get("real_world_impact"):
+                body_blocks.append(Paragraph("Dampak di dunia nyata", label))
+                body_blocks.append(Paragraph(_escape(ti["real_world_impact"]), base))
+            if ti.get("who_is_at_risk"):
+                body_blocks.append(Paragraph("Siapa yang biasa jadi korban", label))
+                body_blocks.append(Paragraph(_escape(ti["who_is_at_risk"]), base))
+            if ti.get("mitre_techniques"):
+                body_blocks.append(Paragraph("MITRE ATT&amp;CK", label))
+                body_blocks.append(
+                    Paragraph(_escape(", ".join(ti["mitre_techniques"])), base)
+                )
+
         if f.get("verification"):
             v = f["verification"]
             body_blocks.append(Paragraph("Verification Detail", label))

@@ -145,6 +145,40 @@ def render_finding_detail(f: Finding, idx: int) -> None:
                 ("\n".join("- " + r for r in f.references), "blue"),
             )
         )
+    # Threat intelligence: penjelasan celah + cara hacker eksploitasi
+    from cyberloka.core.threat_intel import get_threat_profile
+    profile = get_threat_profile(f.module, f.cwe)
+    if profile is not None:
+        body_parts.append(Text(""))
+        body_parts.append(
+            Text.assemble(
+                ("Apa itu kelemahan ini?\n", "bold magenta"),
+                (profile.what_it_is, ""),
+            )
+        )
+        body_parts.append(Text(""))
+        body_parts.append(
+            Text.assemble(
+                ("Mengapa berbahaya?\n", "bold magenta"),
+                (profile.why_dangerous, ""),
+            )
+        )
+        if profile.attack_scenarios:
+            body_parts.append(Text(""))
+            body_parts.append(
+                Text.assemble(
+                    ("Cara hacker mengeksploitasi:\n", "bold red"),
+                    ("\n".join("- " + s for s in profile.attack_scenarios[:3]), "yellow"),
+                )
+            )
+        if profile.real_world_impact:
+            body_parts.append(Text(""))
+            body_parts.append(
+                Text.assemble(
+                    ("Dampak di dunia nyata:\n", "bold magenta"),
+                    (profile.real_world_impact, "dim"),
+                )
+            )
     # Verification details (only present after a verify pass)
     v = (f.extra or {}).get("verification") if f.extra else None
     if v:
@@ -198,6 +232,44 @@ def render_summary(findings: list[Finding]) -> None:
             str(counts[s]),
         )
     table.add_row(Text("TOTAL", style="bold"), str(len(findings)))
+    console.print(table)
+
+
+def render_module_stats(stats: list[dict]) -> None:
+    """Render per-module execution stats — supaya jelas modul mana yang
+    jalan, mana yang skip, dan berapa lama. User sering bingung saat
+    finding sedikit padahal banyak modul yang dipilih.
+    """
+    console = get_console()
+    if not stats:
+        return
+    table = Table(title="Module Execution", expand=True)
+    table.add_column("Module", style="cyan", width=18)
+    table.add_column("Status", width=10)
+    table.add_column("Findings", justify="right", width=9)
+    table.add_column("Duration", justify="right", width=10)
+    table.add_column("Note", overflow="fold")
+
+    status_styles = {
+        "ok": "green",
+        "error": "bold red",
+        "skipped": "dim yellow",
+    }
+
+    for s in stats:
+        status = s.get("status", "ok")
+        findings = s.get("findings", 0)
+        duration_ms = s.get("duration_ms", 0)
+        note = s.get("error") or ""
+        if status == "ok" and findings == 0:
+            note = note or "(tidak ada finding -- target mungkin sudah aman)"
+        table.add_row(
+            s.get("module", "?"),
+            Text(status.upper(), style=status_styles.get(status, "dim")),
+            str(findings) if status == "ok" else "-",
+            f"{duration_ms} ms" if duration_ms else "-",
+            note,
+        )
     console.print(table)
 
 

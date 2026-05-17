@@ -20,6 +20,7 @@ from cyberloka.core.risk import (
     severity_band,
 )
 from cyberloka.core.target import Target
+from cyberloka.core.threat_intel import get_threat_profile
 
 
 def build_bundle(
@@ -42,6 +43,10 @@ def build_bundle(
         mapping = map_finding(f)
         d["compliance"] = mapping.to_dict()
         d["compliance_tags"] = mapping.as_flat_tags()
+        # Embed threat intelligence (penjelasan celah + cara hacker eksploitasi)
+        threat = get_threat_profile(f.module, f.cwe)
+        if threat is not None:
+            d["threat_intel"] = threat.to_dict()
         # Surface verification info at top level if present, so reporters
         # don't need to dig into `extra`.
         v = (f.extra or {}).get("verification") if f.extra else None
@@ -64,6 +69,11 @@ def build_bundle(
     for f in findings:
         counts[f.severity.value] += 1
 
+    # Per-module execution stats from most recent run_scan() call.
+    # Imported lazily to avoid circular import.
+    from cyberloka.scanner import get_last_module_stats
+    module_stats = get_last_module_stats()
+
     return {
         "tool": "cyberloka",
         "version": __version__,
@@ -80,6 +90,7 @@ def build_bundle(
             "mode": config.mode,
             "modules": config.resolve_modules(),
             "simulate_attack": config.simulate_attack,
+            "module_stats": module_stats,
         },
         "summary": {
             "total": len(findings),
