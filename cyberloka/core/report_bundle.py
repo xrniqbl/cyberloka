@@ -27,6 +27,13 @@ def build_bundle(
 ) -> dict[str, Any]:
     """Return a JSON-serialisable dict with everything a reporter needs."""
     enriched: list[dict[str, Any]] = []
+    verification_stats = {
+        "verified": 0,
+        "confirmed": 0,
+        "firm": 0,
+        "tentative": 0,
+        "false_positive": 0,
+    }
     for f in findings:
         d = f.to_dict()
         score = score_finding(f)
@@ -35,6 +42,15 @@ def build_bundle(
         mapping = map_finding(f)
         d["compliance"] = mapping.to_dict()
         d["compliance_tags"] = mapping.as_flat_tags()
+        # Surface verification info at top level if present, so reporters
+        # don't need to dig into `extra`.
+        v = (f.extra or {}).get("verification") if f.extra else None
+        if v:
+            d["verification"] = v
+            status = v.get("status")
+            verification_stats["verified"] += 1
+            if status in verification_stats:
+                verification_stats[status] += 1
         enriched.append(d)
 
     # Sort by risk score (high -> low) so reporters get a stable order.
@@ -68,6 +84,7 @@ def build_bundle(
         "summary": {
             "total": len(findings),
             "by_severity": counts,
+            "verification": verification_stats,
         },
         "executive_summary": asdict(summary),
         "compliance_summary": compliance_summary(findings),

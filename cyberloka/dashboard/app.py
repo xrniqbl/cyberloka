@@ -78,8 +78,11 @@ def create_app(reports_dir: str | Path) -> Flask:
         framework = request.args.get("framework")
         clause = request.args.get("clause")
         q = request.args.get("q")
+        verification = request.args.get("verification")
         all_findings = bundle.get("findings", [])
-        filtered = filter_findings(all_findings, severity, module, framework, clause, q)
+        filtered = filter_findings(
+            all_findings, severity, module, framework, clause, q, verification
+        )
 
         modules_present = sorted({f.get("module", "") for f in all_findings if f.get("module")})
 
@@ -96,6 +99,7 @@ def create_app(reports_dir: str | Path) -> Flask:
                 "framework": framework or "",
                 "clause": clause or "",
                 "q": q or "",
+                "verification": verification or "",
             },
         )
 

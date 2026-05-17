@@ -114,6 +114,21 @@ section h2 {
 .badge.info     { background: var(--info); color: #fff; }
 .badge.muted    { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
 
+/* verification status badges */
+.badge.verify-confirmed     { background: var(--ok);   color: #0b0d12; }
+.badge.verify-firm          { background: var(--low);  color: #0b0d12; }
+.badge.verify-tentative     { background: var(--med);  color: #0b0d12; }
+.badge.verify-false_positive{ background: var(--info); color: #fff; }
+
+.verify-block {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; margin-top: 4px;
+}
+.verify-block ul.attempts { list-style: none; margin: 6px 0 0; padding: 0; font-size: 0.85rem; }
+.verify-block ul.attempts li { padding: 2px 0; }
+.verify-block ul.attempts li.ok::before    { content: "[+] "; color: var(--ok);  font-weight: 700; }
+.verify-block ul.attempts li.fail::before  { content: "[-] "; color: var(--info); }
+
 .badge.grade { font-size: 0.85rem; padding: 3px 10px; }
 
 /* grade cards */

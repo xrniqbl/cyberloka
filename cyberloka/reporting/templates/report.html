@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cyberloka Report - {{ bundle.target.host }}</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface-2: #232735;
+    --text: #e6e8ee;
+    --muted: #8a94a6;
+    --border: #2a2f3d;
+    --accent: #8b5cf6;
+    --crit: #ef4444;
+    --high: #f97316;
+    --med:  #eab308;
+    --low:  #38bdf8;
+    --info: #6b7280;
+    --grade-a-plus: #10b981;
+    --grade-a: #22c55e;
+    --grade-b: #06b6d4;
+    --grade-c: #eab308;
+    --grade-d: #f97316;
+    --grade-f: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+                 Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  header.hero {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 24px;
+    background: linear-gradient(135deg, #1a1d27 0%, #232735 100%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 24px;
+  }
+  header.hero h1 {
+    margin: 0 0 4px 0; font-size: 1.6rem; letter-spacing: 0.02em;
+  }
+  header.hero .target { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header.hero .grade {
+    display: flex; flex-direction: column; align-items: center;
+    min-width: 140px; padding: 12px 18px; border-radius: 14px;
+    color: #0b0d12; font-weight: 700;
+  }
+  header.hero .grade .letter { font-size: 3rem; line-height: 1; }
+  header.hero .grade .score { font-size: 0.9rem; margin-top: 4px; opacity: 0.8; }
+  .grade-A\+ { background: var(--grade-a-plus); }
+  .grade-A   { background: var(--grade-a); }
+  .grade-B   { background: var(--grade-b); }
+  .grade-C   { background: var(--grade-c); }
+  .grade-D   { background: var(--grade-d); }
+  .grade-F   { background: var(--grade-f); color: #fff; }
+
+  .meta-grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 16px; }
+  .meta-grid div span:first-child { color: var(--muted); display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  .meta-grid div span:last-child { font-weight: 600; }
+
+  section { margin-bottom: 28px; }
+  section h2 {
+    font-size: 1.1rem; margin: 0 0 12px 0; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px;
+  }
+
+  /* severity chips and stats */
+  .sev-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 12px 0; }
+  .sev-strip .cell {
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px; text-align: center;
+  }
+  .sev-strip .cell .num { font-size: 1.7rem; font-weight: 700; }
+  .sev-strip .cell .lbl { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  .cell.critical .num { color: var(--crit); }
+  .cell.high     .num { color: var(--high); }
+  .cell.medium   .num { color: var(--med); }
+  .cell.low      .num { color: var(--low); }
+  .cell.info     .num { color: var(--info); }
+
+  /* finding cards */
+  .finding {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin-bottom: 12px;
+    border-left: 4px solid var(--info);
+  }
+  .finding.critical { border-left-color: var(--crit); }
+  .finding.high     { border-left-color: var(--high); }
+  .finding.medium   { border-left-color: var(--med); }
+  .finding.low      { border-left-color: var(--low); }
+  .finding-head {
+    display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
+    margin-bottom: 8px;
+  }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .badge.critical { background: var(--crit); color: #fff; }
+  .badge.high     { background: var(--high); color: #fff; }
+  .badge.medium   { background: var(--med);  color: #1a1d27; }
+  .badge.low      { background: var(--low);  color: #1a1d27; }
+  .badge.info     { background: var(--info); color: #fff; }
+  .badge.muted    { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+
+  /* verification status badges */
+  .badge.verify-confirmed      { background: #10b981; color: #0b0d12; }
+  .badge.verify-firm           { background: var(--low);  color: #0b0d12; }
+  .badge.verify-tentative      { background: var(--med);  color: #0b0d12; }
+  .badge.verify-false_positive { background: var(--info); color: #fff; }
+  .verify-block {
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; margin-top: 4px;
+  }
+  .verify-block ul.attempts { list-style: none; margin: 6px 0 0; padding: 0; font-size: 0.85rem; }
+  .verify-block ul.attempts li { padding: 2px 0; }
+  .verify-block ul.attempts li.ok::before   { content: "[+] "; color: #10b981; font-weight: 700; }
+  .verify-block ul.attempts li.fail::before { content: "[-] "; color: var(--info); }
+
+  .finding-title { font-weight: 600; flex: 1; min-width: 240px; }
+  .finding-meta { color: var(--muted); font-size: 0.85rem; margin-bottom: 10px; }
+  .finding pre {
+    background: #0b0d12; border: 1px solid var(--border);
+    color: #d1d5db; padding: 10px 12px; border-radius: 8px;
+    overflow-x: auto; font-size: 0.82rem;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .finding p { margin: 4px 0 8px; }
+  .finding .label { color: var(--muted); font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .compliance-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; }
+  table th, table td {
+    text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border);
+    font-size: 0.9rem; vertical-align: top;
+  }
+  table th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 0.74rem; letter-spacing: 0.05em; }
+  table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* responsive */
+  @media (max-width: 720px) {
+    .container { padding: 16px; }
+    header.hero { flex-direction: column; align-items: flex-start; }
+    header.hero .grade { align-self: stretch; flex-direction: row; justify-content: space-between; }
+    header.hero .grade .letter { font-size: 2.2rem; }
+    .sev-strip { grid-template-columns: repeat(2, 1fr); }
+    .meta-grid { grid-template-columns: 1fr; }
+  }
+
+  /* print to PDF */
+  @media print {
+    body { background: #fff; color: #111; }
+    .container { max-width: 100%; padding: 0; }
+    .panel, .finding, header.hero, .sev-strip .cell { background: #fff !important; border-color: #ddd !important; }
+    .finding pre { background: #f6f7f9 !important; color: #111 !important; }
+    section { page-break-inside: avoid; }
+    .finding { page-break-inside: avoid; }
+    a { color: #0c63e4 !important; text-decoration: underline; }
+  }
+
+  footer.foot {
+    margin: 24px 0 8px; color: var(--muted); font-size: 0.8rem; text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="hero">
+    <div class="grade grade-{{ exec_summary.grade }}">
+      <div class="letter">{{ exec_summary.grade }}</div>
+      <div class="score">{{ '%.1f' % exec_summary.overall_score }} / 100</div>
+    </div>
+    <div style="flex:1; min-width: 240px;">
+      <h1>Cyberloka Security Report</h1>
+      <div class="target">{{ bundle.target.base_url }}</div>
+      <div class="meta-grid" style="margin-top:14px;">
+        <div><span>Mode</span><span>{{ bundle.scan.mode }}</span></div>
+        <div><span>Modules</span><span>{{ bundle.scan.modules | length }}</span></div>
+        <div><span>Findings</span><span>{{ bundle.summary.total }}</span></div>
+        <div><span>Generated</span><span>{{ generated_at }}</span></div>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <h2>Executive Summary</h2>
+    <div class="panel">
+      <p style="margin-top:0">{{ exec_summary.posture }}</p>
+      <div class="sev-strip">
+        <div class="cell critical"><div class="num">{{ exec_summary.by_severity.critical }}</div><div class="lbl">Critical</div></div>
+        <div class="cell high"><div class="num">{{ exec_summary.by_severity.high }}</div><div class="lbl">High</div></div>
+        <div class="cell medium"><div class="num">{{ exec_summary.by_severity.medium }}</div><div class="lbl">Medium</div></div>
+        <div class="cell low"><div class="num">{{ exec_summary.by_severity.low }}</div><div class="lbl">Low</div></div>
+        <div class="cell info"><div class="num">{{ exec_summary.by_severity.info }}</div><div class="lbl">Info</div></div>
+      </div>
+    </div>
+  </section>
+
+  {% if exec_summary.top_priorities %}
+  <section>
+    <h2>Top 5 Prioritas Perbaikan</h2>
+    <div class="panel" style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr><th>#</th><th>Risk</th><th>Severity</th><th>Module</th><th>Issue</th></tr>
+        </thead>
+        <tbody>
+        {% for p in exec_summary.top_priorities %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td class="num"><strong>{{ '%.1f' % p.score }}</strong></td>
+            <td><span class="badge {{ p.severity }}">{{ p.severity }}</span></td>
+            <td>{{ p.module }}</td>
+            <td>{{ p.title }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  <section>
+    <h2>Compliance Mapping</h2>
+    <div class="panel">
+      {% set fw_titles = {
+        'owasp_2021': 'OWASP Top 10 2021',
+        'pci_dss_v4': 'PCI-DSS v4.0',
+        'iso_27001':  'ISO/IEC 27001:2022',
+        'nist_csf':   'NIST CSF 2.0',
+        'cis_v8':     'CIS Controls v8',
+        'uu_pdp':     'UU PDP Indonesia (UU 27/2022)'
+      } %}
+      {% set has_any = false %}
+      {% for fw, rows in bundle.compliance_summary.items() %}
+        {% if rows %}{% set has_any = true %}{% endif %}
+      {% endfor %}
+      {% if not has_any %}
+        <p style="color: var(--muted); margin: 0;">Tidak ada finding yang ter-map ke kontrol compliance.</p>
+      {% endif %}
+      {% for fw, rows in bundle.compliance_summary.items() %}
+        {% if rows %}
+          <h3 style="margin: 10px 0 6px; font-size: 0.95rem; color: var(--accent);">{{ fw_titles[fw] }}</h3>
+          <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Clause</th><th>Findings</th><th>Risk Weight</th><th>Description</th></tr></thead>
+            <tbody>
+            {% for r in rows %}
+              <tr>
+                <td><span class="badge muted">{{ r.id }}</span></td>
+                <td class="num">{{ r.count }}</td>
+                <td class="num">{{ r.weight }}</td>
+                <td>{{ r.label }}</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+
+  <section>
+    <h2>Findings ({{ bundle.findings | length }})</h2>
+    {% if not bundle.findings %}
+      <div class="panel"><p style="margin:0; color: var(--muted);">Tidak ada finding.</p></div>
+    {% endif %}
+    {% for f in bundle.findings %}
+      <div class="finding {{ f.severity }}">
+        <div class="finding-head">
+          <span class="badge {{ f.severity }}">{{ f.severity }}</span>
+          <span class="badge muted">Risk {{ '%.1f' % f.risk_score }}/10</span>
+          <span class="badge muted">{{ f.module }}</span>
+          {% if f.cwe %}<span class="badge muted">{{ f.cwe }}</span>{% endif %}
+          {% if f.verification %}
+            <span class="badge verify-{{ f.verification.status }}">
+              {{ f.verification.status | replace('_', ' ') }}
+            </span>
+          {% endif %}
+          <div class="finding-title">{{ f.title }}</div>
+        </div>
+        <div class="finding-meta">{{ f.target }}</div>
+        <p>{{ f.description }}</p>
+        {% if f.evidence %}
+          <div class="label">Evidence</div>
+          <pre>{{ f.evidence }}</pre>
+        {% endif %}
+        {% if f.remediation %}
+          <div class="label">Remediasi</div>
+          <p>{{ f.remediation }}</p>
+        {% endif %}
+        {% if f.compliance_tags %}
+          <div class="label">Compliance</div>
+          <div class="compliance-row">
+            {% for tag in f.compliance_tags %}
+              <span class="badge muted">{{ tag }}</span>
+            {% endfor %}
+          </div>
+        {% endif %}
+        {% if f.references %}
+          <div class="label" style="margin-top:8px;">Referensi</div>
+          <ul style="margin:4px 0 0 18px; padding:0;">
+          {% for r in f.references %}
+            <li><a href="{{ r }}" style="color: var(--low);">{{ r }}</a></li>
+          {% endfor %}
+          </ul>
+        {% endif %}
+        {% if f.verification %}
+          <div class="label" style="margin-top:8px;">Verification</div>
+          <div class="verify-block">
+            <div>
+              <span class="badge verify-{{ f.verification.status }}">{{ f.verification.status | replace('_', ' ') }}</span>
+              <span class="muted small">{{ f.verification.verified_at }}</span>
+            </div>
+            {% if f.verification.evidence_strong %}
+              <p style="margin:6px 0 0;">{{ f.verification.evidence_strong }}</p>
+            {% endif %}
+            {% if f.verification.attempts %}
+              <ul class="attempts">
+              {% for a in f.verification.attempts %}
+                <li class="{{ 'ok' if a.success else 'fail' }}">
+                  <code>{{ a.technique }}</code>
+                  {% if a.detail %} - {{ a.detail }}{% endif %}
+                </li>
+              {% endfor %}
+              </ul>
+            {% endif %}
+            {% if f.verification.poc %}
+              <div class="label">PoC</div>
+              <pre>{{ f.verification.poc }}</pre>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </section>
+
+  <footer class="foot">
+    Generated by Cyberloka {{ tool_version }} - {{ generated_at }}
+  </footer>
+</div>
+</body>
+</html>

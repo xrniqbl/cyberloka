@@ -14,11 +14,12 @@ env/
 .vscode/
 *.swp
 
-# Reports
+# Reports (generated, not the Jinja template)
 reports/
 *.json.bak
 report*.html
 report*.json
+!cyberloka/reporting/templates/report.html
 
 # Cache
 .pytest_cache/

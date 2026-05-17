@@ -15,6 +15,7 @@ def filter_findings(
     framework: str | None,
     clause: str | None,
     q: str | None,
+    verification: str | None = None,
 ) -> list[dict[str, Any]]:
     """Apply UI filters to a list of finding dicts."""
     out = findings
@@ -32,6 +33,12 @@ def filter_findings(
                 c.get("id") == clause
                 for c in f.get("compliance", {}).get(framework, [])
             )
+        ]
+    if verification:
+        vstatuses = {v.strip().lower() for v in verification.split(",") if v.strip()}
+        out = [
+            f for f in out
+            if (f.get("verification") or {}).get("status") in vstatuses
         ]
     if q:
         ql = q.lower().strip()

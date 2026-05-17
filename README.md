@@ -64,10 +64,28 @@ Setiap finding di-map otomatis ke standar yang relevan:
 - Export **JSON** terstruktur (lengkap dengan score + compliance) — cocok untuk pipeline CI
 - Export **HTML** responsive: tampil rapi di mobile + desktop, ramah print/PDF
 
-### 8. Web Dashboard  *(baru)*
+### 8. Verification — Deep Re-Test  *(baru)*
+Setelah scan biasa selesai, lakukan **deep re-scan** pada finding yang sudah
+ditemukan untuk memisahkan **real vulnerability** dari **false-positive**.
+- Modul yang didukung: `sqli`, `xss`, `lfi`, `redirect`, `cmdi`, `sensitive_files`, `dirlist`, `headers`, `cookies`
+- Tiap finding di-test dengan **teknik berbeda** dari deteksi awal (mis. SQLi: error-based + boolean-based + time-based; XSS: 5 context-aware payload)
+- Hasil: `confirmed` / `firm` / `tentative` / `false_positive` — finding yang ternyata false-positive otomatis didemote severity-nya ke `info` dan diberi tag `[FALSE POSITIVE]`
+- Setiap finding `confirmed`/`firm` mendapat **PoC curl command** yang reproducible
+- Statistik verifikasi muncul di summary, badge di setiap finding, dan filter baru di dashboard
+
+```bash
+# Mode A: scan + verify dalam satu run
+cyberloka -t https://example.com --mode full --authorized --verify-after-scan
+
+# Mode B: re-test bundle JSON dari scan sebelumnya
+cyberloka --verify reports/example.com-20260101T120000Z.json --authorized
+# menghasilkan reports/example.com.verified-...json + .html
+```
+
+### 9. Web Dashboard  *(baru)*
 - Flask web UI ringan: history scan, trend grade per host, filter findings interaktif
 - Compare dua scan side-by-side (resolved / new / unchanged)
-- Filter: severity, module, full-text search, klik clause compliance untuk drill-down
+- Filter: severity, module, full-text search, **status verifikasi**, klik clause compliance untuk drill-down
 - API JSON sederhana di `/api/scans`, `/api/host/<host>/trend`, `/api/scan/<id>`
 
 ---
@@ -150,6 +168,8 @@ cyberloka -t https://example.com --simulate-attack \
 | `--json` | Path output JSON |
 | `--html` | Path output HTML |
 | `--reports-dir` | Folder output: tulis JSON+HTML otomatis (kompatibel dashboard) |
+| `--verify SCAN.json` | Jalankan deep re-test pada finding di bundle yang ada |
+| `--verify-after-scan` | Setelah scan, langsung verify finding yang baru ditemukan |
 | `--no-compliance` | Sembunyikan tabel compliance di console |
 | `--quiet` | Tekan log non-finding |
 

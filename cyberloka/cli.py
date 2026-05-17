@@ -8,11 +8,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from cyberloka import __version__
+from cyberloka.active.verify import (
+    SUPPORTED_MODULES as VERIFY_SUPPORTED,
+    load_findings_from_bundle,
+    verify_findings,
+)
 from cyberloka.core.config import ScanConfig
 from cyberloka.core.logger import get_console, get_logger
 from cyberloka.core.target import parse_target
 from cyberloka.reporting import console as console_report
-from cyberloka.reporting.html_report import write_html
 from cyberloka.reporting.json_report import write_json
 from cyberloka.scanner import MODULE_MAP, run_scan
 
@@ -59,7 +63,13 @@ def build_parser() -> argparse.ArgumentParser:
         prog="cyberloka",
         description="Cyberloka - Web vulnerability scanner & remediation advisor.",
     )
-    p.add_argument("-t", "--target", required=True, help="URL atau IP target (mis. https://example.com)")
+    # --target is required for normal scans, but optional in --verify mode.
+    p.add_argument(
+        "-t",
+        "--target",
+        required=False,
+        help="URL atau IP target (mis. https://example.com). Wajib kecuali memakai --verify.",
+    )
     p.add_argument(
         "--mode",
         choices=("passive", "active", "full"),
@@ -98,13 +108,32 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Sembunyikan tabel compliance di console.",
     )
+    # --- Verify (deep re-scan) options ----------------------------------
+    p.add_argument(
+        "--verify",
+        metavar="SCAN.json",
+        help=(
+            "Mode verifikasi: load bundle JSON hasil scan sebelumnya dan "
+            "lakukan re-test mendalam pada finding yang ditemukan untuk "
+            f"memastikan apakah benar-benar exploitable. Modul yang didukung: "
+            f"{', '.join(VERIFY_SUPPORTED)}."
+        ),
+    )
+    p.add_argument(
+        "--verify-after-scan",
+        action="store_true",
+        help=(
+            "Setelah scan biasa selesai, langsung jalankan verifikasi pada "
+            "finding yang baru ditemukan (one-shot scan + verify)."
+        ),
+    )
     p.add_argument("--quiet", action="store_true")
     p.add_argument("--yes", action="store_true", help="Lewati prompt konfirmasi")
     p.add_argument("--version", action="version", version=f"cyberloka {__version__}")
     return p
 
 
-def _resolve_outputs(args: argparse.Namespace, target_host: str) -> tuple[str | None, str | None]:
+def _resolve_outputs(args: argparse.Namespace, target_host: str, *, suffix: str = "") -> tuple[str | None, str | None]:
     """Combine --json / --html / --reports-dir into final output paths."""
     json_out = args.json_out
     html_out = args.html_out
@@ -112,7 +141,7 @@ def _resolve_outputs(args: argparse.Namespace, target_host: str) -> tuple[str | 
         base = Path(args.reports_dir)
         base.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        stem = f"{_slug(target_host)}-{ts}"
+        stem = f"{_slug(target_host)}{suffix}-{ts}"
         if not json_out:
             json_out = str(base / f"{stem}.json")
         if not html_out:
@@ -120,24 +149,10 @@ def _resolve_outputs(args: argparse.Namespace, target_host: str) -> tuple[str | 
     return json_out, html_out
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-    console = get_console()
-    log = get_logger()
-
-    console.print(ETHICS_NOTICE)
-    console.print()
-
-    try:
-        target = parse_target(args.target)
-    except ValueError as e:
-        log.error("Target tidak valid: %s", e)
-        return 2
-
-    json_out, html_out = _resolve_outputs(args, target.host)
-
-    cfg = ScanConfig(
-        target=args.target,
+def _build_config_from_args(args: argparse.Namespace, target_url: str) -> ScanConfig:
+    """Construct a ScanConfig from CLI args, given an effective target URL."""
+    return ScanConfig(
+        target=target_url,
         mode=args.mode,
         modules=[m.strip() for m in args.modules.split(",")] if args.modules else [],
         threads=args.threads,
@@ -154,45 +169,89 @@ def main(argv: list[str] | None = None) -> int:
         login_pass_field=args.login_pass_field,
         login_test_user=args.login_test_user,
         quiet=args.quiet,
-        json_out=json_out,
-        html_out=html_out,
         proxy=args.proxy,
     )
 
-    needs_intrusive = cfg.mode in ("active", "full") or cfg.simulate_attack
-    if needs_intrusive and not cfg.authorized:
-        if args.yes:
-            cfg.authorized = True
-        else:
-            console.print(
-                "[bold red]Mode aktif/simulasi memerlukan flag --authorized "
-                "(atau --yes) untuk konfirmasi izin.[/bold red]"
-            )
-            try:
-                ans = input("Apakah Anda berwenang men-scan target ini? (yes/N) ").strip().lower()
-            except EOFError:
-                ans = ""
-            if ans not in ("yes", "y"):
-                console.print("[red]Dibatalkan.[/red]")
-                return 1
-            cfg.authorized = True
 
-    console_report.render_banner(target.base_url, cfg.mode, cfg.resolve_modules())
+def _ensure_authorized(cfg: ScanConfig, console, args: argparse.Namespace) -> bool:
+    if cfg.authorized:
+        return True
+    if args.yes:
+        cfg.authorized = True
+        return True
+    console.print(
+        "[bold red]Mode aktif/simulasi/verifikasi memerlukan flag --authorized "
+        "(atau --yes) untuk konfirmasi izin.[/bold red]"
+    )
+    try:
+        ans = input("Apakah Anda berwenang men-scan target ini? (yes/N) ").strip().lower()
+    except EOFError:
+        ans = ""
+    if ans not in ("yes", "y"):
+        console.print("[red]Dibatalkan.[/red]")
+        return False
+    cfg.authorized = True
+    return True
 
-    findings = run_scan(target, cfg)
 
+def _run_verify_only(args: argparse.Namespace) -> int:
+    """Handle `cyberloka --verify scan.json` — load + re-test + write."""
+    console = get_console()
+    log = get_logger()
+
+    bundle_path = Path(args.verify)
+    if not bundle_path.exists():
+        log.error("File tidak ditemukan: %s", bundle_path)
+        return 2
+
+    try:
+        target, findings = load_findings_from_bundle(bundle_path)
+    except Exception as e:  # noqa: BLE001
+        log.error("Gagal memuat bundle %s: %s", bundle_path, e)
+        return 2
+
+    cfg = _build_config_from_args(args, target.base_url)
+
+    # Verification reaches the live target -> it counts as intrusive.
+    if not _ensure_authorized(cfg, console, args):
+        return 1
+
+    # Default outputs: when --reports-dir is set, write a `.verified` file.
+    json_out, html_out = _resolve_outputs(args, target.host, suffix=".verified")
+    cfg.json_out = json_out
+    cfg.html_out = html_out
+
+    console_report.render_banner(
+        target.base_url, "verify", [f.module for f in findings if f.module in VERIFY_SUPPORTED] or ["(none)"]
+    )
+    console.print(f"[dim]Memuat {len(findings)} finding dari {bundle_path}[/dim]\n")
+
+    verified = verify_findings(target, cfg, findings)
+    return _emit_reports(target, cfg, verified, args, console=console, log=log)
+
+
+def _emit_reports(
+    target,
+    cfg: ScanConfig,
+    findings,
+    args: argparse.Namespace,
+    *,
+    console,
+    log,
+) -> int:
+    """Render console output + write JSON/HTML if requested."""
     console.print()
-    # 1. Executive summary first — manager-friendly view at the top.
     console_report.render_executive_summary(findings)
     console.print()
-    # 2. Findings overview table (with risk score column).
     console_report.render_findings(findings)
     console.print()
-    # 3. Compliance mapping summary (skippable).
     if not args.no_compliance:
         console_report.render_compliance_summary(findings)
         console.print()
-    # 4. Per-finding detail (skipped in quiet mode, same as before).
+    # Verification table (only if any finding has been verified)
+    if any(f.extra and f.extra.get("verification") for f in findings):
+        console_report.render_verification_summary(findings)
+        console.print()
     if not cfg.quiet:
         from cyberloka.core.risk import score_finding
         for i, f in enumerate(
@@ -203,20 +262,73 @@ def main(argv: list[str] | None = None) -> int:
             1,
         ):
             console_report.render_finding_detail(f, i)
-    # 5. Severity totals.
     console_report.render_summary(findings)
 
     if cfg.json_out:
         write_json(cfg.json_out, target, cfg, findings)
         log.info("[green]JSON report ditulis ke %s[/green]", cfg.json_out)
     if cfg.html_out:
-        write_html(cfg.html_out, target, cfg, findings)
-        log.info("[green]HTML report ditulis ke %s[/green]", cfg.html_out)
+        # Lazy import: jinja2 is a hard dep but if it's missing we still want
+        # JSON + console output to work.
+        try:
+            from cyberloka.reporting.html_report import write_html
+        except ImportError as e:
+            log.warning("Lewati output HTML (jinja2 tidak tersedia: %s).", e)
+        else:
+            write_html(cfg.html_out, target, cfg, findings)
+            log.info("[green]HTML report ditulis ke %s[/green]", cfg.html_out)
 
-    # Exit code: 0 = no high+ findings; 1 = ada high/critical
     if any(f.severity.value in ("critical", "high") for f in findings):
         return 1
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    console = get_console()
+    log = get_logger()
+
+    console.print(ETHICS_NOTICE)
+    console.print()
+
+    # Verify-only mode
+    if args.verify:
+        return _run_verify_only(args)
+
+    # Standard scan mode requires --target
+    if not args.target:
+        log.error("--target wajib diisi (kecuali memakai --verify).")
+        return 2
+
+    try:
+        target = parse_target(args.target)
+    except ValueError as e:
+        log.error("Target tidak valid: %s", e)
+        return 2
+
+    json_out, html_out = _resolve_outputs(args, target.host)
+
+    cfg = _build_config_from_args(args, args.target)
+    cfg.json_out = json_out
+    cfg.html_out = html_out
+
+    needs_intrusive = (
+        cfg.mode in ("active", "full")
+        or cfg.simulate_attack
+        or args.verify_after_scan
+    )
+    if needs_intrusive and not _ensure_authorized(cfg, console, args):
+        return 1
+
+    console_report.render_banner(target.base_url, cfg.mode, cfg.resolve_modules())
+
+    findings = run_scan(target, cfg)
+
+    if args.verify_after_scan:
+        console.print("\n[bold magenta]Memulai verifikasi mendalam pada finding...[/bold magenta]")
+        findings = verify_findings(target, cfg, findings)
+
+    return _emit_reports(target, cfg, findings, args, console=console, log=log)
 
 
 if __name__ == "__main__":

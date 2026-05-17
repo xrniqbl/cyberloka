@@ -116,6 +116,15 @@
       Search
       <input type="search" name="q" value="{{ current_filters.q }}" placeholder="title / desc / evidence">
     </label>
+    <label>
+      Verification
+      <select name="verification">
+        <option value="">- all -</option>
+        {% for v in ['confirmed','firm','tentative','false_positive'] %}
+          <option value="{{ v }}" {% if current_filters.verification == v %}selected{% endif %}>{{ v | replace('_',' ') }}</option>
+        {% endfor %}
+      </select>
+    </label>
     {% if current_filters.framework %}
       <input type="hidden" name="framework" value="{{ current_filters.framework }}">
       <input type="hidden" name="clause" value="{{ current_filters.clause }}">
@@ -132,6 +141,11 @@
         <span class="badge muted">Risk {{ '%.1f' % f.risk_score }}/10</span>
         <span class="badge muted">{{ f.module }}</span>
         {% if f.cwe %}<span class="badge muted">{{ f.cwe }}</span>{% endif %}
+        {% if f.verification %}
+          <span class="badge verify-{{ f.verification.status }}">
+            {{ f.verification.status | replace('_', ' ') }}
+          </span>
+        {% endif %}
         <div class="finding-title">{{ f.title }}</div>
       </div>
       <div class="muted small mono">{{ f.target }}</div>
@@ -159,6 +173,32 @@
             <li><a href="{{ r }}" target="_blank" rel="noopener">{{ r }}</a></li>
           {% endfor %}
         </ul>
+      {% endif %}
+      {% if f.verification %}
+        <div class="lbl">Verification</div>
+        <div class="verify-block">
+          <div>
+            <span class="badge verify-{{ f.verification.status }}">{{ f.verification.status | replace('_', ' ') }}</span>
+            <span class="muted small">{{ f.verification.verified_at }}</span>
+          </div>
+          {% if f.verification.evidence_strong %}
+            <p style="margin:6px 0 0;">{{ f.verification.evidence_strong }}</p>
+          {% endif %}
+          {% if f.verification.attempts %}
+            <ul class="attempts">
+            {% for a in f.verification.attempts %}
+              <li class="{{ 'ok' if a.success else 'fail' }}">
+                <code>{{ a.technique }}</code>
+                {% if a.detail %} - {{ a.detail }}{% endif %}
+              </li>
+            {% endfor %}
+            </ul>
+          {% endif %}
+          {% if f.verification.poc %}
+            <div class="lbl">PoC</div>
+            <pre>{{ f.verification.poc }}</pre>
+          {% endif %}
+        </div>
       {% endif %}
     </div>
   {% else %}

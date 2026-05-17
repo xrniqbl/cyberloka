@@ -31,6 +31,13 @@ GRADE_STYLE = {
     "F": "bold white on red",
 }
 
+_VSTATUS_STYLE = {
+    "confirmed": "bold white on green",
+    "firm": "bold cyan",
+    "tentative": "yellow",
+    "false_positive": "bold white on grey50",
+}
+
 
 def render_banner(target: str, mode: str, modules: list[str]) -> None:
     console = get_console()
@@ -138,6 +145,41 @@ def render_finding_detail(f: Finding, idx: int) -> None:
                 ("\n".join("- " + r for r in f.references), "blue"),
             )
         )
+    # Verification details (only present after a verify pass)
+    v = (f.extra or {}).get("verification") if f.extra else None
+    if v:
+        body_parts.append(Text(""))
+        status = v.get("status", "tentative")
+        body_parts.append(
+            Text.assemble(
+                ("Verification: ", "bold"),
+                (
+                    status.upper().replace("_", " "),
+                    _VSTATUS_STYLE.get(status, "dim"),
+                ),
+                ("  ", ""),
+                (f"({v.get('verified_at', '')})", "dim"),
+            )
+        )
+        attempts = v.get("attempts", []) or []
+        if attempts:
+            lines = []
+            for a in attempts:
+                marker = "[+]" if a.get("success") else "[-]"
+                lines.append(
+                    f"  {marker} {a.get('technique', '?')}: "
+                    f"{a.get('detail', '') or a.get('payload', '')}"
+                )
+            body_parts.append(
+                Text.assemble(
+                    ("Attempts:\n", "bold"),
+                    ("\n".join(lines), "yellow"),
+                )
+            )
+        if v.get("poc"):
+            body_parts.append(
+                Text.assemble(("PoC:\n", "bold"), (v["poc"], "magenta"))
+            )
     body = Text("\n").join(body_parts)
     console.print(Panel(body, title=header, border_style=style))
 
@@ -246,3 +288,42 @@ def render_compliance_summary(findings: list[Finding]) -> None:
                 row["label"],
             )
         console.print(table)
+
+
+
+# ---------------------------------------------------------------------------
+# Verification summary
+# ---------------------------------------------------------------------------
+
+
+def render_verification_summary(findings: list[Finding]) -> None:
+    """Render a table of findings that have been re-tested (verified)."""
+    console = get_console()
+    rows: list[Finding] = [
+        f for f in findings if f.extra and f.extra.get("verification")
+    ]
+    if not rows:
+        return
+    table = Table(title="Verification (Deep Re-Test)", expand=True)
+    table.add_column("#", style="dim", width=3)
+    table.add_column("Status", width=14)
+    table.add_column("Severity", width=10)
+    table.add_column("Module", width=12)
+    table.add_column("Title", overflow="fold")
+    table.add_column("Attempts", width=9, justify="right")
+
+    rows.sort(key=lambda f: (f.severity.order, f.module))
+    for i, f in enumerate(rows, 1):
+        v = f.extra["verification"]
+        status = v.get("status", "tentative")
+        attempts = v.get("attempts", []) or []
+        successes = sum(1 for a in attempts if a.get("success"))
+        table.add_row(
+            str(i),
+            Text(status.upper().replace("_", " "), style=_VSTATUS_STYLE.get(status, "dim")),
+            Text(f.severity.value.upper(), style=SEV_STYLE[f.severity]),
+            f.module,
+            f.title,
+            f"{successes}/{len(attempts)}",
+        )
+    console.print(table)
