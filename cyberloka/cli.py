@@ -112,6 +112,8 @@ def build_parser() -> argparse.ArgumentParser:
     # Output
     p.add_argument("--json", dest="json_out", help="Path output JSON")
     p.add_argument("--html", dest="html_out", help="Path output HTML")
+    p.add_argument("--narrative", dest="narrative_out", nargs="?", const="-",
+                   help="Cetak ringkasan naratif bahasa Indonesia. Tambah path untuk simpan ke file (mis. --narrative report.txt)")
     p.add_argument("--quiet", action="store_true")
     p.add_argument("--yes", action="store_true", help="Lewati prompt konfirmasi")
     p.add_argument("--version", action="version", version=f"cyberloka {__version__}")
@@ -215,6 +217,20 @@ def main(argv: list[str] | None = None) -> int:
     if cfg.html_out:
         write_html(cfg.html_out, target, cfg, findings)
         log.info("[green]HTML report ditulis ke %s[/green]", cfg.html_out)
+
+    # Narrative report (Indonesian, human-friendly)
+    if args.narrative_out is not None:
+        from cyberloka.reporting.narrative import build_narrative
+        text = build_narrative(target.base_url, findings)
+        if args.narrative_out == "-":
+            console.print()
+            console.print(text)
+        else:
+            with open(args.narrative_out, "w", encoding="utf-8") as fp:
+                fp.write(text)
+            log.info("[green]Narrative report ditulis ke %s[/green]", args.narrative_out)
+            console.print()
+            console.print(text)
 
     # Exit code: 0 = no high+ findings; 1 = ada high/critical
     if any(f.severity.value in ("critical", "high") for f in findings):
