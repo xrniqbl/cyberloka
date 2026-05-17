@@ -13,65 +13,84 @@ penyebabnya, serta memberikan rekomendasi perbaikan.
 
 ---
 
+## Quick Start (paling mudah)
+
+```bash
+pip install -e ".[all]"
+cyberloka                  # buka menu interaktif - tinggal pilih
+```
+
+Menu memberi pilihan:
+1. **Quick Scan** (passive, paling aman)
+2. **Full Scan** (recon + passive + active, butuh izin)
+3. **Verify** finding dari scan sebelumnya
+4. **Buka Web Dashboard**
+5. **Lihat laporan HTML terakhir**
+6. **Setup login session** (untuk scan di balik authentication)
+
+---
+
 ## Fitur
 
-### 1. Reconnaissance (Pengumpulan Informasi)
-- Resolusi DNS (A, AAAA, MX, NS, TXT, CNAME, SOA)
-- WHOIS lookup
-- Port scanning (top common ports, TCP connect)
-- Subdomain enumeration (wordlist-based)
-- Technology fingerprinting (server, framework, CMS) dari header & body
+### 1. Reconnaissance
+DNS, WHOIS, port scan, subdomain enumeration, technology fingerprinting.
 
-### 2. Passive Vulnerability Checks
-- Security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy)
-- TLS/SSL audit (versi protokol, expiry sertifikat, weak ciphers, hostname mismatch)
-- Cookie audit (Secure, HttpOnly, SameSite)
-- CORS misconfiguration
-- Clickjacking exposure
-- HTTP method enumeration (TRACE, PUT, DELETE, OPTIONS)
-- Sensitive file exposure (`.git/`, `.env`, `backup.zip`, `phpinfo.php`, dll.)
+### 2. Passive checks
+Security headers (CSP/HSTS/XFO/etc), TLS audit, cookie flags, CORS,
+clickjacking, HTTP methods, sensitive file exposure.
 
-### 3. Active Vulnerability Checks
-- SQL Injection (error-based & boolean-based, payload aman)
-- Cross-Site Scripting (Reflected XSS)
-- Open Redirect
-- Local File Inclusion (LFI) / Path Traversal
-- Command Injection (time-based & marker)
-- Directory Listing exposure
-- Inspeksi `robots.txt` & `sitemap.xml`
+### 3. Active checks
+SQL Injection, XSS, Open Redirect, LFI / Path Traversal, Command Injection,
+Directory Listing, robots.txt / sitemap.xml inspection.
 
-### 4. Attack Simulation (Safe Mode)
-- Rate-limit & brute-force resistance test pada endpoint login
-- Burst request test untuk melihat respons WAF / rate limiter
-- *Tidak* melakukan DoS sungguhan: dibatasi durasi & jumlah request.
+### 4. Authenticated session scanning *(baru)*
+Scan halaman di balik login. Tiga metode auth didukung:
+- **form** — POST credentials, capture cookie (default)
+- **header** — kirim header statis (Bearer token, dll.) di setiap request
+- **cookie** — pakai cookie session yang sudah ada (mis. di-export dari browser)
 
-### 5. Risk Scoring & Executive Summary  *(baru)*
-- **Risk score CVSS-like (0.0 – 10.0)** per finding (severity × module exploitability × confidence)
-- **Overall website grade A+ / A / B / C / D / F** (mirip SSL Labs), berikut score 0–100
-- **Executive Summary** satu halaman untuk manajemen non-teknis: postur, distribusi risk, dan **Top 5 prioritas perbaikan**
+Optional: pre-fetch CSRF token, success/failure indicator, logout-URL avoidance.
 
-### 6. Compliance Mapping  *(baru)*
-Setiap finding di-map otomatis ke standar yang relevan:
-- **OWASP Top 10 2021** (A01–A10)
-- **PCI-DSS v4.0** (requirement IDs)
-- **ISO/IEC 27001:2022** Annex A controls
-- **NIST CSF 2.0** functions/categories
-- **CIS Controls v8** control IDs
-- **UU PDP Indonesia** (UU 27/2022, pasal terkait)
+```bash
+# Buat config interaktif lewat menu (pilihan 6) atau tulis manual:
+cat > login.json <<'EOF'
+{
+  "method": "form",
+  "url": "https://app.example.com/login",
+  "username": "alice",
+  "password": "secret",
+  "user_field": "email",
+  "pass_field": "password",
+  "success_indicator": "Welcome,",
+  "csrf_url": "https://app.example.com/login",
+  "csrf_field": "csrf_token",
+  "logout_url": "https://app.example.com/logout"
+}
+EOF
+chmod 600 login.json
 
-### 7. Reporting
-- Output CLI berwarna (severity-coded) menggunakan `rich`, kini dengan kolom risk score
-- Export **JSON** terstruktur (lengkap dengan score + compliance) — cocok untuk pipeline CI
-- Export **HTML** responsive: tampil rapi di mobile + desktop, ramah print/PDF
+cyberloka -t https://app.example.com --mode full --authorized \
+          --login-config login.json --reports-dir reports
+```
 
-### 8. Verification — Deep Re-Test  *(baru)*
-Setelah scan biasa selesai, lakukan **deep re-scan** pada finding yang sudah
-ditemukan untuk memisahkan **real vulnerability** dari **false-positive**.
-- Modul yang didukung: `sqli`, `xss`, `lfi`, `redirect`, `cmdi`, `sensitive_files`, `dirlist`, `headers`, `cookies`
-- Tiap finding di-test dengan **teknik berbeda** dari deteksi awal (mis. SQLi: error-based + boolean-based + time-based; XSS: 5 context-aware payload)
-- Hasil: `confirmed` / `firm` / `tentative` / `false_positive` — finding yang ternyata false-positive otomatis didemote severity-nya ke `info` dan diberi tag `[FALSE POSITIVE]`
-- Setiap finding `confirmed`/`firm` mendapat **PoC curl command** yang reproducible
-- Statistik verifikasi muncul di summary, badge di setiap finding, dan filter baru di dashboard
+### 5. Attack simulation
+Rate-limit & brute-force resistance test (login endpoint), burst test.
+Tidak melakukan DoS sungguhan.
+
+### 6. Risk Scoring & Executive Summary
+- **Risk score CVSS-like (0.0 – 10.0)** per finding
+- **Overall grade A+/A/B/C/D/F** (mirip SSL Labs), score 0–100
+- **Executive Summary** untuk manajemen non-teknis: postur, distribusi risk,
+  Top 5 prioritas perbaikan
+
+### 7. Compliance Mapping
+Setiap finding di-map ke OWASP Top 10 2021, PCI-DSS v4.0, ISO/IEC 27001:2022,
+NIST CSF 2.0, CIS Controls v8, dan UU PDP Indonesia (UU 27/2022).
+
+### 8. Verification — Deep Re-Test
+Re-test finding pakai teknik berbeda dari deteksi awal untuk memisahkan
+real-vuln dari false-positive. Hasil: `confirmed`/`firm`/`tentative`/`false_positive`,
+plus PoC `curl` command yang reproducible.
 
 ```bash
 # Mode A: scan + verify dalam satu run
@@ -79,14 +98,36 @@ cyberloka -t https://example.com --mode full --authorized --verify-after-scan
 
 # Mode B: re-test bundle JSON dari scan sebelumnya
 cyberloka --verify reports/example.com-20260101T120000Z.json --authorized
-# menghasilkan reports/example.com.verified-...json + .html
 ```
 
-### 9. Web Dashboard  *(baru)*
-- Flask web UI ringan: history scan, trend grade per host, filter findings interaktif
+### 9. Reporting (4 format) *(baru)*
+
+| Format | Use case | Flag |
+|--------|----------|------|
+| **JSON** | CI pipeline, dashboard, scripting | `--json` |
+| **HTML** | Print-to-PDF, sharing via browser | `--html` |
+| **TXT** | Plain text untuk email/ticket/diff | `--txt` |
+| **PDF** | Laporan formal ke management/audit | `--pdf` (butuh `pip install 'cyberloka[pdf]'`) |
+
+`--reports-dir reports/` otomatis menulis JSON+HTML; tambah `--txt`/`--pdf`
+untuk format ekstra (file akan diberi nama bertanggal otomatis).
+
+### 10. Web Dashboard
+- Flask web UI: history scan, trend grade per host, filter findings interaktif
 - Compare dua scan side-by-side (resolved / new / unchanged)
-- Filter: severity, module, full-text search, **status verifikasi**, klik clause compliance untuk drill-down
-- API JSON sederhana di `/api/scans`, `/api/host/<host>/trend`, `/api/scan/<id>`
+- Filter: severity, module, full-text, status verifikasi, drill-down clause compliance
+- API JSON di `/api/scans`, `/api/host/<host>/trend`, `/api/scan/<id>`
+
+```bash
+cyberloka-dashboard --reports-dir reports --open    # auto-buka browser
+```
+
+Atau dari hasil scan langsung:
+
+```bash
+cyberloka -t https://example.com --mode full --authorized \
+          --reports-dir reports --open-dashboard
+```
 
 ---
 
@@ -97,27 +138,34 @@ git clone https://github.com/xrniqbl/cyberloka.git
 cd cyberloka
 python -m venv .venv
 source .venv/bin/activate           # Windows: .venv\Scripts\activate
-pip install -e .                    # core scanner + reporters
-pip install -e ".[dashboard]"       # tambah web dashboard (Flask)
+
+# pilih satu:
+pip install -e .                    # core (JSON + HTML + TXT)
+pip install -e ".[dashboard]"       # + Web Dashboard
+pip install -e ".[pdf]"             # + PDF report
+pip install -e ".[all]"             # semua fitur (rekomendasi)
 ```
 
-Atau tanpa install:
+## Penggunaan CLI
 
+### Menu interaktif (paling mudah)
 ```bash
-pip install -r requirements.txt
-python -m cyberloka --help
+cyberloka                 # buka menu
+cyberloka --menu          # eksplisit
 ```
 
-## Penggunaan
-
-### Scan dasar (passive only — paling aman)
+### Scan dasar (passive)
 ```bash
 cyberloka -t https://example.com --mode passive
 ```
 
-### Scan penuh (recon + passive + active)
+### Scan penuh + verify + semua format laporan
 ```bash
-cyberloka -t https://example.com --mode full --authorized
+cyberloka -t https://example.com --mode full --authorized \
+          --reports-dir reports \
+          --txt --pdf \
+          --verify-after-scan \
+          --open-dashboard
 ```
 
 ### Pilih modul tertentu
@@ -125,94 +173,93 @@ cyberloka -t https://example.com --mode full --authorized
 cyberloka -t https://example.com --modules headers,tls,xss,sqli
 ```
 
-### Simpan laporan (file individual)
+### Authenticated scan
 ```bash
-cyberloka -t https://example.com --mode full --authorized \
-          --json report.json --html report.html
+cyberloka -t https://app.example.com --mode full --authorized \
+          --login-config login.json --reports-dir reports
 ```
 
-### Simpan ke folder reports/ (otomatis untuk dashboard)
+### Verify finding lama
 ```bash
-cyberloka -t https://example.com --mode full --authorized \
-          --reports-dir reports
-# menulis reports/example.com-20260101T120000Z.json + .html
+cyberloka --verify reports/example.com-20260101T120000Z.json --authorized
 ```
 
-### Jalankan Web Dashboard
+### Buka Dashboard
 ```bash
-pip install -e ".[dashboard]"
-cyberloka-dashboard --reports-dir reports
-# buka http://127.0.0.1:5005
-```
-
-### Attack simulation (butuh konfirmasi)
-```bash
-cyberloka -t https://example.com --simulate-attack \
-          --login-url https://example.com/login \
-          --authorized
+cyberloka-dashboard --reports-dir reports --open
+# Default port: 5005, atau --port 8080
 ```
 
 ### Opsi CLI (ringkas)
 
 | Opsi | Deskripsi |
 |------|-----------|
-| `-t, --target` | URL atau IP target (wajib) |
-| `--mode` | `passive`, `active`, `full` (default: `passive`) |
+| `--menu` | Buka menu interaktif |
+| `-t, --target` | URL/IP target |
+| `--mode` | `passive`, `active`, `full` |
 | `--modules` | Daftar modul (comma-separated) |
-| `--authorized` | Konfirmasi bahwa Anda berwenang men-scan target |
-| `--threads` | Jumlah worker untuk modul paralel |
-| `--timeout` | Timeout HTTP per request (detik) |
-| `--rate` | Maks request per detik |
-| `--user-agent` | UA custom |
-| `--cookies` | Cookies tambahan (`k=v;k2=v2`) |
-| `--json` | Path output JSON |
-| `--html` | Path output HTML |
-| `--reports-dir` | Folder output: tulis JSON+HTML otomatis (kompatibel dashboard) |
-| `--verify SCAN.json` | Jalankan deep re-test pada finding di bundle yang ada |
-| `--verify-after-scan` | Setelah scan, langsung verify finding yang baru ditemukan |
+| `--authorized` | Konfirmasi izin men-scan |
+| `--login-config FILE` | Path ke JSON config untuk authenticated session |
+| `--json / --html / --txt / --pdf` | Format laporan output |
+| `--reports-dir DIR` | Folder output otomatis bertanggal |
+| `--open-dashboard` | Buka dashboard setelah scan selesai |
+| `--verify FILE.json` | Re-test bundle dari scan sebelumnya |
+| `--verify-after-scan` | Auto-verify setelah scan |
 | `--no-compliance` | Sembunyikan tabel compliance di console |
 | `--quiet` | Tekan log non-finding |
+| `--yes` | Lewati prompt konfirmasi (untuk CI) |
 
 ---
 
-## Struktur Project
+## Login Config Format
 
+```json
+{
+  "method": "form",
+  "url": "https://example.com/login",
+  "username": "alice",
+  "password": "secret",
+  "user_field": "username",
+  "pass_field": "password",
+  "extra_fields": { "remember": "1" },
+  "success_indicator": "Welcome,",
+  "failure_indicator": "Invalid credentials",
+  "success_url_pattern": "/dashboard",
+  "csrf_url": "https://example.com/login",
+  "csrf_field": "csrf_token",
+  "logout_url": "https://example.com/logout"
+}
 ```
-cyberloka/
-├── cyberloka/
-│   ├── __init__.py
-│   ├── __main__.py
-│   ├── cli.py
-│   ├── core/                   # config, http client, model, logger, util
-│   │   ├── risk.py             # CVSS-like scoring + grading + executive summary
-│   │   ├── compliance.py       # OWASP/PCI/ISO/NIST/CIS/UU-PDP mapping
-│   │   └── report_bundle.py    # unified report bundle (consumed by all reporters)
-│   ├── recon/                  # dns, whois, ports, subdomain, fingerprint
-│   ├── passive/                # headers, tls, cookies, cors, methods, files
-│   ├── active/                 # sqli, xss, redirect, lfi, cmdi, dirlist
-│   ├── simulate/               # rate_limit, burst
-│   ├── reporting/              # console, json_report, html_report (responsive)
-│   └── dashboard/              # Flask web UI (history, trend, compare, filter)
-├── data/
-│   ├── subdomains.txt
-│   ├── sensitive_paths.txt
-│   └── common_passwords.txt
-├── pyproject.toml
-├── requirements.txt
-└── README.md
+
+Untuk Bearer token / API:
+```json
+{
+  "method": "header",
+  "headers": { "Authorization": "Bearer eyJhbGc..." }
+}
 ```
+
+Untuk session cookie yang sudah ada:
+```json
+{
+  "method": "cookie",
+  "cookies": { "session": "abc123", "csrf": "xyz" }
+}
+```
+
+> **Tip:** simpan dengan `chmod 600 login.json` agar credential tidak terbaca user lain.
+
+---
 
 ## Severity & Risk Score
 
 | Severity | Score band | Grade impact | Arti |
 |----------|-----------|--------------|------|
-| `critical` | 9.0 – 10.0 | -35 / finding | Segera perbaiki — eksploitasi mudah, dampak besar |
-| `high`     | 7.0 – 8.9  | -18 / finding | Risiko tinggi, perlu perbaikan dalam waktu dekat |
+| `critical` | 9.0 – 10.0 | -35 / finding | Eksploitasi mudah, dampak besar — segera perbaiki |
+| `high`     | 7.0 – 8.9  | -18 / finding | Risiko tinggi, perbaiki dalam waktu dekat |
 | `medium`   | 4.0 – 6.9  | -7  / finding | Penting, perbaiki saat siklus rilis berikutnya |
 | `low`      | 0.1 – 3.9  | -2  / finding | Best-practice / hardening |
 | `info`     | 0.0        | none          | Informasi (tidak selalu kerentanan) |
-
-Penalty per finding mengalami *diminishing returns* seiring jumlah temuan, sehingga score dan grade tetap relevan untuk situs dengan banyak temuan low/info.
 
 ## Lisensi
 

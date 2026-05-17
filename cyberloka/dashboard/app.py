@@ -181,16 +181,77 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1).")
     parser.add_argument("--port", type=int, default=5005, help="Bind port (default: 5005).")
     parser.add_argument("--debug", action="store_true", help="Mode debug (auto-reload).")
+    parser.add_argument(
+        "--open",
+        dest="open_browser",
+        action="store_true",
+        help="Buka dashboard di browser setelah server siap.",
+    )
+    parser.add_argument(
+        "--no-banner",
+        action="store_true",
+        help="Sembunyikan banner ASCII di startup.",
+    )
     args = parser.parse_args(argv)
 
+    reports_dir = Path(args.reports_dir).resolve()
+    reports_dir.mkdir(parents=True, exist_ok=True)
     app = create_app(args.reports_dir)
-    print(
-        f"Cyberloka Dashboard v{__version__}\n"
-        f"  Reports dir : {Path(args.reports_dir).resolve()}\n"
-        f"  Listening   : http://{args.host}:{args.port}\n"
-        "  (Ctrl+C to stop)"
-    )
-    app.run(host=args.host, port=args.port, debug=args.debug)
+
+    # Pretty banner with rich (graceful fallback if rich missing).
+    url = f"http://{args.host if args.host != '0.0.0.0' else '127.0.0.1'}:{args.port}/"
+    if not args.no_banner:
+        try:
+            from rich.console import Console
+            from rich.panel import Panel
+            from rich.text import Text
+            console = Console()
+            banner = Text()
+            banner.append("CYBERLOKA DASHBOARD", style="bold magenta")
+            banner.append(f"  v{__version__}\n", style="dim")
+            banner.append(f"\n  Reports dir : ", style="bold")
+            banner.append(f"{reports_dir}\n", style="cyan")
+            banner.append(f"  Listening   : ", style="bold")
+            banner.append(f"{url}\n", style="bold green")
+            banner.append("  (Tekan Ctrl+C untuk berhenti)", style="dim")
+            console.print(Panel.fit(banner, border_style="magenta"))
+        except ImportError:  # pragma: no cover
+            print(
+                f"Cyberloka Dashboard v{__version__}\n"
+                f"  Reports dir : {reports_dir}\n"
+                f"  Listening   : {url}\n"
+                "  (Ctrl+C to stop)"
+            )
+
+    if args.open_browser:
+        # Schedule browser launch *after* the server starts. We can't block
+        # here because app.run() never returns. A small thread that waits
+        # for the port to be reachable, then opens the URL, is the cleanest
+        # approach.
+        import socket
+        import threading
+        import time
+        import webbrowser
+
+        def _open_when_ready() -> None:
+            host = args.host if args.host != "0.0.0.0" else "127.0.0.1"
+            for _ in range(50):  # ~5s total
+                try:
+                    with socket.create_connection((host, args.port), timeout=0.2):
+                        break
+                except OSError:
+                    time.sleep(0.1)
+            try:
+                webbrowser.open(url)
+            except Exception:  # noqa: BLE001
+                pass
+
+        threading.Thread(target=_open_when_ready, daemon=True).start()
+
+    try:
+        app.run(host=args.host, port=args.port, debug=args.debug)
+    except KeyboardInterrupt:
+        return 0
     return 0
 
 

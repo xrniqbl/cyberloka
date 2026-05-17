@@ -35,6 +35,13 @@ dependencies = [
 dashboard = [
     "flask>=3.0.0",
 ]
+pdf = [
+    "reportlab>=4.0.0",
+]
+all = [
+    "flask>=3.0.0",
+    "reportlab>=4.0.0",
+]
 
 [project.scripts]
 cyberloka = "cyberloka.cli:main"
