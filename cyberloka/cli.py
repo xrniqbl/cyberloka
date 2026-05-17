@@ -5,6 +5,7 @@ import argparse
 import sys
 
 from cyberloka import __version__
+from cyberloka.core.auth import AuthConfig
 from cyberloka.core.config import ScanConfig
 from cyberloka.core.logger import get_console, get_logger
 from cyberloka.core.target import parse_target
@@ -46,6 +47,18 @@ def parse_headers(values: list[str] | None) -> dict[str, str]:
     return out
 
 
+def parse_form_fields(values: list[str] | None) -> dict[str, str]:
+    if not values:
+        return {}
+    out: dict[str, str] = {}
+    for v in values:
+        if "=" not in v:
+            continue
+        k, val = v.split("=", 1)
+        out[k.strip()] = val.strip()
+    return out
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="cyberloka",
@@ -76,6 +89,27 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--header", action="append", default=[], help="Tambah header `Name: value` (boleh diulang)")
     p.add_argument("--no-verify-tls", action="store_true")
     p.add_argument("--proxy", help="HTTP proxy URL (mis. http://127.0.0.1:8080)")
+
+    # Crawler
+    p.add_argument("--crawl", action="store_true", help="Aktifkan crawler/spider untuk discover endpoint")
+    p.add_argument("--crawl-max-pages", type=int, default=60)
+    p.add_argument("--crawl-max-depth", type=int, default=3)
+
+    # Authenticated scan
+    p.add_argument("--auth-method", choices=("none", "form", "bearer"), default="none",
+                   help="Metode otentikasi sebelum scan")
+    p.add_argument("--auth-login-url", help="URL form login (untuk --auth-method form)")
+    p.add_argument("--auth-user", help="Username untuk form login")
+    p.add_argument("--auth-pass", help="Password untuk form login")
+    p.add_argument("--auth-user-field", default="username")
+    p.add_argument("--auth-pass-field", default="password")
+    p.add_argument("--auth-form-field", action="append", default=[],
+                   help="Field form tambahan `key=value` (boleh diulang)")
+    p.add_argument("--auth-token", help="Bearer token (untuk --auth-method bearer)")
+    p.add_argument("--auth-success-marker", help="Regex yang harus muncul setelah login berhasil")
+    p.add_argument("--auth-failure-marker", help="Regex yang menandakan login gagal")
+
+    # Output
     p.add_argument("--json", dest="json_out", help="Path output JSON")
     p.add_argument("--html", dest="html_out", help="Path output HTML")
     p.add_argument("--quiet", action="store_true")
@@ -98,6 +132,19 @@ def main(argv: list[str] | None = None) -> int:
         log.error("Target tidak valid: %s", e)
         return 2
 
+    auth = AuthConfig(
+        method=args.auth_method,
+        login_url=args.auth_login_url,
+        username=args.auth_user,
+        password=args.auth_pass,
+        user_field=args.auth_user_field,
+        pass_field=args.auth_pass_field,
+        extra_form_fields=parse_form_fields(args.auth_form_field),
+        bearer_token=args.auth_token,
+        success_marker=args.auth_success_marker,
+        failure_marker=args.auth_failure_marker,
+    )
+
     cfg = ScanConfig(
         target=args.target,
         mode=args.mode,
@@ -119,6 +166,10 @@ def main(argv: list[str] | None = None) -> int:
         json_out=args.json_out,
         html_out=args.html_out,
         proxy=args.proxy,
+        auth=auth,
+        crawl=args.crawl,
+        crawl_max_pages=args.crawl_max_pages,
+        crawl_max_depth=args.crawl_max_depth,
     )
 
     needs_intrusive = cfg.mode in ("active", "full") or cfg.simulate_attack
