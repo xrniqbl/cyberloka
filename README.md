@@ -76,7 +76,29 @@ penyebabnya, serta memberikan rekomendasi perbaikan.
 
 ---
 
-## Instalasi
+## Quickstart (rekomendasi)
+
+Cara tercepat — clone, lalu jalankan `scan.sh` (Linux/macOS/WSL) atau `scan.bat` (Windows). Skrip ini otomatis membuat venv, install dependency, scan, dan menampilkan ringkasan.
+
+```bash
+git clone https://github.com/xrniqbl/cyberloka.git
+cd cyberloka
+git checkout integration/all-features
+
+# Linux / macOS / WSL
+./scan.sh https://target-anda.com           # mode passive (paling aman)
+./scan.sh https://target-anda.com active    # passive + active checks + crawler
+./scan.sh https://target-anda.com full      # recon + passive + active
+
+# Windows
+scan.bat https://target-anda.com
+scan.bat http://localhost:3000 active
+```
+
+Skrip akan menyimpan laporan ke `reports/<host>_<timestamp>.html` dan `.json`,
+plus mencetak ringkasan severity & top issues di terminal.
+
+## Instalasi manual
 
 ```bash
 git clone https://github.com/xrniqbl/cyberloka.git
