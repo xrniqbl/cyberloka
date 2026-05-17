@@ -58,6 +58,11 @@ MODULE_HUMAN: dict[str, str] = {
     "openapi": "Spesifikasi OpenAPI/Swagger ter-ekspos",
     "rate_limit": "Endpoint login tanpa rate-limit (rentan brute-force)",
     "burst": "Tidak ada rate-limit/WAF saat burst request",
+    "payment": "Alur pembayaran/saldo bermasalah (CSRF/HTTP/key bocor)",
+    "idor": "Insecure Direct Object Reference (data user lain dapat diakses)",
+    "host_header": "Host header injection (link reset password dapat dipalsukan)",
+    "mass_assign": "Mass Assignment (field privileged dapat di-set lewat body)",
+    "hpp": "HTTP Parameter Pollution (parameter ganda menyebabkan inkonsistensi)",
 }
 
 
@@ -282,6 +287,64 @@ def _section_whois(findings: list[Finding]) -> list[str]:
     return out
 
 
+def _section_payment(findings: list[Finding]) -> list[str]:
+    """Section khusus alur pembayaran."""
+    pay_findings = [f for f in findings if f.module == "payment"]
+    if not pay_findings:
+        return []
+
+    out: list[str] = []
+    out.append("[4b] ALUR PEMBAYARAN / SALDO")
+    out.append("-" * 70)
+
+    # Cari finding ringkasan (INFO) yang punya extra.endpoints
+    summary = next(
+        (f for f in pay_findings if f.severity == Severity.INFO and f.extra and f.extra.get("endpoints")),
+        None,
+    )
+    if summary:
+        eps = summary.extra.get("endpoints", [])
+        forms = summary.extra.get("forms", [])
+        out.append(f"Endpoint payment terdeteksi: {len(eps)}")
+        out.append(f"Form payment terdeteksi    : {len(forms)}")
+        out.append("")
+        if eps:
+            out.append("Endpoint:")
+            for e in eps[:8]:
+                out.append(f"   - [{e.get('method', 'GET')}] {e.get('url')}")
+        if forms:
+            out.append("")
+            out.append("Form:")
+            for f in forms[:8]:
+                out.append(
+                    f"   - [{f.get('method', 'GET')}] {f.get('url')} "
+                    f"fields={f.get('fields')}"
+                )
+        out.append("")
+
+    # Masalah konfigurasi yang langsung relevan
+    issues = [f for f in pay_findings if f.severity != Severity.INFO]
+    if issues:
+        out.append("Masalah konfigurasi pada alur pembayaran:")
+        for f in issues:
+            out.append(f"   [{SEVERITY_LABEL[f.severity]}] {f.title}")
+        out.append("")
+
+    # Daftar test manual
+    manual = next(
+        (f for f in pay_findings if "test manual" in f.title.lower()),
+        None,
+    )
+    if manual:
+        out.append(">> Test MANUAL yang WAJIB dilakukan tester (tidak bisa otomatis):")
+        for line in (manual.evidence or "").split("\n"):
+            if line.strip():
+                out.append(line)
+        out.append("")
+
+    return out
+
+
 def _section_endpoints(findings: list[Finding]) -> list[str]:
     """Endpoint hasil crawler/openapi + file sensitif."""
     out: list[str] = []
@@ -445,6 +508,11 @@ def build_narrative(target_url: str, findings: list[Finding]) -> str:
     ep_lines = _section_endpoints(findings_sorted)
     if ep_lines:
         lines.extend(ep_lines)
+
+    # Section 4b: payment flow
+    pay_lines = _section_payment(findings_sorted)
+    if pay_lines:
+        lines.extend(pay_lines)
 
     # Section 5: vuln details
     vuln_lines = _section_vulns(findings_sorted)

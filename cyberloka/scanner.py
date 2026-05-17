@@ -45,6 +45,11 @@ MODULE_MAP: dict[str, str] = {
     "nosqli": "cyberloka.active.nosqli",
     "graphql": "cyberloka.active.graphql_audit",
     "websocket": "cyberloka.active.websocket",
+    "payment": "cyberloka.active.payment",
+    "idor": "cyberloka.active.idor",
+    "host_header": "cyberloka.active.host_header",
+    "mass_assign": "cyberloka.active.mass_assign",
+    "hpp": "cyberloka.active.hpp",
     # simulate
     "rate_limit": "cyberloka.simulate.rate_limit",
     "burst": "cyberloka.simulate.burst",

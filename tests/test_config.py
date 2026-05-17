@@ -22,6 +22,8 @@ def test_active_mode_includes_ports_subdomains_and_active_checks():
         "nosqli", "graphql", "websocket",
         # ditambahkan: ports & subdomains supaya laporan kaya
         "ports", "subdomains", "openapi", "dns", "whois", "fingerprint",
+        # detector lebih dalam
+        "payment", "idor", "host_header", "mass_assign", "hpp",
     ):
         assert m in mods, f"{m} should be in active mode"
 

@@ -74,6 +74,11 @@ class ScanConfig:
         "nosqli",
         "graphql",
         "websocket",
+        "host_header",
+        "hpp",
+        "idor",
+        "mass_assign",
+        "payment",
     )
     # Backward-compat: union semua modul recon
     RECON_MODULES = PASSIVE_RECON + ACTIVE_RECON + ("crawler",)

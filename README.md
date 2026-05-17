@@ -49,6 +49,11 @@ penyebabnya, serta memberikan rekomendasi perbaikan.
 - **NoSQL Injection** (MongoDB) — operator probe + JSON body
 - **GraphQL audit** — introspection, batching, alias overload, GET-method
 - **WebSocket scanner** — handshake, cross-origin, ws:// vs wss://, token in URL
+- **Payment / saldo flow auditor** — endpoint payment over HTTP, form payment tanpa CSRF, field amount dari client (price tampering), key payment provider bocor (Stripe/Midtrans/Xendit), plus daftar test manual yang wajib dilakukan tester (race condition, negative amount, currency confusion, IDOR transaction, webhook spoofing)
+- **IDOR heuristic** — id numerik berurutan return 200 berbeda → kandidat akses data user lain
+- **Host header injection** — server merefleksikan Host attacker (password reset poisoning)
+- **Mass Assignment** — body JSON dengan field `isAdmin`/`role`/`balance` diterima 2xx tanpa error
+- **HTTP Parameter Pollution** — server pakai value yang berbeda dari WAF saat parameter duplikat
 
 ### 4. Authenticated Scan
 - Form login dengan **CSRF token auto-extract**
