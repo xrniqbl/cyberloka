@@ -97,40 +97,77 @@ echo === Folder Output ===
 echo [OK]  reports\ siap dipakai
 
 REM 7. Menu untuk coba live
+:menu
 echo.
 echo ============================================================
-echo   FITUR TERSEDIA - Pilih untuk dicoba
+echo   APA YANG MAU DICOBA?  (pilih nomor)
 echo ============================================================
 echo.
-echo   1. Buka menu interaktif Cyberloka
-echo   2. Quick scan passive ke target uji (httpbin.org)
-echo   3. Buka dashboard di browser
-echo   4. Tampilkan --help (semua opsi CLI)
+echo   1. Buka menu interaktif Cyberloka  (RECOMMENDED)
+echo   2. Quick Scan  (passive, paling aman)
+echo   3. Full Scan   (recon + passive + active, butuh izin)
+echo   4. Buka Dashboard di browser
+echo   5. Lihat laporan HTML terakhir
+echo   6. Tampilkan --help (semua opsi CLI)
 echo   0. Keluar
 echo.
-set /p choice="Pilih [0-4]: "
+set /p choice="Pilih [0-6]: "
 
-if "%choice%"=="1" (
-    python -m cyberloka --menu
-    goto :end
-)
-if "%choice%"=="2" (
-    set /p target="Target URL [https://httpbin.org]: "
-    if "!target!"=="" set "target=https://httpbin.org"
-    python -m cyberloka -t !target! --mode passive --reports-dir reports --txt --pdf --no-compliance
-    echo.
-    echo Lihat hasil di folder reports\
-    goto :end
-)
-if "%choice%"=="3" (
-    echo Memulai dashboard di http://127.0.0.1:5005/
-    python -m cyberloka.dashboard.app --reports-dir reports --open
-    goto :end
-)
-if "%choice%"=="4" (
-    python -m cyberloka --help
-    goto :end
-)
+if "%choice%"=="1" goto :menu_interactive
+if "%choice%"=="2" goto :scan_quick
+if "%choice%"=="3" goto :scan_full
+if "%choice%"=="4" goto :dashboard
+if "%choice%"=="5" goto :view_report
+if "%choice%"=="6" goto :show_help
+if "%choice%"=="0" goto :end
+
+echo Pilihan tidak dikenal.
+goto :menu
+
+:menu_interactive
+python -m cyberloka --menu
+goto :menu
+
+:scan_quick
+echo.
+set /p target=">> Masukkan domain/IP target: "
+if "%target%"=="" goto :menu
+python -m cyberloka -t %target% --mode passive --reports-dir reports --txt --pdf --yes
+echo.
+echo [OK] Scan selesai. Cek folder reports\
+goto :menu
+
+:scan_full
+echo.
+echo [WARN] Full scan menjalankan probe aktif (SQLi/XSS/dll).
+echo        Pastikan Anda berwenang men-scan target ini.
+echo.
+set /p target=">> Masukkan domain/IP target: "
+if "%target%"=="" goto :menu
+python -m cyberloka -t %target% --mode full --authorized --reports-dir reports --txt --pdf --verify-after-scan --open-dashboard --yes
+echo.
+echo [OK] Scan selesai. Lihat dashboard yang terbuka, atau folder reports\
+goto :menu
+
+:dashboard
+echo.
+echo Memulai dashboard di http://127.0.0.1:5005/
+python -m cyberloka.dashboard.app --reports-dir reports --open
+goto :menu
+
+:view_report
+echo.
+echo Laporan HTML di folder reports\:
+dir /B /O:-D reports\*.html 2>nul
+echo.
+echo Buka file HTML di browser dengan double-click, atau:
+echo   start reports\nama-file.html
+goto :menu
+
+:show_help
+echo.
+python -m cyberloka --help
+goto :menu
 
 :end
 echo.
