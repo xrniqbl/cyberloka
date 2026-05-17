@@ -35,7 +35,12 @@ class RateLimiter:
 
 
 class HttpClient:
-    """Thin wrapper over requests.Session with safe defaults."""
+    """Thin wrapper over requests.Session with safe defaults.
+
+    Bila `config.headers` memuat `Authorization` (mis. dari --auth-token),
+    atau `config.cookies` memuat cookie hasil login form, maka semua request
+    akan otomatis terotentikasi.
+    """
 
     def __init__(self, config: ScanConfig):
         self.config = config

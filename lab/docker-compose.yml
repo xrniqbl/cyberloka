@@ -1,0 +1,52 @@
+# Cyberloka Test Lab — INTENTIONALLY VULNERABLE applications
+#
+# Aplikasi ini SENGAJA rentan dan dipakai untuk berlatih scan dengan Cyberloka.
+# JANGAN expose ke internet. Pakai hanya di mesin lokal di belakang firewall.
+#
+#   cd lab && docker compose up -d
+#
+# Targets default:
+#   - Juice Shop  http://localhost:3000   (modern OWASP top-10 lab)
+#   - DVWA        http://localhost:8080   (klasik PHP/MySQL labs; default login admin/password)
+#   - bWAPP       http://localhost:8888   (kumpulan ratusan vuln)
+#   - VAmPI       http://localhost:5001   (REST API rentan, untuk JWT/IDOR/SSRF)
+#
+# Beberapa container memerlukan beberapa detik untuk siap.
+version: "3.9"
+
+services:
+  juiceshop:
+    image: bkimminich/juice-shop:latest
+    container_name: cyberloka-juiceshop
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+    # Juice Shop sudah self-contained.
+
+  dvwa:
+    image: vulnerables/web-dvwa:latest
+    container_name: cyberloka-dvwa
+    ports:
+      - "127.0.0.1:8080:80"
+    restart: unless-stopped
+    # Setelah up: buka /setup.php, klik "Create / Reset Database",
+    # lalu login admin/password. Atur DVWA Security ke "low" untuk
+    # melihat scanner mendeteksi celah.
+
+  bwapp:
+    image: raesene/bwapp:latest
+    container_name: cyberloka-bwapp
+    ports:
+      - "127.0.0.1:8888:80"
+    restart: unless-stopped
+    # Setelah up: buka /install.php sekali. Login default: bee/bug.
+
+  vampi:
+    image: erev0s/vampi:latest
+    container_name: cyberloka-vampi
+    ports:
+      - "127.0.0.1:5001:5000"
+    environment:
+      - vulnerable=1
+    restart: unless-stopped
+    # API endpoint /createdb sekali untuk seed.

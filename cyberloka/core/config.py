@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from cyberloka.core.auth import AuthConfig
+
 
 @dataclass
 class ScanConfig:
@@ -30,6 +32,10 @@ class ScanConfig:
     json_out: str | None = None
     html_out: str | None = None
     proxy: str | None = None
+    auth: AuthConfig = field(default_factory=AuthConfig)
+    crawl: bool = False
+    crawl_max_pages: int = 60
+    crawl_max_depth: int = 3
 
     PASSIVE_MODULES = (
         "headers",
@@ -42,6 +48,7 @@ class ScanConfig:
         "fingerprint",
         "robots",
         "dns",
+        "csrf",
     )
     ACTIVE_MODULES = (
         "sqli",
@@ -50,6 +57,13 @@ class ScanConfig:
         "lfi",
         "cmdi",
         "dirlist",
+        "ssrf",
+        "jwt",
+        "xxe",
+        "ssti",
+        "nosqli",
+        "graphql",
+        "websocket",
     )
     RECON_MODULES = (
         "dns",
@@ -57,15 +71,23 @@ class ScanConfig:
         "ports",
         "subdomains",
         "fingerprint",
+        "crawler",
+        "openapi",
     )
 
     def resolve_modules(self) -> list[str]:
         if self.modules:
             return list(self.modules)
         if self.mode == "passive":
-            return list(self.PASSIVE_MODULES)
+            mods = list(self.PASSIVE_MODULES)
+            if self.crawl:
+                mods = ["crawler", *mods]
+            return mods
         if self.mode == "active":
-            return list(self.PASSIVE_MODULES) + list(self.ACTIVE_MODULES)
+            mods = list(self.PASSIVE_MODULES) + list(self.ACTIVE_MODULES)
+            if self.crawl:
+                mods = ["crawler", *mods]
+            return mods
         if self.mode == "full":
             mods = list(dict.fromkeys(
                 list(self.RECON_MODULES)
