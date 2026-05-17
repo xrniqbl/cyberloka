@@ -15,12 +15,14 @@ penyebabnya, serta memberikan rekomendasi perbaikan.
 
 ## Fitur
 
-### 1. Reconnaissance (Pengumpulan Informasi)
-- Resolusi DNS (A, AAAA, MX, NS, TXT, CNAME, SOA)
+### 1. Reconnaissance
+- Resolusi DNS (A, AAAA, MX, NS, TXT, CNAME, SOA) + cek SPF/DMARC
 - WHOIS lookup
 - Port scanning (top common ports, TCP connect)
 - Subdomain enumeration (wordlist-based)
 - Technology fingerprinting (server, framework, CMS) dari header & body
+- **Crawler / Spider** in-scope untuk auto-discover endpoint, form, JS file, dan parameter
+- **OpenAPI/Swagger importer** — auto-discover spec di `/openapi.json`, `/swagger.json`, dll. dan import endpoint sebagai target tambahan
 
 ### 2. Passive Vulnerability Checks
 - Security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy)
@@ -30,29 +32,85 @@ penyebabnya, serta memberikan rekomendasi perbaikan.
 - Clickjacking exposure
 - HTTP method enumeration (TRACE, PUT, DELETE, OPTIONS)
 - Sensitive file exposure (`.git/`, `.env`, `backup.zip`, `phpinfo.php`, dll.)
+- robots.txt / sitemap.xml inspection
+- **CSRF audit** — form state-changing tanpa anti-CSRF token (memakai data crawler)
 
 ### 3. Active Vulnerability Checks
-- SQL Injection (error-based & boolean-based, payload aman)
+- SQL Injection (error-based & boolean-based)
 - Cross-Site Scripting (Reflected XSS)
 - Open Redirect
 - Local File Inclusion (LFI) / Path Traversal
 - Command Injection (time-based & marker)
 - Directory Listing exposure
-- Inspeksi `robots.txt` & `sitemap.xml`
+- **Server-Side Request Forgery (SSRF)** — termasuk deteksi cloud metadata (AWS IMDS, GCP, Azure)
+- **JWT auditor** — alg=none, weak HMAC secret (offline dictionary), expiry, kid/jku/jwk attacks
+- **XXE** (XML External Entity) — read-only, file:// signature
+- **SSTI** (Server-Side Template Injection) — Jinja2/Twig/Freemarker/Velocity/ERB
+- **NoSQL Injection** (MongoDB) — operator probe + JSON body
+- **GraphQL audit** — introspection, batching, alias overload, GET-method
+- **WebSocket scanner** — handshake, cross-origin, ws:// vs wss://, token in URL
+- **Payment / saldo flow auditor** — endpoint payment over HTTP, form payment tanpa CSRF, field amount dari client (price tampering), key payment provider bocor (Stripe/Midtrans/Xendit), plus daftar test manual yang wajib dilakukan tester (race condition, negative amount, currency confusion, IDOR transaction, webhook spoofing)
+- **IDOR heuristic** — id numerik berurutan return 200 berbeda → kandidat akses data user lain
+- **Host header injection** — server merefleksikan Host attacker (password reset poisoning)
+- **Mass Assignment** — body JSON dengan field `isAdmin`/`role`/`balance` diterima 2xx tanpa error
+- **HTTP Parameter Pollution** — server pakai value yang berbeda dari WAF saat parameter duplikat
 
-### 4. Attack Simulation (Safe Mode)
+### 4. Authenticated Scan
+- Form login dengan **CSRF token auto-extract**
+- Bearer token (`--auth-method bearer --auth-token ...`)
+- Cookies/headers manual (`--cookies`, `--header`)
+- Marker validation (success/failure regex)
+
+### 5. Attack Simulation (Safe Mode)
 - Rate-limit & brute-force resistance test pada endpoint login
 - Burst request test untuk melihat respons WAF / rate limiter
 - *Tidak* melakukan DoS sungguhan: dibatasi durasi & jumlah request.
 
-### 5. Reporting
+### 6. Reporting
 - Output CLI berwarna (severity-coded) menggunakan `rich`
 - Export JSON terstruktur
 - Export HTML report (rapi, lengkap dengan remediasi per finding)
+- **Laporan naratif bahasa Indonesia** (`.txt`) berisi section:
+  1. Ringkasan status (RENTAN / AMAN)
+  2. Informasi website (DNS, teknologi, WHOIS)
+  3. Daftar **port terbuka** + port tidak aman
+  4. Daftar **subdomain** ditemukan
+  5. Endpoint, form, dan file sensitif yang ter-ekspos
+  6. Detail **celah keamanan** beserta cara perbaikan
+- **Diff scan** — bandingkan dua report JSON untuk track regresi:
+  ```bash
+  cyberloka diff old.json new.json --json diff.json --fail-on-new
+  ```
+
+### 7. Test Lab
+- Direktori [`lab/`](lab/README.md) berisi `docker-compose.yml` dengan
+  Juice Shop, DVWA, bWAPP, dan VAmPI untuk berlatih scan secara legal.
 
 ---
 
-## Instalasi
+## Quickstart (rekomendasi)
+
+Cara tercepat — clone, lalu jalankan `scan.sh` (Linux/macOS/WSL) atau `scan.bat` (Windows). Skrip ini otomatis membuat venv, install dependency, scan, dan menampilkan ringkasan.
+
+```bash
+git clone https://github.com/xrniqbl/cyberloka.git
+cd cyberloka
+git checkout integration/all-features
+
+# Linux / macOS / WSL
+./scan.sh https://target-anda.com           # mode passive (paling aman)
+./scan.sh https://target-anda.com active    # passive + active checks + crawler
+./scan.sh https://target-anda.com full      # recon + passive + active
+
+# Windows
+scan.bat https://target-anda.com
+scan.bat http://localhost:3000 active
+```
+
+Skrip akan menyimpan laporan ke `reports/<host>_<timestamp>.html` dan `.json`,
+plus mencetak ringkasan severity & top issues di terminal.
+
+## Instalasi manual
 
 ```bash
 git clone https://github.com/xrniqbl/cyberloka.git
@@ -76,45 +134,50 @@ python -m cyberloka --help
 cyberloka -t https://example.com --mode passive
 ```
 
-### Scan penuh (recon + passive + active)
+### Crawler + scan aktif
 ```bash
-cyberloka -t https://example.com --mode full --authorized
+cyberloka -t https://example.com --mode active --authorized --crawl
 ```
 
-### Pilih modul tertentu
-```bash
-cyberloka -t https://example.com --modules headers,tls,xss,sqli
-```
-
-### Simpan laporan
+### Scan penuh (recon + crawler + passive + active)
 ```bash
 cyberloka -t https://example.com --mode full --authorized \
           --json report.json --html report.html
 ```
 
-### Attack simulation (butuh konfirmasi)
+### Authenticated scan (form login)
+```bash
+cyberloka -t https://example.com --mode active --authorized \
+          --auth-method form \
+          --auth-login-url https://example.com/login \
+          --auth-user admin --auth-pass 'secret' \
+          --auth-success-marker "Welcome|Dashboard" \
+          --crawl
+```
+
+### Authenticated scan (bearer token / API)
+```bash
+cyberloka -t https://api.example.com --mode active --authorized \
+          --auth-method bearer --auth-token "$TOKEN" \
+          --modules crawler,jwt,ssrf,headers,cors,cookies
+```
+
+### Pilih modul tertentu
+```bash
+cyberloka -t https://example.com --modules headers,tls,xss,sqli,jwt,ssrf
+```
+
+### Attack simulation
 ```bash
 cyberloka -t https://example.com --simulate-attack \
           --login-url https://example.com/login \
           --authorized
 ```
 
-### Opsi CLI (ringkas)
-
-| Opsi | Deskripsi |
-|------|-----------|
-| `-t, --target` | URL atau IP target (wajib) |
-| `--mode` | `passive`, `active`, `full` (default: `passive`) |
-| `--modules` | Daftar modul (comma-separated) |
-| `--authorized` | Konfirmasi bahwa Anda berwenang men-scan target |
-| `--threads` | Jumlah worker untuk modul paralel |
-| `--timeout` | Timeout HTTP per request (detik) |
-| `--rate` | Maks request per detik |
-| `--user-agent` | UA custom |
-| `--cookies` | Cookies tambahan (`k=v;k2=v2`) |
-| `--json` | Path output JSON |
-| `--html` | Path output HTML |
-| `--quiet` | Tekan log non-finding |
+### Lihat semua opsi
+```bash
+cyberloka --help
+```
 
 ---
 
@@ -123,19 +186,16 @@ cyberloka -t https://example.com --simulate-attack \
 ```
 cyberloka/
 ├── cyberloka/
-│   ├── __init__.py
-│   ├── __main__.py
+│   ├── core/           # config, http client, model, logger, util, auth
+│   ├── recon/          # dns, whois, ports, subdomain, fingerprint, crawler
+│   ├── passive/        # headers, tls, cookies, cors, methods, files, robots
+│   ├── active/         # sqli, xss, redirect, lfi, cmdi, dirlist, ssrf, jwt
+│   ├── simulate/       # rate_limit, burst
+│   ├── reporting/      # console, json, html
 │   ├── cli.py
-│   ├── core/                   # config, http client, model, logger, util
-│   ├── recon/                  # dns, whois, ports, subdomain, fingerprint
-│   ├── passive/                # headers, tls, cookies, cors, methods, files
-│   ├── active/                 # sqli, xss, redirect, lfi, cmdi, dirlist
-│   ├── simulate/               # rate_limit, burst
-│   └── reporting/              # console, json_report, html_report
-├── data/
-│   ├── subdomains.txt
-│   ├── sensitive_paths.txt
-│   └── common_passwords.txt
+│   └── scanner.py
+├── data/               # subdomains.txt, sensitive_paths.txt, common_passwords.txt
+├── lab/                # docker-compose.yml + README — vulnerable apps untuk testing
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md

@@ -5,6 +5,7 @@ import argparse
 import sys
 
 from cyberloka import __version__
+from cyberloka.core.auth import AuthConfig
 from cyberloka.core.config import ScanConfig
 from cyberloka.core.logger import get_console, get_logger
 from cyberloka.core.target import parse_target
@@ -46,6 +47,18 @@ def parse_headers(values: list[str] | None) -> dict[str, str]:
     return out
 
 
+def parse_form_fields(values: list[str] | None) -> dict[str, str]:
+    if not values:
+        return {}
+    out: dict[str, str] = {}
+    for v in values:
+        if "=" not in v:
+            continue
+        k, val = v.split("=", 1)
+        out[k.strip()] = val.strip()
+    return out
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="cyberloka",
@@ -76,8 +89,31 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--header", action="append", default=[], help="Tambah header `Name: value` (boleh diulang)")
     p.add_argument("--no-verify-tls", action="store_true")
     p.add_argument("--proxy", help="HTTP proxy URL (mis. http://127.0.0.1:8080)")
+
+    # Crawler
+    p.add_argument("--crawl", action="store_true", help="Aktifkan crawler/spider untuk discover endpoint")
+    p.add_argument("--crawl-max-pages", type=int, default=60)
+    p.add_argument("--crawl-max-depth", type=int, default=3)
+
+    # Authenticated scan
+    p.add_argument("--auth-method", choices=("none", "form", "bearer"), default="none",
+                   help="Metode otentikasi sebelum scan")
+    p.add_argument("--auth-login-url", help="URL form login (untuk --auth-method form)")
+    p.add_argument("--auth-user", help="Username untuk form login")
+    p.add_argument("--auth-pass", help="Password untuk form login")
+    p.add_argument("--auth-user-field", default="username")
+    p.add_argument("--auth-pass-field", default="password")
+    p.add_argument("--auth-form-field", action="append", default=[],
+                   help="Field form tambahan `key=value` (boleh diulang)")
+    p.add_argument("--auth-token", help="Bearer token (untuk --auth-method bearer)")
+    p.add_argument("--auth-success-marker", help="Regex yang harus muncul setelah login berhasil")
+    p.add_argument("--auth-failure-marker", help="Regex yang menandakan login gagal")
+
+    # Output
     p.add_argument("--json", dest="json_out", help="Path output JSON")
     p.add_argument("--html", dest="html_out", help="Path output HTML")
+    p.add_argument("--narrative", dest="narrative_out", nargs="?", const="-",
+                   help="Cetak ringkasan naratif bahasa Indonesia. Tambah path untuk simpan ke file (mis. --narrative report.txt)")
     p.add_argument("--quiet", action="store_true")
     p.add_argument("--yes", action="store_true", help="Lewati prompt konfirmasi")
     p.add_argument("--version", action="version", version=f"cyberloka {__version__}")
@@ -85,6 +121,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Subcommand: cyberloka diff <old.json> <new.json> [--json out.json]
+    raw = list(sys.argv[1:] if argv is None else argv)
+    if raw and raw[0] == "diff":
+        return _diff_main(raw[1:])
+
     args = build_parser().parse_args(argv)
     console = get_console()
     log = get_logger()
@@ -97,6 +138,19 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as e:
         log.error("Target tidak valid: %s", e)
         return 2
+
+    auth = AuthConfig(
+        method=args.auth_method,
+        login_url=args.auth_login_url,
+        username=args.auth_user,
+        password=args.auth_pass,
+        user_field=args.auth_user_field,
+        pass_field=args.auth_pass_field,
+        extra_form_fields=parse_form_fields(args.auth_form_field),
+        bearer_token=args.auth_token,
+        success_marker=args.auth_success_marker,
+        failure_marker=args.auth_failure_marker,
+    )
 
     cfg = ScanConfig(
         target=args.target,
@@ -119,6 +173,10 @@ def main(argv: list[str] | None = None) -> int:
         json_out=args.json_out,
         html_out=args.html_out,
         proxy=args.proxy,
+        auth=auth,
+        crawl=args.crawl,
+        crawl_max_pages=args.crawl_max_pages,
+        crawl_max_depth=args.crawl_max_depth,
     )
 
     needs_intrusive = cfg.mode in ("active", "full") or cfg.simulate_attack
@@ -143,6 +201,10 @@ def main(argv: list[str] | None = None) -> int:
 
     findings = run_scan(target, cfg)
 
+    # Perkaya finding dengan impact / attack scenario / fix examples / manual steps
+    from cyberloka.reporting.enrich import enrich_findings
+    findings = enrich_findings(findings)
+
     console.print()
     console_report.render_findings(findings)
     console.print()
@@ -160,6 +222,20 @@ def main(argv: list[str] | None = None) -> int:
         write_html(cfg.html_out, target, cfg, findings)
         log.info("[green]HTML report ditulis ke %s[/green]", cfg.html_out)
 
+    # Narrative report (Indonesian, human-friendly)
+    if args.narrative_out is not None:
+        from cyberloka.reporting.narrative import build_narrative
+        text = build_narrative(target.base_url, findings)
+        if args.narrative_out == "-":
+            console.print()
+            console.print(text)
+        else:
+            with open(args.narrative_out, "w", encoding="utf-8") as fp:
+                fp.write(text)
+            log.info("[green]Narrative report ditulis ke %s[/green]", args.narrative_out)
+            console.print()
+            console.print(text)
+
     # Exit code: 0 = no high+ findings; 1 = ada high/critical
     if any(f.severity.value in ("critical", "high") for f in findings):
         return 1
@@ -168,3 +244,33 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+
+
+def _diff_main(argv: list[str]) -> int:
+    """Subcommand: cyberloka diff <old.json> <new.json> [--json out.json]"""
+    parser = argparse.ArgumentParser(
+        prog="cyberloka diff",
+        description="Bandingkan dua report JSON Cyberloka.",
+    )
+    parser.add_argument("old", help="Path report JSON sebelumnya")
+    parser.add_argument("new", help="Path report JSON terbaru")
+    parser.add_argument("--json", dest="json_out", help="Tulis hasil diff sebagai JSON")
+    parser.add_argument("--fail-on-new", action="store_true",
+                        help="Exit code != 0 bila ada finding baru")
+    args = parser.parse_args(argv)
+
+    from cyberloka.reporting.diff import diff_files, render_text
+
+    diff = diff_files(args.old, args.new)
+    console = get_console()
+    console.print(render_text(diff))
+    if args.json_out:
+        import json as _json
+        with open(args.json_out, "w", encoding="utf-8") as fp:
+            _json.dump(diff.to_dict(), fp, indent=2, ensure_ascii=False)
+        console.print(f"[green]Diff JSON ditulis ke {args.json_out}[/green]")
+    if args.fail_on_new and diff.new:
+        return 2
+    return 0

@@ -21,7 +21,14 @@ class Severity(str, Enum):
 
 @dataclass
 class Finding:
-    """A single vulnerability or informational finding."""
+    """A single vulnerability or informational finding.
+
+    Field tambahan untuk laporan yang lebih mendalam:
+    - impact          : dampak bila celah dieksploitasi (1-3 kalimat)
+    - attack_scenario : cerita serangan langkah-demi-langkah (apa yang attacker lakukan)
+    - fix_examples    : contoh kode/config perbaikan per stack (dict: stack -> snippet)
+    - manual_steps    : langkah verifikasi manual yang harus dilakukan tester
+    """
 
     module: str
     title: str
@@ -37,6 +44,10 @@ class Finding:
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
     extra: dict[str, Any] = field(default_factory=dict)
+    impact: str = ""
+    attack_scenario: str = ""
+    fix_examples: dict[str, str] = field(default_factory=dict)
+    manual_steps: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)

@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from cyberloka.core.auth import AuthConfig
+
 
 @dataclass
 class ScanConfig:
@@ -30,7 +32,23 @@ class ScanConfig:
     json_out: str | None = None
     html_out: str | None = None
     proxy: str | None = None
+    auth: AuthConfig = field(default_factory=AuthConfig)
+    crawl: bool = False
+    crawl_max_pages: int = 60
+    crawl_max_depth: int = 3
 
+    # Modul recon "ringan" (info publik, tidak menyentuh server target dengan request berat)
+    PASSIVE_RECON = (
+        "dns",
+        "whois",
+        "fingerprint",
+    )
+    # Modul recon yang berinteraksi langsung dengan server (port scan, subdomain enum)
+    ACTIVE_RECON = (
+        "ports",
+        "subdomains",
+        "openapi",
+    )
     PASSIVE_MODULES = (
         "headers",
         "tls",
@@ -39,9 +57,15 @@ class ScanConfig:
         "clickjacking",
         "methods",
         "sensitive_files",
-        "fingerprint",
         "robots",
-        "dns",
+        "csrf",
+        "sri",
+        "pii_leak",
+        "tech_cve",
+        "error_disclosure",
+        "csp_audit",
+        "debug_endpoint",
+        "outdated_js",
     )
     ACTIVE_MODULES = (
         "sqli",
@@ -50,27 +74,59 @@ class ScanConfig:
         "lfi",
         "cmdi",
         "dirlist",
+        "ssrf",
+        "jwt",
+        "xxe",
+        "ssti",
+        "nosqli",
+        "graphql",
+        "websocket",
+        "host_header",
+        "hpp",
+        "idor",
+        "mass_assign",
+        "payment",
+        "crlf",
+        "voucher",
+        "auth_bypass",
+        "session_audit",
+        "password_policy",
+        "account_enum",
+        "otp_audit",
+        "api_pagination",
+        "excessive_data",
+        "business_logic",
     )
-    RECON_MODULES = (
-        "dns",
-        "whois",
-        "ports",
-        "subdomains",
-        "fingerprint",
-    )
+    # Backward-compat: union semua modul recon
+    RECON_MODULES = PASSIVE_RECON + ACTIVE_RECON + ("crawler",)
 
     def resolve_modules(self) -> list[str]:
         if self.modules:
             return list(self.modules)
         if self.mode == "passive":
-            return list(self.PASSIVE_MODULES)
+            # Recon ringan + checks pasif
+            mods = list(self.PASSIVE_RECON) + list(self.PASSIVE_MODULES)
+            if self.crawl:
+                mods.append("crawler")
+            return list(dict.fromkeys(mods))
         if self.mode == "active":
-            return list(self.PASSIVE_MODULES) + list(self.ACTIVE_MODULES)
-        if self.mode == "full":
-            mods = list(dict.fromkeys(
-                list(self.RECON_MODULES)
+            # Tambah port scan + subdomain enum + spec discovery + active checks
+            mods = (
+                list(self.PASSIVE_RECON)
+                + list(self.ACTIVE_RECON)
                 + list(self.PASSIVE_MODULES)
                 + list(self.ACTIVE_MODULES)
-            ))
-            return mods
+            )
+            if self.crawl:
+                mods = ["crawler", *mods]
+            return list(dict.fromkeys(mods))
+        if self.mode == "full":
+            mods = (
+                list(self.PASSIVE_RECON)
+                + list(self.ACTIVE_RECON)
+                + ["crawler"]
+                + list(self.PASSIVE_MODULES)
+                + list(self.ACTIVE_MODULES)
+            )
+            return list(dict.fromkeys(mods))
         raise ValueError(f"Unknown mode: {self.mode}")
