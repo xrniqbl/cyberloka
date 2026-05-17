@@ -70,6 +70,7 @@ echo.
 
 cd /d "%~dp0"
 
+rem Setup venv ^& deps
 if not exist ".venv" (
     echo [setup] Menyiapkan environment Python...
     python -m venv .venv
@@ -84,25 +85,41 @@ if errorlevel 1 (
 )
 
 if not exist reports mkdir reports
-for /f "tokens=2 delims==" %%a in ('wmic OS Get LocalDateTime /value ^| find "="') do set DT=%%a
-set TS=!DT:~0,8!_!DT:~8,6!
-set SAFE=%TARGET:https://=%
-set SAFE=!SAFE:http://=!
-set SAFE=!SAFE:/=_!
-set SAFE=!SAFE::=_!
-set JSON_OUT=reports\!SAFE!_!TS!.json
-set HTML_OUT=reports\!SAFE!_!TS!.html
-set TXT_OUT=reports\!SAFE!_!TS!.txt
+
+rem Generate filename via Python (anti-error untuk semua locale Windows)
+for /f "delims=" %%i in ('python -c "from datetime import datetime; print(datetime.now().strftime('%%Y%%m%%d_%%H%%M%%S'))"') do set "TS=%%i"
+
+rem Sanitize target -> safe filename: hapus skema, ganti karakter terlarang dengan _
+for /f "delims=" %%i in ('python -c "import sys,re; t=sys.argv[1]; t=re.sub(r'^https?://','',t); print(re.sub(r'[^A-Za-z0-9._-]','_',t))" "%TARGET%"') do set "SAFE=%%i"
+
+set "JSON_OUT=reports\%SAFE%_%TS%.json"
+set "HTML_OUT=reports\%SAFE%_%TS%.html"
+set "TXT_OUT=reports\%SAFE%_%TS%.txt"
 
 set EXTRA=
 if not "%MODE%"=="passive" set EXTRA=--authorized --yes --crawl
 
-python -m cyberloka -t "%TARGET%" --mode %MODE% %EXTRA% --json "!JSON_OUT!" --html "!HTML_OUT!" --narrative "!TXT_OUT!" --quiet
+echo Menjalankan scan, mohon tunggu...
+echo.
+python -m cyberloka -t "%TARGET%" --mode %MODE% %EXTRA% --json "%JSON_OUT%" --html "%HTML_OUT%" --narrative "%TXT_OUT%" --quiet
 
 echo.
-echo Laporan tersimpan di:
-echo    !TXT_OUT!   ^(ringkasan teks^)
-echo    !HTML_OUT!  ^(laporan visual^)
-echo    !JSON_OUT!  ^(data terstruktur^)
+echo ============================================================
+echo  HASIL SCAN
+echo ============================================================
+if exist "%TXT_OUT%" (
+    type "%TXT_OUT%"
+) else (
+    echo [error] file laporan tidak terbuat. Cek pesan error di atas.
+    exit /b 1
+)
+
+echo.
+echo ============================================================
+echo  Laporan tersimpan di:
+echo    %TXT_OUT%   ^(ringkasan teks bahasa Indonesia^)
+echo    %HTML_OUT%  ^(laporan visual, double-click untuk buka^)
+echo    %JSON_OUT%  ^(data terstruktur^)
+echo ============================================================
 
 endlocal

@@ -5,7 +5,7 @@
 # Tool akan otomatis:
 #   1) install dependency yang dibutuhkan
 #   2) scan website
-#   3) cetak: "Website ini rentan / aman" + daftar celah dalam bahasa Indonesia
+#   3) cetak ringkasan: "Website ini rentan / aman" + daftar celah
 #
 # WAJIB: hanya gunakan untuk website yang Anda miliki / yang memberi izin.
 
@@ -14,7 +14,6 @@ set -e
 TARGET="${1:-}"
 MODE_INPUT="${2:-}"
 
-# Tampilkan banner
 echo
 echo "============================================================"
 echo "  CYBERLOKA - Pemeriksa Kerentanan Website"
@@ -46,7 +45,7 @@ if [ -z "$MODE_INPUT" ]; then
     MODE_INPUT="${MODE_INPUT:-1}"
 fi
 
-# Normalisasi mode (terima nomor atau nama)
+# Normalisasi mode
 case "$MODE_INPUT" in
     1|passive|pasif|p) MODE="passive" ;;
     2|active|aktif|a)  MODE="active"  ;;
@@ -85,8 +84,11 @@ if ! python -c "import requests, rich, jinja2" 2>/dev/null; then
 fi
 
 mkdir -p reports
-TS="$(date +%Y%m%d_%H%M%S)"
-SAFE="$(echo "$TARGET" | sed 's#https\?://##' | tr '/:?&=' '_')"
+
+# Timestamp & sanitised filename (anti-error di shell apapun)
+TS="$(python -c 'from datetime import datetime; print(datetime.now().strftime("%Y%m%d_%H%M%S"))')"
+SAFE="$(python -c 'import sys,re; t=sys.argv[1]; t=re.sub(r"^https?://","",t); print(re.sub(r"[^A-Za-z0-9._-]","_",t))' "$TARGET")"
+
 JSON_OUT="reports/${SAFE}_${TS}.json"
 HTML_OUT="reports/${SAFE}_${TS}.html"
 TXT_OUT="reports/${SAFE}_${TS}.txt"
@@ -96,7 +98,9 @@ if [ "$MODE" != "passive" ]; then
     EXTRA="--authorized --yes --crawl"
 fi
 
-# Jalankan; tetap lanjut walau exit code != 0
+echo "Menjalankan scan, mohon tunggu..."
+echo
+
 set +e
 python -m cyberloka -t "$TARGET" --mode "$MODE" $EXTRA \
     --json "$JSON_OUT" --html "$HTML_OUT" --narrative "$TXT_OUT" \
@@ -104,8 +108,20 @@ python -m cyberloka -t "$TARGET" --mode "$MODE" $EXTRA \
 set -e
 
 echo
-echo "Laporan tersimpan di:"
-echo "   $TXT_OUT   (ringkasan teks)"
-echo "   $HTML_OUT  (laporan visual)"
-echo "   $JSON_OUT  (data terstruktur)"
+echo "============================================================"
+echo " HASIL SCAN"
+echo "============================================================"
+if [ -f "$TXT_OUT" ]; then
+    cat "$TXT_OUT"
+else
+    echo "[error] file laporan tidak terbuat. Cek pesan error di atas."
+    exit 1
+fi
+
 echo
+echo "============================================================"
+echo " Laporan tersimpan di:"
+echo "   $TXT_OUT   (ringkasan teks bahasa Indonesia)"
+echo "   $HTML_OUT  (laporan visual, buka di browser)"
+echo "   $JSON_OUT  (data terstruktur)"
+echo "============================================================"
