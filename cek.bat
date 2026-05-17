@@ -1,10 +1,8 @@
 @echo off
 REM ============================================================
 REM  Cyberloka - Feature Check Script (Windows)
-REM ============================================================
-REM  Verifikasi semua fitur (login session, TXT/PDF report,
-REM  menu interaktif, dashboard, verify deep re-test, dll.)
-REM  bisa berjalan di environment Anda.
+REM  Pakai goto-labels (bukan nested if-blocks) supaya tidak
+REM  kena bug CMD parser dengan parens di dalam echo.
 REM ============================================================
 
 setlocal EnableDelayedExpansion
@@ -16,119 +14,129 @@ echo   CYBERLOKA - Feature Check
 echo ============================================================
 echo.
 
-REM 1. Cek Python
+REM --- 1. Python ----------------------------------------------------------
 where python >nul 2>&1
-if errorlevel 1 (
-    echo [FAIL] Python tidak ditemukan. Install Python 3.10+ dulu.
-    goto :end
-)
+if errorlevel 1 goto :no_python
 echo [OK]  Python tersedia
 python --version
+goto :check_pkg
 
-REM 2. Cek instalasi cyberloka
+:no_python
+echo [FAIL] Python tidak ditemukan. Install Python 3.10+ dulu.
+goto :end
+
+REM --- 2. Cyberloka package ----------------------------------------------
+:check_pkg
 python -c "import cyberloka; print('  cyberloka', cyberloka.__version__)" 2>nul
-if errorlevel 1 (
-    echo [FAIL] Modul cyberloka belum terinstall.
-    echo        Jalankan: python -m pip install -e ".[all]"
-    goto :end
-)
+if errorlevel 1 goto :no_pkg
+goto :check_deps
 
-REM 3. Cek dependencies opsional
+:no_pkg
+echo [FAIL] Modul cyberloka belum terinstall.
+echo        Jalankan: python -m pip install -e ".[all]"
+goto :end
+
+REM --- 3. Optional dependencies ------------------------------------------
+:check_deps
 echo.
 echo === Dependencies ===
-python -c "import jinja2; print('[OK]  jinja2     ', jinja2.__version__)" 2>nul || echo [WARN] jinja2 missing -- HTML report tidak akan jalan
-python -c "import flask;  print('[OK]  flask      ', flask.__version__)"  2>nul || echo [WARN] flask missing -- dashboard tidak akan jalan (install: pip install "cyberloka[dashboard]")
-python -c "import reportlab; print('[OK]  reportlab  ', reportlab.Version)" 2>nul || echo [WARN] reportlab missing -- PDF report tidak akan jalan (install: pip install "cyberloka[pdf]")
-python -c "import rich;   print('[OK]  rich       ', rich.__version__)"   2>nul || echo [FAIL] rich missing
-python -c "import requests; print('[OK]  requests   ', requests.__version__)" 2>nul || echo [FAIL] requests missing
+call :check_dep jinja2    "HTML report"
+call :check_dep flask     "Web Dashboard"
+call :check_dep reportlab "PDF report"
+call :check_dep rich      "console UI (REQUIRED)"
+call :check_dep requests  "HTTP client (REQUIRED)"
 
-REM 4. Run offline smoke tests
+REM --- 4. Smoke tests -----------------------------------------------------
 echo.
 echo === Smoke Tests (offline, no network) ===
 echo.
 
-if exist "scripts\smoke_test.py" (
-    echo --- Risk + Compliance ---
-    python scripts\smoke_test.py 2>nul | findstr /C:"All smoke checks passed" /C:"FAIL"
-    if errorlevel 1 (
-        echo [WARN] smoke_test.py gagal. Run manual: python scripts\smoke_test.py
-    ) else (
-        echo [OK]  Risk scoring + compliance + executive summary
-    )
-) else (
-    echo [SKIP] scripts\smoke_test.py tidak ada
-)
+if not exist "scripts\smoke_test.py" goto :skip_smoke1
+echo Running risk + compliance test...
+python scripts\smoke_test.py >nul 2>&1
+if errorlevel 1 echo [WARN] smoke_test.py gagal
+if not errorlevel 1 echo [OK]  Risk scoring + compliance + executive summary
+goto :smoke2
 
-if exist "scripts\verify_smoke_test.py" (
-    echo --- Verify (deep re-scan) ---
-    python scripts\verify_smoke_test.py 2>nul | findstr /C:"All verify smoke checks passed" /C:"FAIL"
-    if errorlevel 1 (
-        echo [WARN] verify_smoke_test.py gagal.
-    ) else (
-        echo [OK]  Deep verification (9 modules)
-    )
-) else (
-    echo [SKIP] scripts\verify_smoke_test.py tidak ada
-)
+:skip_smoke1
+echo [SKIP] scripts\smoke_test.py tidak ada
 
-if exist "scripts\feature_smoke_test.py" (
-    echo --- Login session + TXT/PDF + menu + dashboard ---
-    python scripts\feature_smoke_test.py 2>nul | findstr /C:"All feature smoke checks passed" /C:"FAIL"
-    if errorlevel 1 (
-        echo [WARN] feature_smoke_test.py gagal.
-    ) else (
-        echo [OK]  Login session + TXT/PDF reports + interactive menu
-    )
-) else (
-    echo [SKIP] scripts\feature_smoke_test.py tidak ada
-)
+:smoke2
+if not exist "scripts\verify_smoke_test.py" goto :skip_smoke2
+echo Running deep verify test...
+python scripts\verify_smoke_test.py >nul 2>&1
+if errorlevel 1 echo [WARN] verify_smoke_test.py gagal
+if not errorlevel 1 echo [OK]  Deep verification module
+goto :smoke3
 
-REM 5. Cek CLI commands tersedia
+:skip_smoke2
+echo [SKIP] scripts\verify_smoke_test.py tidak ada
+
+:smoke3
+if not exist "scripts\feature_smoke_test.py" goto :skip_smoke3
+echo Running login + TXT/PDF + menu test...
+python scripts\feature_smoke_test.py >nul 2>&1
+if errorlevel 1 echo [WARN] feature_smoke_test.py gagal
+if not errorlevel 1 echo [OK]  Login session + TXT/PDF reports + menu
+goto :cli_check
+
+:skip_smoke3
+echo [SKIP] scripts\feature_smoke_test.py tidak ada
+
+REM --- 5. CLI commands ----------------------------------------------------
+:cli_check
 echo.
 echo === CLI Commands ===
-python -m cyberloka --version >nul 2>&1 && echo [OK]  python -m cyberloka          || echo [FAIL] python -m cyberloka
-where cyberloka >nul 2>&1                && echo [OK]  cyberloka                    || echo [INFO] 'cyberloka' belum di PATH (pakai 'python -m cyberloka')
-where cyberloka-dashboard >nul 2>&1      && echo [OK]  cyberloka-dashboard          || echo [INFO] 'cyberloka-dashboard' belum di PATH
+python -m cyberloka --version >nul 2>&1
+if errorlevel 1 echo [FAIL] python -m cyberloka
+if not errorlevel 1 echo [OK]  python -m cyberloka
 
-REM 6. Buat folder reports
+where cyberloka >nul 2>&1
+if errorlevel 1 echo [INFO] 'cyberloka' belum di PATH ^(pakai 'python -m cyberloka'^)
+if not errorlevel 1 echo [OK]  cyberloka
+
+where cyberloka-dashboard >nul 2>&1
+if errorlevel 1 echo [INFO] 'cyberloka-dashboard' belum di PATH
+if not errorlevel 1 echo [OK]  cyberloka-dashboard
+
+REM --- 6. Reports folder --------------------------------------------------
 if not exist "reports" mkdir reports
 echo.
 echo === Folder Output ===
 echo [OK]  reports\ siap dipakai
 
-REM 7. Menu untuk coba live
+REM --- 7. Action menu -----------------------------------------------------
 :menu
 echo.
 echo ============================================================
 echo   APA YANG MAU DICOBA?  (pilih nomor)
 echo ============================================================
 echo.
-echo   1. Buka menu interaktif Cyberloka  (RECOMMENDED)
-echo   2. Quick Scan  (passive, paling aman)
-echo   3. Full Scan   (recon + passive + active, butuh izin)
+echo   1. Buka menu interaktif Cyberloka  [RECOMMENDED]
+echo   2. Quick Scan   - passive, paling aman
+echo   3. Full Scan    - recon + passive + active, butuh izin
 echo   4. Buka Dashboard di browser
 echo   5. Lihat laporan HTML terakhir
-echo   6. Tampilkan --help (semua opsi CLI)
+echo   6. Tampilkan --help
 echo   0. Keluar
 echo.
 set /p choice="Pilih [0-6]: "
 
-if "%choice%"=="1" goto :menu_interactive
-if "%choice%"=="2" goto :scan_quick
-if "%choice%"=="3" goto :scan_full
-if "%choice%"=="4" goto :dashboard
-if "%choice%"=="5" goto :view_report
-if "%choice%"=="6" goto :show_help
+if "%choice%"=="1" goto :run_menu
+if "%choice%"=="2" goto :run_quick
+if "%choice%"=="3" goto :run_full
+if "%choice%"=="4" goto :run_dashboard
+if "%choice%"=="5" goto :run_view
+if "%choice%"=="6" goto :run_help
 if "%choice%"=="0" goto :end
-
 echo Pilihan tidak dikenal.
 goto :menu
 
-:menu_interactive
+:run_menu
 python -m cyberloka --menu
 goto :menu
 
-:scan_quick
+:run_quick
 echo.
 set /p target=">> Masukkan domain/IP target: "
 if "%target%"=="" goto :menu
@@ -137,37 +145,46 @@ echo.
 echo [OK] Scan selesai. Cek folder reports\
 goto :menu
 
-:scan_full
+:run_full
 echo.
-echo [WARN] Full scan menjalankan probe aktif (SQLi/XSS/dll).
-echo        Pastikan Anda berwenang men-scan target ini.
+echo [WARN] Full scan menjalankan probe aktif. Pastikan Anda berwenang.
 echo.
 set /p target=">> Masukkan domain/IP target: "
 if "%target%"=="" goto :menu
 python -m cyberloka -t %target% --mode full --authorized --reports-dir reports --txt --pdf --verify-after-scan --open-dashboard --yes
 echo.
-echo [OK] Scan selesai. Lihat dashboard yang terbuka, atau folder reports\
+echo [OK] Scan selesai. Lihat dashboard atau folder reports\
 goto :menu
 
-:dashboard
+:run_dashboard
 echo.
 echo Memulai dashboard di http://127.0.0.1:5005/
 python -m cyberloka.dashboard.app --reports-dir reports --open
 goto :menu
 
-:view_report
+:run_view
 echo.
 echo Laporan HTML di folder reports\:
 dir /B /O:-D reports\*.html 2>nul
 echo.
-echo Buka file HTML di browser dengan double-click, atau:
-echo   start reports\nama-file.html
+echo Buka file HTML di browser dengan double-click di File Explorer.
 goto :menu
 
-:show_help
+:run_help
 echo.
 python -m cyberloka --help
 goto :menu
+
+REM --- Helper subroutine: check_dep <module> <description> ---------------
+:check_dep
+python -c "import %~1" 2>nul
+if errorlevel 1 goto :dep_missing
+for /f "delims=" %%v in ('python -c "import %~1; print(getattr(%~1, '__version__', getattr(%~1, 'Version', '?')))" 2^>nul') do echo [OK]  %~1 %%v
+goto :eof
+
+:dep_missing
+echo [WARN] %~1 missing - %~2 tidak akan jalan
+goto :eof
 
 :end
 echo.
