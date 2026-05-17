@@ -85,6 +85,8 @@ class ScanConfig:
         "mass_assign",
         "payment",
         "crlf",
+        "voucher",
+        "auth_bypass",
     )
     # Backward-compat: union semua modul recon
     RECON_MODULES = PASSIVE_RECON + ACTIVE_RECON + ("crawler",)

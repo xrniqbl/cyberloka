@@ -69,6 +69,8 @@ MODULE_HUMAN: dict[str, str] = {
     "error_disclosure": "Stack trace / debug info bocor di error response",
     "csp_audit": "Content-Security-Policy ada tapi memuat directive lemah",
     "crlf": "CRLF / HTTP header injection (Set-Cookie palsu, response splitting)",
+    "voucher": "Alur voucher/promo bermasalah (CSRF, discount client-controlled, code bocor)",
+    "auth_bypass": "Halaman/endpoint dapat diakses tanpa login (broken access control)",
 }
 
 
@@ -290,6 +292,121 @@ def _section_whois(findings: list[Finding]) -> list[str]:
         if k in info:
             out.append(f"   {k:18s}: {info[k]}")
     out.append("")
+    return out
+
+
+def _section_voucher(findings: list[Finding]) -> list[str]:
+    """Section khusus alur voucher / promo / kupon."""
+    v_findings = [f for f in findings if f.module == "voucher"]
+    if not v_findings:
+        return []
+
+    out: list[str] = []
+    out.append("[4c] ALUR VOUCHER / PROMO / KUPON")
+    out.append("-" * 70)
+
+    summary = next(
+        (f for f in v_findings if f.severity == Severity.INFO and f.extra and f.extra.get("endpoints")),
+        None,
+    )
+    if summary:
+        eps = summary.extra.get("endpoints", [])
+        forms = summary.extra.get("forms", [])
+        out.append(f"Endpoint voucher terdeteksi: {len(eps)}")
+        out.append(f"Form voucher terdeteksi   : {len(forms)}")
+        out.append("")
+        if eps:
+            out.append("Endpoint:")
+            for e in eps[:8]:
+                out.append(f"   - [{e.get('method', 'GET')}] {e.get('url')}")
+        if forms:
+            out.append("")
+            out.append("Form:")
+            for f in forms[:8]:
+                out.append(
+                    f"   - [{f.get('method', 'GET')}] {f.get('url')} "
+                    f"fields={f.get('fields')}"
+                )
+        out.append("")
+
+    issues = [f for f in v_findings if f.severity != Severity.INFO]
+    if issues:
+        out.append("Masalah pada alur voucher (lengkap dengan cara amankan):")
+        out.append("")
+        for i, f in enumerate(issues, 1):
+            out.append(f"   ({i}) [{SEVERITY_LABEL[f.severity]}] {f.title}")
+            out.append(f"       Lokasi    : {f.target}")
+            if f.cwe:
+                out.append(f"       Referensi : {f.cwe}")
+            if f.description:
+                out.append(f"       Apa itu   : {_wrap(f.description, 75, indent=19)}")
+            if f.remediation:
+                out.append(f"       Cara aman : {_wrap(f.remediation, 75, indent=19)}")
+            if f.evidence:
+                ev = f.evidence.replace("\n", " | ")
+                if len(ev) > 160:
+                    ev = ev[:160] + "..."
+                out.append(f"       Bukti     : {ev}")
+            out.append("")
+
+    manual = next(
+        (f for f in v_findings if "test manual" in f.title.lower()),
+        None,
+    )
+    if manual:
+        out.append(">> Test MANUAL voucher yang WAJIB dilakukan tester:")
+        for line in (manual.evidence or "").split("\n"):
+            if line.strip():
+                out.append(line)
+        out.append("")
+
+    return out
+
+
+def _section_auth_bypass(findings: list[Finding]) -> list[str]:
+    """Section khusus halaman/endpoint yang dapat diakses anonim."""
+    ab_findings = [f for f in findings if f.module == "auth_bypass"]
+    if not ab_findings:
+        return []
+
+    issues = [f for f in ab_findings if f.severity != Severity.INFO]
+    if not issues:
+        return []  # nothing dramatic
+
+    out: list[str] = []
+    out.append("[4d] HALAMAN/ENDPOINT YANG BISA DIAKSES TANPA LOGIN")
+    out.append("-" * 70)
+    # Urut by severity
+    issues.sort(key=lambda f: f.severity.order)
+
+    by_sev: dict[str, list] = {}
+    for f in issues:
+        by_sev.setdefault(SEVERITY_LABEL[f.severity], []).append(f)
+    for sev_label, group in by_sev.items():
+        out.append(f"  [{sev_label}] {len(group)} URL:")
+        for f in group[:15]:
+            out.append(f"     - {f.target}")
+        if len(group) > 15:
+            out.append(f"     ... dan {len(group) - 15} URL lagi")
+        out.append("")
+
+    out.append("Cara amankan (umum):")
+    out.append("   - Pasang middleware otentikasi pada semua route admin/internal/profile.")
+    out.append("   - Anonymous request ke API harus return 401, bukan 200 dengan body kosong.")
+    out.append("   - JANGAN andalkan obscurity (mis. /admin12345). Pakai auth eksplisit.")
+    out.append("")
+
+    manual = next(
+        (f for f in ab_findings if f.severity == Severity.INFO and "test manual" in f.title.lower()),
+        None,
+    )
+    if manual:
+        out.append(">> Test MANUAL otentikasi & access control:")
+        for line in (manual.evidence or "").split("\n"):
+            if line.strip():
+                out.append(line)
+        out.append("")
+
     return out
 
 
@@ -556,6 +673,16 @@ def build_narrative(target_url: str, findings: list[Finding]) -> str:
     pay_lines = _section_payment(findings_sorted)
     if pay_lines:
         lines.extend(pay_lines)
+
+    # Section 4c: voucher flow
+    v_lines = _section_voucher(findings_sorted)
+    if v_lines:
+        lines.extend(v_lines)
+
+    # Section 4d: auth bypass / unauth access
+    ab_lines = _section_auth_bypass(findings_sorted)
+    if ab_lines:
+        lines.extend(ab_lines)
 
     # Section 5: vuln details
     vuln_lines = _section_vulns(findings_sorted)

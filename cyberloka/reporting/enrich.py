@@ -986,6 +986,137 @@ _BASE: dict[str, dict] = {
             "Test setiap endpoint admin dengan token user biasa — harus 403.",
         ],
     },
+    # --- Voucher & auth bypass ---------------------------------------------
+    "voucher": {
+        "impact": (
+            "Risiko spesifik voucher: kerugian finansial langsung (diskon "
+            "berlebihan), pelanggaran term promo (1 voucher 1 user), abuse "
+            "promo dengan akun bot. Untuk fintech/e-commerce, kerugian bisa "
+            "sangat besar bila promo viral atau dieksploitasi reseller."
+        ),
+        "attack_scenario": (
+            "Skenario business-logic flaw voucher (perlu test manual untuk "
+            "konfirmasi):\n"
+            "1. Discount client-controlled: attacker intercept POST /apply-coupon, "
+            "ubah field `discount=5` jadi `discount=99` -> dapat 99% off.\n"
+            "2. Voucher single-use, race condition: dua request bayar bersamaan "
+            "dalam <50ms, dua-duanya berhasil pakai voucher yang sama -> double benefit.\n"
+            "3. Voucher untuk produk lain: voucher 'PROMO_BUKU' di-aplikasi ke "
+            "kategori 'ELEKTRONIK' karena server tidak validasi kategori.\n"
+            "4. Voucher code bocor di JS bundle: attacker grep /static/app.js, "
+            "dapat daftar 50 voucher aktif -> share di forum, semua dipakai."
+        ),
+        "fix_examples": {
+            "Server-side hitung diskon (Express)":
+                "// SALAH:\n"
+                "app.post('/apply-coupon', async (req, res) => {\n"
+                "  const { code, discount } = req.body;  // BAHAYA discount dari client\n"
+                "  total -= discount;\n"
+                "});\n\n"
+                "// BENAR:\n"
+                "app.post('/apply-coupon', async (req, res) => {\n"
+                "  const { code, orderId } = req.body;\n"
+                "  const v = await Voucher.findOne({code, active: true});\n"
+                "  if (!v || v.usedBy.includes(req.user.id)) return res.status(400).end();\n"
+                "  if (Date.now() > v.expiresAt) return res.status(400).end();\n"
+                "  const order = await Order.findById(orderId);\n"
+                "  if (order.total < v.minPurchase) return res.status(400).end();\n"
+                "  // server hitung discount sendiri\n"
+                "  const discount = v.percent ? order.total * v.percent / 100 : v.amount;\n"
+                "  if (discount > v.maxDiscount) discount = v.maxDiscount;\n"
+                "  // atomic update untuk anti race condition:\n"
+                "  await Voucher.updateOne(\n"
+                "    {_id: v._id, usedBy: {$ne: req.user.id}},\n"
+                "    {$push: {usedBy: req.user.id}, $inc: {usageCount: 1}}\n"
+                "  );\n"
+                "});",
+            "Atomic increment Postgres (anti race)":
+                "-- pakai SELECT FOR UPDATE dalam transaction\n"
+                "BEGIN;\n"
+                "  SELECT * FROM voucher WHERE code = ? AND active = true \n"
+                "    AND used_count < max_uses FOR UPDATE;\n"
+                "  -- validasi expired, kategori, min_purchase, dll\n"
+                "  UPDATE voucher SET used_count = used_count + 1 WHERE id = ?;\n"
+                "  INSERT INTO voucher_usage (voucher_id, user_id, order_id) VALUES (?, ?, ?);\n"
+                "COMMIT;",
+            "Idempotency key untuk anti double-claim":
+                "// Klien kirim Idempotency-Key per upaya apply\n"
+                "// Server simpan {key, voucher_id, order_id} di redis dengan TTL 1 menit\n"
+                "// Request kedua dengan key sama -> return response pertama, tidak proses ulang",
+        },
+        "manual_steps": [
+            "TEST DI SANDBOX, JANGAN PRODUCTION!",
+            "Brute-force code: kirim 100 kode random ke /apply-voucher, server harus rate-limit.",
+            "Voucher stacking: pakai 2 voucher sekaligus.",
+            "Voucher expired: pakai code yang sudah lewat tanggal.",
+            "Voucher kategori salah: voucher buku di-apply ke produk elektronik.",
+            "Negative discount: discount=-100 atau percent=110.",
+            "Single-use race: 2 request bayar bersamaan dengan voucher yang sama.",
+            "Min purchase bypass: voucher min Rp 100rb, coba dengan amount Rp 99rb.",
+            "Voucher untuk akun lain: ganti userId di body request.",
+            "First-time-only voucher dipakai user lama: kirim flag isFirstTime=true.",
+        ],
+    },
+    "auth_bypass": {
+        "impact": (
+            "Halaman/endpoint sensitif yang seharusnya butuh login bisa diakses "
+            "oleh siapapun. Akibat: kebocoran data user/admin, akses fungsi "
+            "administratif, dump database lewat phpmyadmin yang lupa di-protect, "
+            "dst. Salah satu kategori OWASP A01:2021 Broken Access Control."
+        ),
+        "attack_scenario": (
+            "1. Attacker scan path admin populer: /admin, /phpmyadmin, /actuator.\n"
+            "2. Path /admin/users return 200 dengan body berisi daftar user lengkap "
+            "dengan email + role. Tidak butuh login.\n"
+            "3. Attacker dump seluruh user. Pakai email untuk phishing target. "
+            "Pakai role admin yang ditemukan untuk social engineering.\n"
+            "4. Bonus: /actuator/env (Spring Boot) return env variables → dapat "
+            "DB password, AWS key."
+        ),
+        "fix_examples": {
+            "Express middleware":
+                "// Pasang middleware auth di SEMUA route admin\n"
+                "function requireAuth(req, res, next) {\n"
+                "  if (!req.session?.userId) return res.status(401).json({error: 'unauthorized'});\n"
+                "  next();\n"
+                "}\n"
+                "function requireAdmin(req, res, next) {\n"
+                "  if (req.user?.role !== 'admin') return res.status(403).json({error: 'forbidden'});\n"
+                "  next();\n"
+                "}\n"
+                "app.use('/admin/*', requireAuth, requireAdmin);\n"
+                "app.use('/api/admin/*', requireAuth, requireAdmin);",
+            "Django":
+                "from django.contrib.auth.decorators import login_required, user_passes_test\n\n"
+                "@login_required\n"
+                "@user_passes_test(lambda u: u.is_staff)\n"
+                "def admin_dashboard(request):\n"
+                "    ...",
+            "Spring Boot":
+                "@PreAuthorize(\"hasRole('ADMIN')\")\n"
+                "@GetMapping(\"/admin/users\")\n"
+                "public List<User> list() { ... }\n\n"
+                "// disable actuator endpoints di production:\n"
+                "// management.endpoints.web.exposure.include=health\n"
+                "// management.endpoint.env.enabled=false",
+            "Nginx (block path internal yang tidak boleh publik)":
+                "location ^~ /admin/ {\n"
+                "    allow 10.0.0.0/8;   # internal saja\n"
+                "    deny all;\n"
+                "}\n"
+                "location = /server-status { deny all; }\n"
+                "location = /server-info  { deny all; }",
+        },
+        "manual_steps": [
+            "Login dengan creds default umum (test 'placeholder'): admin/admin, "
+            "admin/password, root/root - JANGAN brute-force.",
+            "Force browse: catat URL setelah login admin, akses dari incognito.",
+            "Privilege escalation: akun user biasa coba akses /admin/*.",
+            "Session fixation: session ID berubah setelah login?",
+            "Logout test: token/cookie post-logout harus reject.",
+            "Cek ?debug=1 / ?admin=true / ?bypass=1 di URL.",
+        ],
+    },
 }
 
 

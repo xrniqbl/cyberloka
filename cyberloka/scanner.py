@@ -56,6 +56,8 @@ MODULE_MAP: dict[str, str] = {
     "mass_assign": "cyberloka.active.mass_assign",
     "hpp": "cyberloka.active.hpp",
     "crlf": "cyberloka.active.crlf",
+    "voucher": "cyberloka.active.voucher",
+    "auth_bypass": "cyberloka.active.auth_bypass",
     # simulate
     "rate_limit": "cyberloka.simulate.rate_limit",
     "burst": "cyberloka.simulate.burst",
