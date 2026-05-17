@@ -31,8 +31,14 @@ dependencies = [
     "tldextract>=5.0.0",
 ]
 
+[project.optional-dependencies]
+dashboard = [
+    "flask>=3.0.0",
+]
+
 [project.scripts]
 cyberloka = "cyberloka.cli:main"
+cyberloka-dashboard = "cyberloka.dashboard.app:main"
 
 [project.urls]
 Homepage = "https://github.com/xrniqbl/cyberloka"
@@ -41,4 +47,9 @@ Homepage = "https://github.com/xrniqbl/cyberloka"
 include = ["cyberloka*"]
 
 [tool.setuptools.package-data]
-cyberloka = ["data/*.txt", "reporting/templates/*.html"]
+cyberloka = [
+    "data/*.txt",
+    "reporting/templates/*.html",
+    "dashboard/templates/*.html",
+    "dashboard/static/*",
+]

@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
+from datetime import datetime, timezone
+from pathlib import Path
 
 from cyberloka import __version__
 from cyberloka.core.config import ScanConfig
@@ -46,6 +49,11 @@ def parse_headers(values: list[str] | None) -> dict[str, str]:
     return out
 
 
+def _slug(s: str) -> str:
+    s = re.sub(r"[^a-zA-Z0-9._-]+", "-", s.strip())
+    return s.strip("-") or "target"
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="cyberloka",
@@ -78,10 +86,38 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--proxy", help="HTTP proxy URL (mis. http://127.0.0.1:8080)")
     p.add_argument("--json", dest="json_out", help="Path output JSON")
     p.add_argument("--html", dest="html_out", help="Path output HTML")
+    p.add_argument(
+        "--reports-dir",
+        help=(
+            "Direktori output. Akan otomatis menulis JSON+HTML "
+            "dengan nama bertanggal di sini (kompatibel dengan dashboard)."
+        ),
+    )
+    p.add_argument(
+        "--no-compliance",
+        action="store_true",
+        help="Sembunyikan tabel compliance di console.",
+    )
     p.add_argument("--quiet", action="store_true")
     p.add_argument("--yes", action="store_true", help="Lewati prompt konfirmasi")
     p.add_argument("--version", action="version", version=f"cyberloka {__version__}")
     return p
+
+
+def _resolve_outputs(args: argparse.Namespace, target_host: str) -> tuple[str | None, str | None]:
+    """Combine --json / --html / --reports-dir into final output paths."""
+    json_out = args.json_out
+    html_out = args.html_out
+    if args.reports_dir:
+        base = Path(args.reports_dir)
+        base.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        stem = f"{_slug(target_host)}-{ts}"
+        if not json_out:
+            json_out = str(base / f"{stem}.json")
+        if not html_out:
+            html_out = str(base / f"{stem}.html")
+    return json_out, html_out
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -97,6 +133,8 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as e:
         log.error("Target tidak valid: %s", e)
         return 2
+
+    json_out, html_out = _resolve_outputs(args, target.host)
 
     cfg = ScanConfig(
         target=args.target,
@@ -116,8 +154,8 @@ def main(argv: list[str] | None = None) -> int:
         login_pass_field=args.login_pass_field,
         login_test_user=args.login_test_user,
         quiet=args.quiet,
-        json_out=args.json_out,
-        html_out=args.html_out,
+        json_out=json_out,
+        html_out=html_out,
         proxy=args.proxy,
     )
 
@@ -144,13 +182,28 @@ def main(argv: list[str] | None = None) -> int:
     findings = run_scan(target, cfg)
 
     console.print()
+    # 1. Executive summary first — manager-friendly view at the top.
+    console_report.render_executive_summary(findings)
+    console.print()
+    # 2. Findings overview table (with risk score column).
     console_report.render_findings(findings)
     console.print()
+    # 3. Compliance mapping summary (skippable).
+    if not args.no_compliance:
+        console_report.render_compliance_summary(findings)
+        console.print()
+    # 4. Per-finding detail (skipped in quiet mode, same as before).
     if not cfg.quiet:
+        from cyberloka.core.risk import score_finding
         for i, f in enumerate(
-            sorted(findings, key=lambda x: (x.severity.order, x.module)), 1
+            sorted(
+                findings,
+                key=lambda x: (-score_finding(x), x.severity.order, x.module),
+            ),
+            1,
         ):
             console_report.render_finding_detail(f, i)
+    # 5. Severity totals.
     console_report.render_summary(findings)
 
     if cfg.json_out:
