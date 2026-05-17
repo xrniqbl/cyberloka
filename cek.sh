@@ -1,50 +1,71 @@
 #!/usr/bin/env bash
-# Cyberloka — pemeriksa kerentanan website (mode super sederhana)
+# Cyberloka — pemeriksa kerentanan website (mode interaktif)
 #
-# Cukup masukkan domain atau IP, tool akan otomatis:
+# Cukup jalankan, masukkan domain/IP, lalu pilih mode 1/2/3.
+# Tool akan otomatis:
 #   1) install dependency yang dibutuhkan
-#   2) scan website (mode passive yang aman)
+#   2) scan website
 #   3) cetak: "Website ini rentan / aman" + daftar celah dalam bahasa Indonesia
-#
-# Pemakaian:
-#   ./cek.sh example.com                # passive (default, hanya membaca)
-#   ./cek.sh https://example.com aktif  # tambah scan aktif (butuh izin scan)
 #
 # WAJIB: hanya gunakan untuk website yang Anda miliki / yang memberi izin.
 
 set -e
 
 TARGET="${1:-}"
-MODE_INPUT="${2:-passive}"
+MODE_INPUT="${2:-}"
+
+# Tampilkan banner
+echo
+echo "============================================================"
+echo "  CYBERLOKA - Pemeriksa Kerentanan Website"
+echo "============================================================"
+echo
+
+# Minta target kalau belum dikasih
+if [ -z "$TARGET" ]; then
+    read -rp "Masukkan domain atau IP target: " TARGET
+fi
 
 if [ -z "$TARGET" ]; then
-    cat <<'EOF'
-Cyberloka — pemeriksa kerentanan website
-
-Cara pakai:
-    ./cek.sh <domain-atau-ip>           # mode aman (passive)
-    ./cek.sh <domain-atau-ip> aktif     # tambah scan aktif
-
-Contoh:
-    ./cek.sh example.com
-    ./cek.sh https://target-anda.com aktif
-    ./cek.sh 192.168.1.10
-EOF
+    echo "Target tidak boleh kosong. Dibatalkan."
     exit 2
 fi
 
-# Normalisasi mode
+# Tampilkan menu mode kalau belum dikasih
+if [ -z "$MODE_INPUT" ]; then
+    echo
+    echo "Pilih mode scan:"
+    echo "  [1] PASSIVE  - paling aman, hanya membaca header/cookies/TLS"
+    echo "                 (cocok untuk website apapun)"
+    echo "  [2] ACTIVE   - passive + crawler + cek SQLi/XSS/SSRF/JWT/dll."
+    echo "                 (butuh izin scan dari pemilik website)"
+    echo "  [3] FULL     - active + recon (DNS/port/subdomain/OpenAPI)"
+    echo "                 (paling lengkap, butuh izin scan)"
+    echo
+    read -rp "Pilihan [1-3, default 1]: " MODE_INPUT
+    MODE_INPUT="${MODE_INPUT:-1}"
+fi
+
+# Normalisasi mode (terima nomor atau nama)
 case "$MODE_INPUT" in
-    passive|pasif|p) MODE="passive" ;;
-    active|aktif|a)  MODE="active"  ;;
-    full|lengkap|l)  MODE="full"    ;;
-    *) MODE="passive" ;;
+    1|passive|pasif|p) MODE="passive" ;;
+    2|active|aktif|a)  MODE="active"  ;;
+    3|full|lengkap|l)  MODE="full"    ;;
+    *)
+        echo "Pilihan tidak dikenal: $MODE_INPUT (gunakan default passive)"
+        MODE="passive"
+        ;;
 esac
 
 # Tambahkan scheme bila tidak ada
 if [[ "$TARGET" != http://* && "$TARGET" != https://* ]]; then
     TARGET="https://$TARGET"
 fi
+
+echo
+echo "Target : $TARGET"
+echo "Mode   : $MODE"
+echo
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"

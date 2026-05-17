@@ -1,40 +1,60 @@
 @echo off
-rem Cyberloka - pemeriksa kerentanan website (mode super sederhana, Windows)
+rem Cyberloka - pemeriksa kerentanan website (mode interaktif, Windows)
 rem
-rem Cukup masukkan domain atau IP, tool akan otomatis:
-rem   1) install dependency yang dibutuhkan
-rem   2) scan website (mode passive yang aman)
-rem   3) cetak: "Website ini rentan / aman" + daftar celah dalam bahasa Indonesia
-rem
-rem Pemakaian:
-rem   cek.bat example.com
-rem   cek.bat https://example.com aktif
+rem Cukup jalankan, masukkan domain/IP, lalu pilih mode 1/2/3.
 rem
 rem WAJIB: hanya gunakan untuk website yang Anda miliki / yang memberi izin.
 
 setlocal enabledelayedexpansion
 
-if "%~1"=="" (
-    echo.
-    echo Cyberloka - pemeriksa kerentanan website
-    echo.
-    echo Cara pakai:
-    echo     cek.bat ^<domain-atau-ip^>           # mode aman ^(passive^)
-    echo     cek.bat ^<domain-atau-ip^> aktif     # tambah scan aktif
-    echo.
-    echo Contoh:
-    echo     cek.bat example.com
-    echo     cek.bat https://target-anda.com aktif
-    exit /b 2
-)
-
 set TARGET=%~1
 set MODE_INPUT=%~2
 
-if /i "%MODE_INPUT%"=="aktif" (set MODE=active) else (
-if /i "%MODE_INPUT%"=="active" (set MODE=active) else (
-if /i "%MODE_INPUT%"=="full" (set MODE=full) else (
-if /i "%MODE_INPUT%"=="lengkap" (set MODE=full) else (set MODE=passive))))
+echo.
+echo ============================================================
+echo   CYBERLOKA - Pemeriksa Kerentanan Website
+echo ============================================================
+echo.
+
+rem Minta target bila belum dikasih
+if "%TARGET%"=="" (
+    set /p "TARGET=Masukkan domain atau IP target: "
+)
+
+if "%TARGET%"=="" (
+    echo Target tidak boleh kosong. Dibatalkan.
+    exit /b 2
+)
+
+rem Tampilkan menu mode bila belum dikasih
+if "%MODE_INPUT%"=="" (
+    echo.
+    echo Pilih mode scan:
+    echo   [1] PASSIVE  - paling aman, hanya membaca header/cookies/TLS
+    echo                  ^(cocok untuk website apapun^)
+    echo   [2] ACTIVE   - passive + crawler + cek SQLi/XSS/SSRF/JWT/dll.
+    echo                  ^(butuh izin scan dari pemilik website^)
+    echo   [3] FULL     - active + recon ^(DNS/port/subdomain/OpenAPI^)
+    echo                  ^(paling lengkap, butuh izin scan^)
+    echo.
+    set /p "MODE_INPUT=Pilihan [1-3, default 1]: "
+    if "!MODE_INPUT!"=="" set MODE_INPUT=1
+)
+
+rem Normalisasi mode
+set MODE=passive
+if "%MODE_INPUT%"=="1" set MODE=passive
+if /i "%MODE_INPUT%"=="passive" set MODE=passive
+if /i "%MODE_INPUT%"=="pasif" set MODE=passive
+if /i "%MODE_INPUT%"=="p" set MODE=passive
+if "%MODE_INPUT%"=="2" set MODE=active
+if /i "%MODE_INPUT%"=="active" set MODE=active
+if /i "%MODE_INPUT%"=="aktif" set MODE=active
+if /i "%MODE_INPUT%"=="a" set MODE=active
+if "%MODE_INPUT%"=="3" set MODE=full
+if /i "%MODE_INPUT%"=="full" set MODE=full
+if /i "%MODE_INPUT%"=="lengkap" set MODE=full
+if /i "%MODE_INPUT%"=="l" set MODE=full
 
 rem Tambahkan https:// kalau belum ada
 echo %TARGET% | findstr /b /i "http://" >nul
@@ -42,6 +62,11 @@ if errorlevel 1 (
     echo %TARGET% | findstr /b /i "https://" >nul
     if errorlevel 1 set TARGET=https://%TARGET%
 )
+
+echo.
+echo Target : %TARGET%
+echo Mode   : %MODE%
+echo.
 
 cd /d "%~dp0"
 
