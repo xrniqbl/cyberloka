@@ -45,17 +45,29 @@ penyebabnya, serta memberikan rekomendasi perbaikan.
 - Burst request test untuk melihat respons WAF / rate limiter
 - *Tidak* melakukan DoS sungguhan: dibatasi durasi & jumlah request.
 
-### 5. Reporting
-- Output CLI berwarna (severity-coded) menggunakan `rich`
-- **Risk score CVSS-like (0.0-10.0)** per finding + **overall grade A+/A/B/C/D/F**
-- **Executive Summary** satu halaman: postur, distribusi risk, dan **Top 5 prioritas** perbaikan
-- **Compliance mapping** otomatis ke OWASP Top 10 2021, PCI-DSS v4.0, ISO/IEC 27001:2022, NIST CSF 2.0, CIS Controls v8, dan UU PDP Indonesia (UU 27/2022)
-- Export JSON terstruktur (lengkap dengan score + compliance) dan HTML responsive (mobile + print/PDF)
+### 5. Risk Scoring & Executive Summary  *(baru)*
+- **Risk score CVSS-like (0.0 – 10.0)** per finding (severity × module exploitability × confidence)
+- **Overall website grade A+ / A / B / C / D / F** (mirip SSL Labs), berikut score 0–100
+- **Executive Summary** satu halaman untuk manajemen non-teknis: postur, distribusi risk, dan **Top 5 prioritas perbaikan**
 
-### 6. Web Dashboard
-- Flask web UI untuk melihat history scan, trend grade per host, dan filter findings
+### 6. Compliance Mapping  *(baru)*
+Setiap finding di-map otomatis ke standar yang relevan:
+- **OWASP Top 10 2021** (A01–A10)
+- **PCI-DSS v4.0** (requirement IDs)
+- **ISO/IEC 27001:2022** Annex A controls
+- **NIST CSF 2.0** functions/categories
+- **CIS Controls v8** control IDs
+- **UU PDP Indonesia** (UU 27/2022, pasal terkait)
+
+### 7. Reporting
+- Output CLI berwarna (severity-coded) menggunakan `rich`, kini dengan kolom risk score
+- Export **JSON** terstruktur (lengkap dengan score + compliance) — cocok untuk pipeline CI
+- Export **HTML** responsive: tampil rapi di mobile + desktop, ramah print/PDF
+
+### 8. Web Dashboard  *(baru)*
+- Flask web UI ringan: history scan, trend grade per host, filter findings interaktif
 - Compare dua scan side-by-side (resolved / new / unchanged)
-- Filter interaktif: severity, module, full-text search, klik clause compliance untuk drill-down
+- Filter: severity, module, full-text search, klik clause compliance untuk drill-down
 - API JSON sederhana di `/api/scans`, `/api/host/<host>/trend`, `/api/scan/<id>`
 
 ---
@@ -95,7 +107,7 @@ cyberloka -t https://example.com --mode full --authorized
 cyberloka -t https://example.com --modules headers,tls,xss,sqli
 ```
 
-### Simpan laporan
+### Simpan laporan (file individual)
 ```bash
 cyberloka -t https://example.com --mode full --authorized \
           --json report.json --html report.html
@@ -151,20 +163,20 @@ cyberloka/
 │   ├── __init__.py
 │   ├── __main__.py
 │   ├── cli.py
-│   ├── core/                   # config, http client, model, logger, util,
-│   │                            # risk scoring, compliance mapping, bundle builder
+│   ├── core/                   # config, http client, model, logger, util
+│   │   ├── risk.py             # CVSS-like scoring + grading + executive summary
+│   │   ├── compliance.py       # OWASP/PCI/ISO/NIST/CIS/UU-PDP mapping
+│   │   └── report_bundle.py    # unified report bundle (consumed by all reporters)
 │   ├── recon/                  # dns, whois, ports, subdomain, fingerprint
 │   ├── passive/                # headers, tls, cookies, cors, methods, files
 │   ├── active/                 # sqli, xss, redirect, lfi, cmdi, dirlist
 │   ├── simulate/               # rate_limit, burst
-│   ├── reporting/              # console, json_report, html_report (+ template)
-│   └── dashboard/              # Flask web UI (+ templates, static, helpers)
+│   ├── reporting/              # console, json_report, html_report (responsive)
+│   └── dashboard/              # Flask web UI (history, trend, compare, filter)
 ├── data/
 │   ├── subdomains.txt
 │   ├── sensitive_paths.txt
 │   └── common_passwords.txt
-├── scripts/
-│   └── smoke_test.py           # offline test untuk risk + compliance + reporting
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
@@ -172,42 +184,15 @@ cyberloka/
 
 ## Severity & Risk Score
 
-| Level | Warna | Risk Score | Arti |
-|-------|-------|------------|------|
-| `critical` | merah        | 9.0 - 10.0 | Segera perbaiki - eksploitasi mudah, dampak besar |
-| `high`     | merah muda   | 7.0 - 8.9  | Risiko tinggi, perlu perbaikan dalam waktu dekat |
-| `medium`   | kuning       | 4.0 - 6.9  | Penting, perbaiki saat siklus rilis berikutnya |
-| `low`      | biru         | 0.1 - 3.9  | Best-practice / hardening |
-| `info`     | abu-abu      | 0.0        | Informasi (tidak selalu kerentanan) |
+| Severity | Score band | Grade impact | Arti |
+|----------|-----------|--------------|------|
+| `critical` | 9.0 – 10.0 | -35 / finding | Segera perbaiki — eksploitasi mudah, dampak besar |
+| `high`     | 7.0 – 8.9  | -18 / finding | Risiko tinggi, perlu perbaikan dalam waktu dekat |
+| `medium`   | 4.0 – 6.9  | -7  / finding | Penting, perbaiki saat siklus rilis berikutnya |
+| `low`      | 0.1 – 3.9  | -2  / finding | Best-practice / hardening |
+| `info`     | 0.0        | none          | Informasi (tidak selalu kerentanan) |
 
-### Overall Grade
-
-Score 0-100 (dengan diminishing-returns penalty per severity) dipetakan ke huruf
-mirip SSL Labs:
-
-| Score    | Grade | Label     |
-|----------|:-----:|-----------|
-| 95 - 100 | A+    | Excellent |
-| 85 - 94  | A     | Strong    |
-| 75 - 84  | B     | Good      |
-| 60 - 74  | C     | Adequate  |
-| 40 - 59  | D     | Weak      |
-| 0 - 39   | F     | Failing   |
-
-## Compliance Mapping
-
-Setiap finding di-map otomatis ke clause dari standar berikut (rule book ada di
-`cyberloka/core/compliance.py`):
-
-- **OWASP Top 10 2021** (A01-A10)
-- **PCI-DSS v4.0** (requirement IDs)
-- **ISO/IEC 27001:2022** (Annex A controls)
-- **NIST Cybersecurity Framework 2.0** (Function.Category)
-- **CIS Controls v8** (control IDs)
-- **UU PDP Indonesia** (UU 27/2022) - pasal yang relevan
-
-Mapping muncul di console, JSON, HTML report, dan dashboard. Anda bisa drill-down
-finding berdasarkan clause langsung dari halaman scan di dashboard.
+Penalty per finding mengalami *diminishing returns* seiring jumlah temuan, sehingga score dan grade tetap relevan untuk situs dengan banyak temuan low/info.
 
 ## Lisensi
 
