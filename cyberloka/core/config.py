@@ -37,6 +37,18 @@ class ScanConfig:
     crawl_max_pages: int = 60
     crawl_max_depth: int = 3
 
+    # Modul recon "ringan" (info publik, tidak menyentuh server target dengan request berat)
+    PASSIVE_RECON = (
+        "dns",
+        "whois",
+        "fingerprint",
+    )
+    # Modul recon yang berinteraksi langsung dengan server (port scan, subdomain enum)
+    ACTIVE_RECON = (
+        "ports",
+        "subdomains",
+        "openapi",
+    )
     PASSIVE_MODULES = (
         "headers",
         "tls",
@@ -45,9 +57,7 @@ class ScanConfig:
         "clickjacking",
         "methods",
         "sensitive_files",
-        "fingerprint",
         "robots",
-        "dns",
         "csrf",
     )
     ACTIVE_MODULES = (
@@ -65,34 +75,36 @@ class ScanConfig:
         "graphql",
         "websocket",
     )
-    RECON_MODULES = (
-        "dns",
-        "whois",
-        "ports",
-        "subdomains",
-        "fingerprint",
-        "crawler",
-        "openapi",
-    )
+    # Backward-compat: union semua modul recon
+    RECON_MODULES = PASSIVE_RECON + ACTIVE_RECON + ("crawler",)
 
     def resolve_modules(self) -> list[str]:
         if self.modules:
             return list(self.modules)
         if self.mode == "passive":
-            mods = list(self.PASSIVE_MODULES)
+            # Recon ringan + checks pasif
+            mods = list(self.PASSIVE_RECON) + list(self.PASSIVE_MODULES)
             if self.crawl:
-                mods = ["crawler", *mods]
-            return mods
+                mods.append("crawler")
+            return list(dict.fromkeys(mods))
         if self.mode == "active":
-            mods = list(self.PASSIVE_MODULES) + list(self.ACTIVE_MODULES)
-            if self.crawl:
-                mods = ["crawler", *mods]
-            return mods
-        if self.mode == "full":
-            mods = list(dict.fromkeys(
-                list(self.RECON_MODULES)
+            # Tambah port scan + subdomain enum + spec discovery + active checks
+            mods = (
+                list(self.PASSIVE_RECON)
+                + list(self.ACTIVE_RECON)
                 + list(self.PASSIVE_MODULES)
                 + list(self.ACTIVE_MODULES)
-            ))
-            return mods
+            )
+            if self.crawl:
+                mods = ["crawler", *mods]
+            return list(dict.fromkeys(mods))
+        if self.mode == "full":
+            mods = (
+                list(self.PASSIVE_RECON)
+                + list(self.ACTIVE_RECON)
+                + ["crawler"]
+                + list(self.PASSIVE_MODULES)
+                + list(self.ACTIVE_MODULES)
+            )
+            return list(dict.fromkeys(mods))
         raise ValueError(f"Unknown mode: {self.mode}")

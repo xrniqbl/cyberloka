@@ -65,6 +65,13 @@ penyebabnya, serta memberikan rekomendasi perbaikan.
 - Output CLI berwarna (severity-coded) menggunakan `rich`
 - Export JSON terstruktur
 - Export HTML report (rapi, lengkap dengan remediasi per finding)
+- **Laporan naratif bahasa Indonesia** (`.txt`) berisi section:
+  1. Ringkasan status (RENTAN / AMAN)
+  2. Informasi website (DNS, teknologi, WHOIS)
+  3. Daftar **port terbuka** + port tidak aman
+  4. Daftar **subdomain** ditemukan
+  5. Endpoint, form, dan file sensitif yang ter-ekspos
+  6. Detail **celah keamanan** beserta cara perbaikan
 - **Diff scan** — bandingkan dua report JSON untuk track regresi:
   ```bash
   cyberloka diff old.json new.json --json diff.json --fail-on-new
