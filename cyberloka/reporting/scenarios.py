@@ -114,6 +114,7 @@ ACCESS_GAINED_MAP: dict[str, tuple[str, str]] = {
     "ldap_injection": ("Akses direktori LDAP", "any"),
     # RCE
     "cmdi": ("Remote Code Execution (Command Injection)", "any"),
+    "rce_validator": ("Remote Code Execution TERVERIFIKASI (multi-oracle)", "any"),
     "ssti": ("Remote Code Execution (Template Injection)", "any"),
     "deserialization": ("Remote Code Execution (deserialization)", "any"),
     "file_upload": ("Webshell upload / RCE via file upload", "any"),
@@ -184,6 +185,16 @@ ACCESS_GAINED_MAP: dict[str, tuple[str, str]] = {
     # Info
     "exif_leak": ("Geo-location bocor di EXIF", "any"),
     "homoglyph_check": ("Risiko homograph phishing", "any"),
+
+    # ============ NEW (v0.9.2) ============
+    "secrets_scanner": ("Kredensial bocor di response/JS", "any"),
+    "tabnabbing": ("Reverse tabnabbing (phishing chain)", "any"),
+    "json_csrf": ("CSRF pada API JSON (text/plain bypass)", "any"),
+    "prompt_injection": ("LLM prompt injection (system prompt override)", "any"),
+    "admin_panel_finder": ("Akses ke management UI / panel admin", "any"),
+    "secrets_in_response_diff": ("Field sensitif bocor di response publik", "any"),
+    "cors_credentials_probe": ("CORS state-changing + credentials (CSRF bypass)", "any"),
+    # waf_detect & well_known_audit are info-level; tidak masuk access-gained
 }
 
 

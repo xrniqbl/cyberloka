@@ -107,8 +107,48 @@ def auto_pdf_path(target: Target, out_dir: str | None = None) -> str:
     return str(base / name)
 
 
+_ALLOWED_TAGS_RE = re.compile(
+    r"</?(?:b|strong|i|em|u|br|font|a|link|sub|sup|para|para[^>]*)(?:\s[^>]*)?/?>",
+    re.I,
+)
+
+
 def _para(text: str, style) -> Paragraph:
-    safe = (text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+    """Render ``text`` as a Paragraph.
+
+    Whitelist a small set of HTML-ish tags supported by ReportLab Paragraph
+    (``<b>``, ``<i>``, ``<u>``, ``<br/>``, ``<font color>``, ``<a href>``,
+    ``<link href>``, ``<sub>``, ``<sup>``). Everything else - including any
+    user-supplied ``<script>``, raw ``<`` / ``>`` / ``&`` - is escaped.
+
+    Bug yang diperbaiki: sebelumnya semua ``<`` / ``>`` / ``&`` di-escape,
+    sehingga markup yang sengaja kami bangun (``<b>...</b>``,
+    ``<link href="...">``, ``<font color="...">``) muncul sebagai teks
+    literal di laporan PDF.
+    """
+    if text is None:
+        return Paragraph("", style)
+    if not isinstance(text, str):
+        text = str(text)
+
+    # 1. Replace allowed tags with sentinels so we don't escape them.
+    placeholders: list[str] = []
+
+    def _save(m: "re.Match[str]") -> str:
+        placeholders.append(m.group(0))
+        return f"\x00TAG{len(placeholders) - 1}\x00"
+
+    masked = _ALLOWED_TAGS_RE.sub(_save, text)
+
+    # 2. Escape everything else (no quote=True so attribute values aren't broken
+    #    when we later restore the tag exactly as the caller wrote it).
+    masked = masked.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    # 3. Restore the original tags untouched.
+    def _restore(m: "re.Match[str]") -> str:
+        return placeholders[int(m.group(1))]
+
+    safe = re.sub(r"\x00TAG(\d+)\x00", _restore, masked)
     return Paragraph(safe, style)
 
 

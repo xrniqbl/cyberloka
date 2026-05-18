@@ -8,7 +8,7 @@ REM  ditanya untuk update. Pilihan #8 di menu adalah update manual
 REM  (git pull + pip install) yang sama.
 REM =====================================================================
 setlocal EnableDelayedExpansion
-title Cyberloka v0.9.0 - Web Vulnerability Scanner
+title Cyberloka v0.9.2 - Web Vulnerability Scanner
 chcp 65001 >nul 2>&1
 
 REM Pindah ke folder script ini
@@ -24,18 +24,29 @@ if not errorlevel 1 (
     git rev-parse --is-inside-work-tree >nul 2>nul
     if not errorlevel 1 (
         echo Memeriksa update dari repository...
+        REM Tampilkan branch aktif + tracking branch supaya jelas update dari mana.
+        for /f "delims=" %%a in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set "CURBRANCH=%%a"
+        for /f "delims=" %%a in ('git rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2^>nul') do set "UPSTREAM=%%a"
+        if defined CURBRANCH echo   Branch aktif : !CURBRANCH!
+        if defined UPSTREAM echo   Tracking     : !UPSTREAM!
         git fetch --quiet origin 2>nul
         for /f %%a in ('git rev-list HEAD..@{u} --count 2^>nul') do set "BEHIND=%%a"
         if not "!BEHIND!"=="" (
             if not "!BEHIND!"=="0" (
                 echo.
                 echo ====================================================================
-                echo  ADA UPDATE!  !BEHIND! commit baru tersedia di repository.
+                echo  ADA UPDATE!  !BEHIND! commit baru tersedia di !UPSTREAM!.
                 echo  Pilih [Y] untuk update sekarang ^(git pull + pip install^)
                 echo  atau [N] untuk lanjut tanpa update.
                 echo ====================================================================
                 set /p UPDATE_NOW="Update sekarang? (Y/N): "
                 if /i "!UPDATE_NOW!"=="Y" goto gitpull_silent
+            ) else (
+                echo   Status       : up-to-date dengan !UPSTREAM!.
+                echo.
+                echo   Catatan: kalau ada commit/PR di branch lain ^(mis. fix/...^),
+                echo   commit itu BELUM masuk sampai PR di-merge ke branch ini.
+                echo   Untuk pindah branch sementara: git checkout ^<nama-branch^>
             )
         )
     )
@@ -44,7 +55,7 @@ if not errorlevel 1 (
 :menu
 cls
 echo ======================================================================
-echo   CYBERLOKA v0.9.0 - Web Vulnerability Scanner
+echo   CYBERLOKA v0.9.2 - Web Vulnerability Scanner
 echo ======================================================================
 echo.
 echo   APA YANG MAU DICOBA?   ^(pilih nomor^)
@@ -58,9 +69,10 @@ echo    5. Lihat laporan PDF terakhir
 echo    6. Tampilkan --help
 echo    7. Daftar semua module deteksi
 echo    8. Update Cyberloka ^(git pull + pip install^)
+echo    9. Validasi RCE / Command Injection ^(non-destruktif, butuh izin^)
 echo    0. Keluar
 echo.
-set /p choice="Pilih [0-8]: "
+set /p choice="Pilih [0-9]: "
 
 if "%choice%"=="1" goto interactive
 if "%choice%"=="2" goto quickscan
@@ -70,6 +82,7 @@ if "%choice%"=="5" goto lastpdf
 if "%choice%"=="6" goto showhelp
 if "%choice%"=="7" goto listmod
 if "%choice%"=="8" goto gitpull
+if "%choice%"=="9" goto rcevalidate
 if "%choice%"=="0" goto end
 echo.
 echo Pilihan tidak dikenal: %choice%
@@ -107,6 +120,7 @@ echo  d. Scan modul tertentu (input: headers,tls,sqli,...)
 echo  e. Recon saja    (dns, whois, ports, subdomains, fingerprint, waf)
 echo  f. Subdomain takeover check
 echo  g. Simulate attack (burst + rate-limit, butuh --login-url)
+echo  h. Validasi RCE / Command Injection (non-destruktif, deep verification)
 echo  x. Kembali ke menu utama
 echo ----------------------------------------------------------------------
 set /p subchoice="Pilih: "
@@ -117,6 +131,7 @@ if /i "%subchoice%"=="d" goto custom
 if /i "%subchoice%"=="e" goto recon
 if /i "%subchoice%"=="f" goto takeover
 if /i "%subchoice%"=="g" goto simulate
+if /i "%subchoice%"=="h" goto rcevalidate
 if /i "%subchoice%"=="x" goto menu
 echo Pilihan tidak dikenal.
 pause
@@ -193,6 +208,45 @@ pause
 goto menu
 
 REM =====================================================================
+REM  RCE VALIDATOR  (modul cyberloka.active.rce_validator)
+REM  Deep, non-destruktif: marker echo + hex round-trip + timing oracle.
+REM  Hanya parameter URL yang diuji. Tidak menulis file, tidak ekfiltrasi.
+REM =====================================================================
+:rcevalidate
+cls
+echo ======================================================================
+echo   VALIDASI RCE / COMMAND INJECTION  (deep, non-destruktif)
+echo ======================================================================
+echo  Modul: rce_validator
+echo  Oracle: marker echo, hex printf round-trip, timing (sleep 5).
+echo  Read-only proof: id, whoami, uname -a, hostname.
+echo  Klasifikasi: false_positive / low_confidence / firm / confirmed.
+echo  CATATAN ETIKA: HANYA jalankan pada target yang Anda miliki / izinkan.
+echo ----------------------------------------------------------------------
+call :askTarget
+echo.
+set "RCE_PARAM="
+set /p RCE_PARAM="Parameter spesifik yang dicurigai (kosong = auto-detect cmd/exec/host/ip): "
+if defined RCE_PARAM (
+    REM kalau user kasih parameter, tambahkan ke target URL kalau belum ada
+    echo %TARGET% | findstr /C:"?" >nul
+    if errorlevel 1 (set "TARGET=%TARGET%?%RCE_PARAM%=1") else (set "TARGET=%TARGET%&%RCE_PARAM%=1")
+)
+echo.
+echo Menjalankan rce_validator pada: %TARGET%
+python -m cyberloka -t "%TARGET%" --modules rce_validator --authorized --yes ^
+    --report-dir "%REPORTDIR%" ^
+    --json "%REPORTDIR%\report-rce.json" ^
+    --html "%REPORTDIR%\report-rce.html"
+echo.
+echo Laporan tersimpan di: %REPORTDIR%
+echo - report-rce.json  (raw)
+echo - report-rce.html  (browse)
+echo - PDF auto-named di folder yang sama (jika --pdf di-set di config)
+pause
+goto menu
+
+REM =====================================================================
 REM  4. BUKA FOLDER LAPORAN
 REM =====================================================================
 :openrep
@@ -265,6 +319,10 @@ if errorlevel 1 (
 
 echo Branch aktif sebelum update:
 git rev-parse --abbrev-ref HEAD
+for /f "delims=" %%a in ('git rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2^>nul') do set "UPSTREAM=%%a"
+if defined UPSTREAM echo Tracking remote: !UPSTREAM!
+for /f "delims=" %%a in ('git rev-parse --short HEAD 2^>nul') do set "BEFORE=%%a"
+if defined BEFORE echo Commit lokal sekarang: !BEFORE!
 echo.
 
 REM Stash perubahan lokal otomatis biar pull mulus
@@ -344,6 +402,19 @@ echo   UPDATE SELESAI
 echo ======================================================================
 for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD') do echo  Branch : %%b
 for /f "delims=" %%c in ('git log -1 --oneline') do echo  Commit : %%c
+for /f "delims=" %%d in ('git rev-parse --short HEAD 2^>nul') do set "AFTER=%%d"
+if defined BEFORE if defined AFTER (
+    if "!BEFORE!"=="!AFTER!" (
+        echo.
+        echo  [INFO] Commit hash TIDAK berubah ^(!BEFORE!^).
+        echo         Branch ini sudah up-to-date dengan remote-nya.
+        echo         Kalau Anda mengharapkan commit dari PR di branch lain,
+        echo         PR itu mungkin belum di-merge ke branch ini.
+        echo         Cek: https://github.com/xrniqbl/cyberloka/pulls
+    ) else (
+        echo  Update : !BEFORE! -^> !AFTER!
+    )
+)
 echo.
 echo  Verifikasi cepat:
 python -c "from cyberloka.scanner import MODULE_MAP; print('   - Total modul scanner :', len(MODULE_MAP))" 2>nul
