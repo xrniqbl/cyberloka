@@ -1,0 +1,945 @@
+"""Plain-Indonesian explainer for findings & modules.
+
+Maps each scanner module name to a non-technical description (`friendly_name`,
+`what_it_means`, `business_impact`, `category_id`) so that HTML/JSON reports
+can be read by non-technical stakeholders (managers, business owners, clients).
+"""
+from __future__ import annotations
+
+from typing import Any
+
+# Categories used in the report grouping.
+CATEGORIES = {
+    "data": "Keamanan Data Pelanggan",
+    "login": "Keamanan Login & Akun",
+    "uang": "Risiko Keuangan & Penipuan",
+    "infra": "Konfigurasi Server & Infrastruktur",
+    "email": "Keamanan Email & Domain",
+    "kode": "Keamanan Kode Aplikasi",
+    "info": "Kebocoran Informasi",
+    "lain": "Lainnya",
+}
+
+# module name -> friendly metadata
+EXPLAIN: dict[str, dict[str, str]] = {
+    # ============ RECON ============
+    "dns": {
+        "friendly_name": "Pemeriksaan Catatan Domain (DNS)",
+        "what_it_means": (
+            "Kami memeriksa catatan domain seperti A, MX, NS, dan TXT untuk "
+            "memastikan nama domain Anda dikonfigurasi dengan benar dan tidak "
+            "membocorkan informasi yang sensitif."
+        ),
+        "business_impact": (
+            "Catatan domain yang salah dapat membuat email perusahaan masuk "
+            "spam, atau membantu penyerang memetakan infrastruktur Anda."
+        ),
+        "category": "infra",
+    },
+    "whois": {
+        "friendly_name": "Pemeriksaan Pemilik Domain (WHOIS)",
+        "what_it_means": (
+            "Kami melihat siapa yang terdaftar sebagai pemilik domain dan "
+            "kapan domain akan kedaluwarsa."
+        ),
+        "business_impact": (
+            "Domain yang akan habis tanpa diperpanjang dapat hilang dan "
+            "dibeli orang lain. Email pemilik yang terbuka publik dapat "
+            "disalahgunakan untuk phishing."
+        ),
+        "category": "infra",
+    },
+    "ports": {
+        "friendly_name": "Pemeriksaan Pintu Masuk Server (Port Terbuka)",
+        "what_it_means": (
+            "Kami memeriksa 'pintu' jaringan mana saja di server Anda yang "
+            "terbuka dari internet."
+        ),
+        "business_impact": (
+            "Pintu yang seharusnya tertutup tetapi terbuka dapat dipakai "
+            "penyerang untuk masuk ke server."
+        ),
+        "category": "infra",
+    },
+    "fingerprint": {
+        "friendly_name": "Identifikasi Teknologi Website",
+        "what_it_means": (
+            "Kami mendeteksi server, framework, dan library yang dipakai "
+            "(misalnya Cloudflare, Next.js, React)."
+        ),
+        "business_impact": (
+            "Versi software yang lama dan dipublikasikan jelas memudahkan "
+            "penyerang mencari kerentanan yang sudah diketahui."
+        ),
+        "category": "info",
+    },
+    "subdomains": {
+        "friendly_name": "Pencarian Sub-domain",
+        "what_it_means": (
+            "Kami mencari sub-domain seperti admin.example.com, dev.example.com, "
+            "yang mungkin tidak Anda sadari masih hidup."
+        ),
+        "business_impact": (
+            "Sub-domain dev/staging yang lupa dimatikan sering jadi pintu "
+            "masuk peretasan karena pengamanannya lemah."
+        ),
+        "category": "infra",
+    },
+    "subdomain_takeover": {
+        "friendly_name": "Pengambilalihan Sub-domain Terlantar",
+        "what_it_means": (
+            "Kami memeriksa sub-domain yang masih mengarah ke layanan cloud "
+            "(GitHub Pages, S3, Heroku) yang sudah dihapus — sehingga "
+            "siapa pun bisa mengklaimnya."
+        ),
+        "business_impact": (
+            "Penyerang dapat membuat halaman palsu di sub-domain Anda untuk "
+            "menipu pelanggan (phishing) seakan-akan resmi dari perusahaan Anda."
+        ),
+        "category": "data",
+    },
+    "api_discovery": {
+        "friendly_name": "Pencarian Endpoint API",
+        "what_it_means": (
+            "Kami memeriksa apakah ada dokumentasi API publik (Swagger, "
+            "OpenAPI, GraphQL) yang seharusnya dibatasi."
+        ),
+        "business_impact": (
+            "Dokumentasi API publik memberi penyerang peta lengkap untuk "
+            "mencoba semua endpoint Anda."
+        ),
+        "category": "info",
+    },
+    "crawler": {
+        "friendly_name": "Pemetaan Halaman Website",
+        "what_it_means": (
+            "Kami menelusuri semua halaman dan formulir di website Anda agar "
+            "modul lain dapat memeriksa parameter & form yang ada."
+        ),
+        "business_impact": (
+            "Tahap penting untuk memastikan semua halaman terjangkau pengujian, "
+            "bukan hanya halaman utama."
+        ),
+        "category": "info",
+    },
+    "email_security": {
+        "friendly_name": "Keamanan Email Domain (SPF/DKIM/DMARC/CAA/DNSSEC)",
+        "what_it_means": (
+            "Kami memeriksa proteksi email perusahaan: apakah hanya server "
+            "yang berhak yang boleh mengirim email atas nama domain Anda."
+        ),
+        "business_impact": (
+            "Tanpa proteksi ini, penyerang dapat mengirim email phishing "
+            "ke pelanggan Anda yang terlihat datang dari email resmi perusahaan. "
+            "Ini berisiko hilangnya kepercayaan pelanggan dan kerugian finansial."
+        ),
+        "category": "email",
+    },
+    "nextjs_specific": {
+        "friendly_name": "Pemeriksaan Khusus Next.js",
+        "what_it_means": (
+            "Kami memeriksa kebocoran data spesifik aplikasi Next.js seperti "
+            "build ID, source map, dan endpoint development."
+        ),
+        "business_impact": (
+            "Source map yang bocor memungkinkan penyerang membaca kode sumber "
+            "asli aplikasi Anda — termasuk logika bisnis dan rahasia."
+        ),
+        "category": "kode",
+    },
+    "cf_origin": {
+        "friendly_name": "Pencarian IP Asli di Balik Cloudflare",
+        "what_it_means": (
+            "Cloudflare menyembunyikan IP server asli Anda. Kami memeriksa "
+            "apakah ada sub-domain yang malah membongkar IP asli tersebut."
+        ),
+        "business_impact": (
+            "Jika IP asli ditemukan, penyerang bisa melewati proteksi "
+            "Cloudflare dan menyerang server langsung."
+        ),
+        "category": "infra",
+    },
+    "wayback": {
+        "friendly_name": "Pencarian URL Lama (Wayback Machine + crt.sh)",
+        "what_it_means": (
+            "Kami melihat arsip historis untuk menemukan URL & sub-domain "
+            "yang dulu publik."
+        ),
+        "business_impact": (
+            "URL lama yang masih hidup tapi tidak dipantau (misal /admin-old) "
+            "sering jadi titik lemah."
+        ),
+        "category": "info",
+    },
+    "framework_default": {
+        "friendly_name": "Pemeriksaan Halaman Default Framework",
+        "what_it_means": (
+            "Kami memeriksa halaman/admin default yang khas framework "
+            "(WordPress admin, Spring actuator, phpMyAdmin, Tomcat, dll.)."
+        ),
+        "business_impact": (
+            "Halaman ini sering punya kredensial default atau tidak butuh "
+            "login — pintu masuk klasik untuk peretasan."
+        ),
+        "category": "infra",
+    },
+    "graphql_deep": {
+        "friendly_name": "Pemeriksaan Mendalam GraphQL",
+        "what_it_means": (
+            "Kami memeriksa apakah API GraphQL Anda membocorkan skema lengkap "
+            "(introspection) atau memberi saran field saat salah ketik."
+        ),
+        "business_impact": (
+            "Skema GraphQL yang bocor = peta lengkap ke seluruh data backend Anda."
+        ),
+        "category": "info",
+    },
+    "source_leak": {
+        "friendly_name": "Kebocoran File Sensitif (.git, .env, backup)",
+        "what_it_means": (
+            "Kami memeriksa apakah ada file rahasia seperti .git, .env, "
+            "kunci SSH, atau dump database yang bisa diunduh publik."
+        ),
+        "business_impact": (
+            "File-file ini biasanya berisi password database, kunci API, "
+            "dan kredensial lain. Sangat kritikal — bisa langsung membongkar "
+            "seluruh sistem."
+        ),
+        "category": "data",
+    },
+    # ============ PASSIVE ============
+    "headers": {
+        "friendly_name": "Pemeriksaan Header Keamanan HTTP",
+        "what_it_means": (
+            "Kami memeriksa apakah website Anda mengirim header keamanan "
+            "yang melindungi browser pengunjung (HSTS, X-Frame-Options, dll)."
+        ),
+        "business_impact": (
+            "Tanpa header ini, browser pengunjung lebih rentan terhadap "
+            "serangan clickjacking, MITM, dan XSS."
+        ),
+        "category": "infra",
+    },
+    "tls": {
+        "friendly_name": "Pemeriksaan Sertifikat HTTPS / TLS",
+        "what_it_means": (
+            "Kami memeriksa sertifikat HTTPS website Anda: validitas, "
+            "tanggal kedaluwarsa, kekuatan enkripsi."
+        ),
+        "business_impact": (
+            "Sertifikat kedaluwarsa = browser menolak / memperingatkan pengunjung. "
+            "Enkripsi lemah = data pelanggan bisa disadap di jaringan publik."
+        ),
+        "category": "infra",
+    },
+    "cookies": {
+        "friendly_name": "Pemeriksaan Cookie Login",
+        "what_it_means": (
+            "Kami memeriksa apakah cookie sesi (yang menyimpan login) memakai "
+            "atribut keamanan minimum (Secure, HttpOnly, SameSite)."
+        ),
+        "business_impact": (
+            "Cookie tanpa proteksi dapat dicuri oleh script jahat atau "
+            "disadap di Wi-Fi publik — penyerang bisa login sebagai pelanggan."
+        ),
+        "category": "login",
+    },
+    "cors": {
+        "friendly_name": "Konfigurasi Akses Lintas Domain (CORS)",
+        "what_it_means": (
+            "Kami memeriksa apakah API website Anda mengizinkan akses dari "
+            "domain yang seharusnya tidak."
+        ),
+        "business_impact": (
+            "CORS terlalu longgar = website lain bisa membaca data pelanggan "
+            "Anda dari browser mereka."
+        ),
+        "category": "data",
+    },
+    "clickjacking": {
+        "friendly_name": "Perlindungan Clickjacking",
+        "what_it_means": (
+            "Kami memeriksa apakah halaman Anda dapat di-embed di website lain "
+            "(seperti iframe transparan untuk menipu klik pengguna)."
+        ),
+        "business_impact": (
+            "Penyerang dapat membuat halaman palsu yang memuat halaman Anda "
+            "untuk menipu pelanggan klik tombol berbahaya."
+        ),
+        "category": "data",
+    },
+    "methods": {
+        "friendly_name": "Metode HTTP Tidak Aman",
+        "what_it_means": (
+            "Kami memeriksa apakah server menerima metode tidak biasa seperti "
+            "TRACE, PUT, DELETE yang seharusnya dimatikan."
+        ),
+        "business_impact": (
+            "Metode ini dapat dipakai untuk mengubah/menghapus data atau "
+            "membaca cookie pengunjung."
+        ),
+        "category": "infra",
+    },
+    "sensitive_files": {
+        "friendly_name": "File Sensitif Terbuka",
+        "what_it_means": (
+            "Kami memeriksa apakah ada file seperti backup, log, atau "
+            "konfigurasi yang seharusnya tidak publik."
+        ),
+        "business_impact": (
+            "File ini sering berisi data internal, password, atau "
+            "informasi sistem yang membantu penyerang."
+        ),
+        "category": "data",
+    },
+    "robots": {
+        "friendly_name": "Pemeriksaan robots.txt & Sitemap",
+        "what_it_means": (
+            "Kami memeriksa file robots.txt dan sitemap untuk melihat path "
+            "yang Anda eksplisit sembunyikan dari Google."
+        ),
+        "business_impact": (
+            "Path 'tersembunyi' di robots.txt sering menjadi target "
+            "penyerang karena justru mengungkap admin panel atau API internal."
+        ),
+        "category": "info",
+    },
+    "outdated_libs": {
+        "friendly_name": "Library JavaScript Kedaluwarsa",
+        "what_it_means": (
+            "Kami memeriksa versi library frontend (jQuery, Lodash, AngularJS, "
+            "Vue, Bootstrap) terhadap database kerentanan."
+        ),
+        "business_impact": (
+            "Library lama = punya CVE yang sudah diketahui publik. Penyerang "
+            "tinggal pakai exploit yang sudah ada."
+        ),
+        "category": "kode",
+    },
+    "mixed_content": {
+        "friendly_name": "Konten HTTP di Halaman HTTPS",
+        "what_it_means": (
+            "Kami memeriksa halaman HTTPS yang masih memuat resource "
+            "(gambar/script) lewat HTTP tidak aman."
+        ),
+        "business_impact": (
+            "Browser memberi peringatan 'Not Secure' dan menurunkan kepercayaan "
+            "pengunjung. Resource HTTP juga bisa dimodifikasi penyerang."
+        ),
+        "category": "infra",
+    },
+    "jwt": {
+        "friendly_name": "Pemeriksaan Token JWT",
+        "what_it_means": (
+            "JWT adalah token login modern. Kami memeriksa apakah token-nya "
+            "dikonfigurasi aman (algoritma, masa berlaku)."
+        ),
+        "business_impact": (
+            "Token JWT yang lemah dapat dipalsu — penyerang bisa login "
+            "sebagai user mana pun, termasuk admin."
+        ),
+        "category": "login",
+    },
+    "csp_evaluator": {
+        "friendly_name": "Kekuatan Content-Security-Policy",
+        "what_it_means": (
+            "CSP adalah aturan keamanan untuk browser. Kami menilai apakah "
+            "aturan Anda cukup ketat untuk mencegah XSS."
+        ),
+        "business_impact": (
+            "CSP longgar = kalau ada bug XSS, penyerang langsung bisa "
+            "mencuri data pelanggan."
+        ),
+        "category": "kode",
+    },
+    "captcha_check": {
+        "friendly_name": "Captcha pada Form Sensitif",
+        "what_it_means": (
+            "Kami memeriksa apakah form penting (login, register, voucher) "
+            "memakai reCAPTCHA / hCaptcha / Turnstile untuk mencegah bot."
+        ),
+        "business_impact": (
+            "Tanpa captcha, bot bisa brute-force login atau spam voucher "
+            "secara otomatis."
+        ),
+        "category": "login",
+    },
+    # ============ ACTIVE ============
+    "csrf": {
+        "friendly_name": "Perlindungan Cross-Site Request Forgery (CSRF)",
+        "what_it_means": (
+            "Kami memeriksa apakah form penting memiliki token anti-CSRF "
+            "yang mencegah aksi atas nama korban dari situs lain."
+        ),
+        "business_impact": (
+            "Penyerang dapat membuat halaman jahat yang menjebak pengunjung "
+            "yang sedang login melakukan transfer/update data tanpa sadar."
+        ),
+        "category": "login",
+    },
+    "sqli": {
+        "friendly_name": "SQL Injection (Akses Database Tidak Sah)",
+        "what_it_means": (
+            "Kami mencoba menyuntikkan kode database lewat parameter URL/form "
+            "untuk melihat apakah server merespons dengan error database."
+        ),
+        "business_impact": (
+            "SQL Injection adalah salah satu kerentanan paling berbahaya. "
+            "Penyerang dapat membaca/mengubah/menghapus seluruh database "
+            "Anda — termasuk semua data pelanggan, password, transaksi."
+        ),
+        "category": "data",
+    },
+    "xss": {
+        "friendly_name": "Cross-Site Scripting / XSS (Script Berbahaya)",
+        "what_it_means": (
+            "Kami mencoba menyuntikkan kode JavaScript lewat parameter URL "
+            "untuk melihat apakah dipantulkan ke halaman."
+        ),
+        "business_impact": (
+            "XSS memungkinkan penyerang menjalankan kode di browser pengunjung — "
+            "mencuri cookie login, defacement halaman, atau menampilkan form "
+            "phishing palsu."
+        ),
+        "category": "data",
+    },
+    "redirect": {
+        "friendly_name": "Open Redirect (Pengalihan Tidak Aman)",
+        "what_it_means": (
+            "Kami memeriksa apakah URL bisa dipakai untuk mengalihkan pengunjung "
+            "ke domain pihak ketiga."
+        ),
+        "business_impact": (
+            "Penyerang membuat link 'aman' yang awalnya ke domain Anda lalu "
+            "redirect ke situs phishing — pelanggan tertipu karena URL awal terpercaya."
+        ),
+        "category": "data",
+    },
+    "lfi": {
+        "friendly_name": "Local File Inclusion (Akses File Server)",
+        "what_it_means": (
+            "Kami mencoba menyuntikkan path file (../../etc/passwd) untuk "
+            "melihat apakah server membaca file dari sistem operasi."
+        ),
+        "business_impact": (
+            "Penyerang dapat membaca file konfigurasi server, password, "
+            "kode sumber aplikasi."
+        ),
+        "category": "infra",
+    },
+    "cmdi": {
+        "friendly_name": "Command Injection (Perintah Sistem Operasi)",
+        "what_it_means": (
+            "Kami memeriksa apakah parameter dieksekusi sebagai perintah "
+            "shell di server."
+        ),
+        "business_impact": (
+            "Sangat kritikal — penyerang dapat menjalankan perintah apa pun "
+            "di server: hapus data, install backdoor, ambil alih total."
+        ),
+        "category": "infra",
+    },
+    "dirlist": {
+        "friendly_name": "Directory Listing Terbuka",
+        "what_it_means": (
+            "Kami memeriksa apakah ada folder yang menampilkan daftar isi "
+            "saat dibuka di browser."
+        ),
+        "business_impact": (
+            "Penyerang dapat menelusuri seluruh file di server termasuk "
+            "backup, file rahasia, atau script internal."
+        ),
+        "category": "info",
+    },
+    "ssrf": {
+        "friendly_name": "Server-Side Request Forgery (SSRF)",
+        "what_it_means": (
+            "Kami memeriksa apakah server bisa dipaksa fetch URL pilihan "
+            "penyerang (termasuk endpoint internal)."
+        ),
+        "business_impact": (
+            "Penyerang dapat mengakses service internal di belakang firewall, "
+            "termasuk metadata cloud (AWS/GCP) yang bisa membongkar kredensial server."
+        ),
+        "category": "infra",
+    },
+    "ssrf_metadata": {
+        "friendly_name": "SSRF ke Metadata Cloud",
+        "what_it_means": (
+            "Pemeriksaan khusus apakah SSRF mencapai endpoint metadata cloud "
+            "yang menyimpan kredensial server."
+        ),
+        "business_impact": (
+            "Sangat kritikal. Jika berhasil, penyerang mendapat IAM token AWS/GCP/Azure "
+            "Anda dan bisa mengambil alih akun cloud Anda."
+        ),
+        "category": "infra",
+    },
+    "ssti": {
+        "friendly_name": "Server-Side Template Injection (SSTI)",
+        "what_it_means": (
+            "Kami menyuntik sintaks template (Jinja, Twig, ERB) untuk melihat "
+            "apakah server mengevaluasinya."
+        ),
+        "business_impact": (
+            "SSTI biasanya berujung pada Remote Code Execution — server "
+            "Anda diambil alih total."
+        ),
+        "category": "infra",
+    },
+    "xxe": {
+        "friendly_name": "XML External Entity (XXE)",
+        "what_it_means": (
+            "Kami menyuntik file XML khusus pada endpoint yang menerima XML "
+            "untuk melihat apakah parser memproses external entity."
+        ),
+        "business_impact": (
+            "Berpotensi membaca file lokal (config, password) dan menjalankan "
+            "permintaan internal (SSRF)."
+        ),
+        "category": "infra",
+    },
+    "forms": {
+        "friendly_name": "Pengujian Form Otomatis",
+        "what_it_means": (
+            "Kami menyuntik payload SQLi/XSS ke form yang ditemukan crawler "
+            "untuk verifikasi keamanan input."
+        ),
+        "business_impact": (
+            "Sama dengan SQLi & XSS — kebocoran data pelanggan / pengambilalihan "
+            "akun."
+        ),
+        "category": "data",
+    },
+    "session": {
+        "friendly_name": "Keamanan Sesi Login",
+        "what_it_means": (
+            "Kami memeriksa form login, atribut cookie sesi, panjang session ID, "
+            "session fixation, dan account enumeration."
+        ),
+        "business_impact": (
+            "Sesi yang lemah memudahkan pengambilalihan akun pelanggan — risiko "
+            "kehilangan trust dan kerugian finansial."
+        ),
+        "category": "login",
+    },
+    "voucher": {
+        "friendly_name": "Pengujian Sistem Voucher / Kupon",
+        "what_it_means": (
+            "Kami coba kode voucher umum (TEST, FREE, WELCOME) dan pengujian "
+            "stack-abuse pada endpoint redeem."
+        ),
+        "business_impact": (
+            "Voucher bug = kerugian langsung. Kode test yang lupa dimatikan "
+            "atau voucher yang bisa dipakai berkali-kali = bocor cashback / promo."
+        ),
+        "category": "uang",
+    },
+    "payment": {
+        "friendly_name": "Pengujian Sistem Pembayaran",
+        "what_it_means": (
+            "Kami memeriksa parameter harga yang bisa dimanipulasi, IDOR pada "
+            "endpoint order, dan kebocoran kunci API gateway pembayaran "
+            "(Midtrans/Stripe/Xendit/Doku)."
+        ),
+        "business_impact": (
+            "Risiko paling tinggi untuk e-commerce — pelanggan bisa beli "
+            "barang Rp 1 atau melihat invoice orang lain. Kunci gateway yang "
+            "bocor bisa dipakai membuat transaksi palsu atas nama merchant."
+        ),
+        "category": "uang",
+    },
+    "otp_check": {
+        "friendly_name": "Keamanan OTP / 2FA",
+        "what_it_means": (
+            "Kami memeriksa apakah endpoint OTP punya rate-limit dan panjang "
+            "kode yang cukup (idealnya 6 digit)."
+        ),
+        "business_impact": (
+            "OTP 4 digit tanpa rate-limit bisa di-brute-force dalam menit. "
+            "Akun pelanggan + saldo bisa dirampas."
+        ),
+        "category": "login",
+    },
+    "password_reset": {
+        "friendly_name": "Keamanan Reset Password",
+        "what_it_means": (
+            "Kami memeriksa apakah endpoint lupa password rentan account "
+            "enumeration, token leak via Referer, atau dilayani via HTTP."
+        ),
+        "business_impact": (
+            "Jalur reset password sering dimanfaatkan untuk takeover akun "
+            "pelanggan. Token yang lemah = akun bisa diambil tanpa tahu password."
+        ),
+        "category": "login",
+    },
+    "file_upload": {
+        "friendly_name": "Keamanan Form Upload File",
+        "what_it_means": (
+            "Kami coba upload file dengan ekstensi nakal (.php.jpg, .phtml, "
+            "SVG XSS) untuk melihat apakah validasinya cukup."
+        ),
+        "business_impact": (
+            "Upload yang lemah dapat berujung Remote Code Execution — penyerang "
+            "upload script PHP/JS dan menjalankannya di server Anda."
+        ),
+        "category": "infra",
+    },
+    "idor_generic": {
+        "friendly_name": "IDOR (Akses Data Orang Lain)",
+        "what_it_means": (
+            "Kami mencoba mengubah ID di URL/path (cth. /order/123 → /order/124) "
+            "untuk melihat apakah server tetap memberi data."
+        ),
+        "business_impact": (
+            "IDOR sering dipakai untuk membaca pesanan/invoice/data pelanggan "
+            "lain. Pelanggaran serius UU PDP."
+        ),
+        "category": "data",
+    },
+    "host_header": {
+        "friendly_name": "Host Header Injection",
+        "what_it_means": (
+            "Kami menyuntik header Host palsu untuk melihat apakah dipantulkan "
+            "ke link reset password / redirect."
+        ),
+        "business_impact": (
+            "Sering dipakai untuk meracuni link reset password — pelanggan klik "
+            "link dari email resmi tapi diarahkan ke situs penyerang."
+        ),
+        "category": "login",
+    },
+    "cache_poison": {
+        "friendly_name": "Web Cache Poisoning",
+        "what_it_means": (
+            "Kami coba header non-standar yang dipantulkan + dikache untuk "
+            "melihat apakah konten bisa diracun untuk pengunjung lain."
+        ),
+        "business_impact": (
+            "Penyerang dapat mengganti konten halaman utama untuk semua "
+            "pengunjung. Risiko defacement massal."
+        ),
+        "category": "infra",
+    },
+    "hpp": {
+        "friendly_name": "HTTP Parameter Pollution",
+        "what_it_means": (
+            "Kami kirim parameter dengan nama sama dua kali untuk melihat "
+            "perilaku server."
+        ),
+        "business_impact": (
+            "Bisa dipakai untuk melewati validasi atau WAF (firewall web)."
+        ),
+        "category": "kode",
+    },
+    "rfd": {
+        "friendly_name": "Reflected File Download",
+        "what_it_means": (
+            "Pengujian apakah response API bisa diunduh sebagai file .bat/.cmd "
+            "berisi perintah berbahaya."
+        ),
+        "business_impact": (
+            "Pelanggan tertipu mengunduh file dari domain terpercaya, lalu "
+            "menjalankannya — komputer pelanggan terinfeksi."
+        ),
+        "category": "data",
+    },
+    "dom_xss": {
+        "friendly_name": "DOM-based XSS (di sisi browser)",
+        "what_it_means": (
+            "Kami menganalisa kode JavaScript untuk pola berbahaya yang "
+            "menerima data dari URL tanpa sanitasi."
+        ),
+        "business_impact": (
+            "Sama dengan XSS biasa — kode jahat dijalankan di browser "
+            "pengunjung."
+        ),
+        "category": "data",
+    },
+    "oauth_check": {
+        "friendly_name": "Keamanan OAuth / Login Sosial",
+        "what_it_means": (
+            "Kami memeriksa konfigurasi OAuth (Google/Facebook login): apakah "
+            "memakai parameter `state`, PKCE, dan redirect_uri HTTPS."
+        ),
+        "business_impact": (
+            "OAuth lemah dapat dimanfaatkan mencuri token login pelanggan."
+        ),
+        "category": "login",
+    },
+    "pii_leak": {
+        "friendly_name": "Kebocoran Data Pribadi (NIK/HP/CC)",
+        "what_it_means": (
+            "Kami memindai response untuk pola nomor identitas Indonesia: "
+            "NIK 16 digit, NPWP, nomor HP +62, kartu kredit."
+        ),
+        "business_impact": (
+            "Kritikal untuk kepatuhan UU Perlindungan Data Pribadi (UU PDP). "
+            "Kebocoran PII = denda regulasi + kehilangan trust pelanggan + "
+            "potensi gugatan."
+        ),
+        "category": "data",
+    },
+    "race_condition": {
+        "friendly_name": "Race Condition (Voucher / Withdraw Ganda)",
+        "what_it_means": (
+            "Kami kirim 8 request paralel ke endpoint kritis (redeem voucher, "
+            "withdraw saldo, klaim cashback) untuk melihat apakah ada locking."
+        ),
+        "business_impact": (
+            "Klasik di e-commerce — voucher dipakai berkali-kali atau "
+            "saldo ditarik double. Kerugian finansial langsung."
+        ),
+        "category": "uang",
+    },
+    "proto_pollution": {
+        "friendly_name": "Prototype Pollution (Node.js)",
+        "what_it_means": (
+            "Pengujian apakah parameter __proto__ atau constructor[prototype] "
+            "diproses oleh aplikasi Node.js."
+        ),
+        "business_impact": (
+            "Berpotensi DoS, escalation privilege, atau RCE di aplikasi Node.js."
+        ),
+        "category": "kode",
+    },
+    "http_smuggling": {
+        "friendly_name": "HTTP Request Smuggling",
+        "what_it_means": (
+            "Kami coba kombinasi header Content-Length + Transfer-Encoding "
+            "yang dapat memecah parsing antara reverse-proxy dan backend."
+        ),
+        "business_impact": (
+            "Smuggling sukses memungkinkan bypass otentikasi, hijack sesi "
+            "pelanggan lain, atau cache poisoning."
+        ),
+        "category": "infra",
+    },
+    "ws_check": {
+        "friendly_name": "Keamanan WebSocket",
+        "what_it_means": (
+            "Pengujian apakah endpoint WebSocket menerima koneksi dari domain "
+            "tidak terpercaya (Cross-Site WebSocket Hijacking)."
+        ),
+        "business_impact": (
+            "Penyerang dapat membuka koneksi WebSocket atas nama korban dan "
+            "membaca/mengirim pesan internal."
+        ),
+        "category": "data",
+    },
+    "rate_limit": {
+        "friendly_name": "Pengujian Rate-Limit Login",
+        "what_it_means": (
+            "Kami uji apakah endpoint login membatasi jumlah percobaan."
+        ),
+        "business_impact": (
+            "Tanpa rate-limit, bot dapat brute-force password ribuan kali per menit."
+        ),
+        "category": "login",
+    },
+    "burst": {
+        "friendly_name": "Pengujian Burst Request",
+        "what_it_means": (
+            "Kami kirim banyak request berturut-turut untuk melihat respons "
+            "WAF/rate-limiter."
+        ),
+        "business_impact": (
+            "Tanpa proteksi, penyerang dapat melakukan scraping / DoS ringan."
+        ),
+        "category": "infra",
+    },
+}
+
+# Action-plan time bucket per severity (untuk action plan di laporan).
+SEVERITY_ACTION = {
+    "critical": {
+        "title": "Segera (1-7 hari)",
+        "color": "#dc2626",
+        "explainer": (
+            "Temuan kritikal harus diperbaiki dalam 1 minggu. Risiko tinggi "
+            "dapat disalahgunakan kapan saja oleh penyerang."
+        ),
+    },
+    "high": {
+        "title": "Minggu Ini (7-14 hari)",
+        "color": "#ea580c",
+        "explainer": (
+            "Temuan tingkat tinggi: risiko nyata, harus diperbaiki sebelum "
+            "rilis berikutnya."
+        ),
+    },
+    "medium": {
+        "title": "Bulan Ini (30 hari)",
+        "color": "#d97706",
+        "explainer": (
+            "Risiko menengah. Masuk ke siklus rilis terdekat — bukan emergency, "
+            "tapi tidak boleh ditunda lebih dari satu bulan."
+        ),
+    },
+    "low": {
+        "title": "Hardening (90 hari)",
+        "color": "#2563eb",
+        "explainer": (
+            "Praktik baik untuk hardening. Tidak ada eksploitasi langsung, "
+            "tapi sebaiknya diperbaiki untuk standar keamanan yang lebih baik."
+        ),
+    },
+    "info": {
+        "title": "Informasi (catat saja)",
+        "color": "#64748b",
+        "explainer": (
+            "Hanya informasi tentang infrastruktur Anda. Bukan kerentanan, "
+            "tapi membantu memetakan attack surface."
+        ),
+    },
+}
+
+# Glosarium istilah teknis untuk pembaca awam
+GLOSSARY: list[tuple[str, str]] = [
+    ("API",
+     "Antarmuka untuk aplikasi lain berinteraksi dengan website Anda — "
+     "biasanya tidak terlihat di browser."),
+    ("Brute-force",
+     "Mencoba ribuan kombinasi password/OTP secara otomatis."),
+    ("CDN (Cloudflare)",
+     "Layanan yang memperantarai trafik website agar lebih cepat & aman."),
+    ("Cookie",
+     "Data kecil yang disimpan browser untuk menjaga login pengguna."),
+    ("CSRF",
+     "Serangan yang memaksa pengguna login melakukan aksi tanpa sadar dari situs lain."),
+    ("CWE",
+     "Common Weakness Enumeration — sistem klasifikasi kelemahan keamanan standar internasional."),
+    ("DNS",
+     "Sistem yang menerjemahkan nama domain (example.com) menjadi alamat IP."),
+    ("Header HTTP",
+     "Metadata yang dikirim browser/server saat berkomunikasi (versi, jenis konten, dll)."),
+    ("HTTPS / TLS",
+     "Versi HTTP yang dienkripsi sehingga data tidak bisa disadap."),
+    ("IDOR",
+     "Insecure Direct Object Reference — bug di mana pengguna bisa membaca data pengguna lain dengan mengubah ID di URL."),
+    ("JWT",
+     "JSON Web Token — format token modern untuk autentikasi."),
+    ("OWASP",
+     "Open Web Application Security Project — komunitas global standar keamanan web."),
+    ("Payload",
+     "Data uji yang dikirim untuk memeriksa kerentanan."),
+    ("PII",
+     "Personally Identifiable Information — data yang dapat mengidentifikasi seseorang (NIK, HP, email)."),
+    ("Phishing",
+     "Penipuan yang menyamar sebagai pihak terpercaya untuk mencuri data login."),
+    ("RCE",
+     "Remote Code Execution — penyerang dapat menjalankan perintah di server Anda."),
+    ("SQLi (SQL Injection)",
+     "Penyuntikan kode database lewat input pengguna."),
+    ("SSRF",
+     "Server-Side Request Forgery — server dipaksa fetch URL pilihan penyerang."),
+    ("SSTI",
+     "Server-Side Template Injection — penyuntikan kode template di sisi server."),
+    ("UU PDP",
+     "Undang-Undang Perlindungan Data Pribadi (No. 27/2022) — wajib diikuti operator data Indonesia."),
+    ("WAF",
+     "Web Application Firewall — saringan keamanan di depan website (mis. Cloudflare WAF)."),
+    ("XSS",
+     "Cross-Site Scripting — penyuntikan script jahat ke halaman, dijalankan di browser pengunjung."),
+]
+
+
+def explain_finding(finding: dict[str, Any]) -> dict[str, Any]:
+    """Enrich a finding dict with friendly fields. Returns a new dict."""
+    out = dict(finding)
+    module = (finding.get("module") or "").lower()
+    info = EXPLAIN.get(module, {})
+    out["friendly_name"] = info.get("friendly_name") or finding.get("title", "")
+    out["what_it_means"] = info.get("what_it_means", "")
+    out["business_impact"] = info.get("business_impact", "")
+    out["category_id"] = info.get("category", "lain")
+    out["category_name"] = CATEGORIES.get(out["category_id"], "Lainnya")
+    return out
+
+
+def explain_module(name: str) -> dict[str, str]:
+    """Return friendly metadata for a module name (or empty dict)."""
+    info = EXPLAIN.get(name, {})
+    return {
+        "friendly_name": info.get("friendly_name", name),
+        "what_it_means": info.get("what_it_means", ""),
+        "business_impact": info.get("business_impact", ""),
+        "category_id": info.get("category", "lain"),
+        "category_name": CATEGORIES.get(info.get("category", "lain"), "Lainnya"),
+    }
+
+
+def categorize_findings(findings: list[dict]) -> dict[str, list[dict]]:
+    """Group findings by friendly category."""
+    out: dict[str, list[dict]] = {k: [] for k in CATEGORIES}
+    for f in findings:
+        cat = explain_finding(f)["category_id"]
+        out.setdefault(cat, []).append(f)
+    # Drop empty categories.
+    return {k: v for k, v in out.items() if v}
+
+
+def build_executive_summary(
+    findings: list[dict],
+    risk_score: int,
+    risk_label: str,
+    target_url: str,
+) -> dict[str, Any]:
+    """Generate plain-Indonesian executive summary."""
+    counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+    for f in findings:
+        counts[f.get("severity", "info")] = counts.get(f.get("severity", "info"), 0) + 1
+
+    # Verdict in plain language
+    if counts["critical"] > 0:
+        verdict = "Memerlukan Tindakan Segera"
+        verdict_text = (
+            f"Pemeriksaan menemukan {counts['critical']} masalah berdampak sangat tinggi. "
+            "Risiko ini perlu ditangani dalam 1 minggu untuk mencegah potensi "
+            "kebocoran data atau pengambilalihan sistem."
+        )
+        verdict_color = "#dc2626"
+    elif counts["high"] > 0:
+        verdict = "Perhatian Tinggi"
+        verdict_text = (
+            f"Tidak ada masalah kritikal, tetapi ada {counts['high']} temuan tingkat tinggi "
+            "yang harus dijadwalkan perbaikannya dalam waktu dekat."
+        )
+        verdict_color = "#ea580c"
+    elif counts["medium"] > 0:
+        verdict = "Posture Cukup Baik"
+        verdict_text = (
+            f"Tidak ada risiko kritikal/tinggi. Ada {counts['medium']} temuan tingkat "
+            "menengah yang masuk dalam siklus rilis terdekat."
+        )
+        verdict_color = "#d97706"
+    elif counts["low"] > 0 or counts["info"] > 0:
+        verdict = "Posture Baik"
+        verdict_text = (
+            "Tidak ditemukan kerentanan signifikan. Hanya catatan untuk hardening "
+            "lebih lanjut yang bersifat opsional."
+        )
+        verdict_color = "#2563eb"
+    else:
+        verdict = "Sangat Baik"
+        verdict_text = "Tidak ada finding terdeteksi pada modul yang dipilih."
+        verdict_color = "#16a34a"
+
+    # Top 5 most important findings
+    sev_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+    top = sorted(
+        findings,
+        key=lambda f: (sev_order.get(f.get("severity", "info"), 4), -(f.get("risk_score", 0)))
+    )[:5]
+    top_friendly = [explain_finding(f) for f in top]
+
+    return {
+        "target": target_url,
+        "verdict": verdict,
+        "verdict_text": verdict_text,
+        "verdict_color": verdict_color,
+        "risk_score": risk_score,
+        "risk_label": risk_label,
+        "counts": counts,
+        "top_findings": top_friendly,
+    }
