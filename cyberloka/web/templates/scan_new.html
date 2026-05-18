@@ -73,6 +73,36 @@
       <label class="flex items-center gap-2"><input type="checkbox" name="authorized" value="true"/> Saya sudah berwenang/berizin men-scan target ini.</label>
       <label class="flex items-center gap-2"><input type="checkbox" name="simulate_attack" value="true"/> Aktifkan simulasi (burst/rate-limit) — pakai dengan hati-hati.</label>
     </div>
+
+    <details class="border-t border-ink-700 pt-3">
+      <summary class="cursor-pointer text-xs uppercase tracking-wider text-slate-400">Authenticated scan (opsional)</summary>
+      <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+        <div class="sm:col-span-2">
+          <label class="block text-xs text-slate-400 mb-1">Login URL</label>
+          <input name="login_url" placeholder="https://target.com/login"
+                 class="w-full bg-ink-700 border border-ink-600 rounded-lg px-3 py-2"/>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Username/email</label>
+          <input name="login_username" autocomplete="off"
+                 class="w-full bg-ink-700 border border-ink-600 rounded-lg px-3 py-2"/>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Password</label>
+          <input name="login_password" type="password" autocomplete="new-password"
+                 class="w-full bg-ink-700 border border-ink-600 rounded-lg px-3 py-2"/>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-xs text-slate-400 mb-1">Atau Bearer token (Authorization: Bearer ...)</label>
+          <input name="auth_bearer" autocomplete="off"
+                 class="w-full bg-ink-700 border border-ink-600 rounded-lg px-3 py-2 font-mono text-xs"/>
+        </div>
+        <p class="sm:col-span-2 text-xs text-slate-500">
+          Scanner akan login sekali sebelum scan dan pakai cookie/token tersebut untuk semua modul.
+          Kredensial hanya disimpan di memori proses scan, bukan di database.
+        </p>
+      </div>
+    </details>
   </div>
 
   <aside class="bg-ink-800 border border-ink-600 rounded-2xl p-6 space-y-4 text-sm">

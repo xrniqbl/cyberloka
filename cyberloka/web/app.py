@@ -137,6 +137,10 @@ def create_app() -> FastAPI:
         max_crawl_pages: int = Form(30),
         authorized: bool = Form(False),
         simulate_attack: bool = Form(False),
+        login_url: str = Form(""),
+        login_username: str = Form(""),
+        login_password: str = Form(""),
+        auth_bearer: str = Form(""),
         db: Database = Depends(get_db),
     ) -> Response:
         target = db.get_target(target_id)
@@ -155,6 +159,10 @@ def create_app() -> FastAPI:
             # selalu dianggap authorized. Mode lain butuh konfirmasi.
             authorized=authorized or mode == "passive",
             simulate_attack=simulate_attack,
+            login_url=login_url.strip() or None,
+            login_username=login_username.strip() or None,
+            login_password=login_password or None,
+            auth_bearer_token=auth_bearer.strip() or None,
         )
         resolved = cfg.resolve_modules()
         if simulate_attack:
