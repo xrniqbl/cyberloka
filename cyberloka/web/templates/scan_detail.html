@@ -4,6 +4,18 @@
 
 {% block header_actions %}
   <a href="/api/scans/{{ scan.id }}" class="px-3 py-2 text-sm rounded-lg bg-ink-700 border border-ink-600 hover:border-brand-500">JSON</a>
+  <a href="/scans/{{ scan.id }}/report.html" target="_blank" class="px-3 py-2 text-sm rounded-lg bg-ink-700 border border-ink-600 hover:border-brand-500">HTML report</a>
+  <a href="/scans/{{ scan.id }}/report.pdf" class="px-3 py-2 text-sm rounded-lg bg-ink-700 border border-ink-600 hover:border-brand-500">PDF</a>
+  {% if previous_scans %}
+    <form action="/scans/{{ scan.id }}/diff" method="get" class="inline-flex items-center gap-2">
+      <select name="previous" class="bg-ink-700 border border-ink-600 rounded-lg px-2 py-2 text-sm">
+        {% for p in previous_scans %}
+          <option value="{{ p.id }}">vs scan #{{ p.id }} ({{ p.finished_at | format_dt }})</option>
+        {% endfor %}
+      </select>
+      <button class="px-3 py-2 text-sm rounded-lg bg-brand-600 hover:bg-brand-500 text-white">Diff</button>
+    </form>
+  {% endif %}
 {% endblock %}
 
 {% block body %}

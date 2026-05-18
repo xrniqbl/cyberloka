@@ -42,6 +42,7 @@ MODULE_MAP: dict[str, str] = {
     "outdated_libs": "cyberloka.passive.outdated_libs",
     "mixed_content": "cyberloka.passive.mixed_content",
     "csp_evaluator": "cyberloka.passive.csp_evaluator",
+    "captcha_check": "cyberloka.passive.captcha_check",
     # active
     "sqli": "cyberloka.active.sqli",
     "xss": "cyberloka.active.xss",
@@ -69,6 +70,9 @@ MODULE_MAP: dict[str, str] = {
     "oauth_check": "cyberloka.active.oauth_check",
     "pii_leak": "cyberloka.active.pii_leak",
     "race_condition": "cyberloka.active.race_condition",
+    "proto_pollution": "cyberloka.active.proto_pollution",
+    "http_smuggling": "cyberloka.active.http_smuggling",
+    "ws_check": "cyberloka.active.ws_check",
     # simulate
     "rate_limit": "cyberloka.simulate.rate_limit",
     "burst": "cyberloka.simulate.burst",

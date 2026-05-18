@@ -1,8 +1,4 @@
-"""SQLite-backed persistence for the dashboard.
-
-Intentionally dependency-light: only stdlib `sqlite3` so we don't force a
-heavier ORM on users. Each row is JSON-serialised where useful.
-"""
+"""SQLite-backed persistence for the dashboard."""
 from __future__ import annotations
 
 import json
@@ -28,7 +24,7 @@ CREATE TABLE IF NOT EXISTS scans (
     target_id INTEGER NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
     mode TEXT NOT NULL,
     modules_json TEXT NOT NULL,
-    status TEXT NOT NULL,            -- queued | running | done | error
+    status TEXT NOT NULL,
     progress INTEGER NOT NULL DEFAULT 0,
     progress_total INTEGER NOT NULL DEFAULT 0,
     current_module TEXT,
@@ -61,6 +57,26 @@ CREATE TABLE IF NOT EXISTS findings (
 
 CREATE INDEX IF NOT EXISTS idx_findings_scan ON findings(scan_id);
 CREATE INDEX IF NOT EXISTS idx_scans_target ON scans(target_id);
+
+CREATE TABLE IF NOT EXISTS schedules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    target_id INTEGER NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
+    interval_hours REAL NOT NULL DEFAULT 24,
+    mode TEXT NOT NULL DEFAULT 'passive',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    last_run TEXT,
+    next_run TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS notifiers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,           -- webhook | slack | email
+    url TEXT,                     -- webhook/slack URL OR mailto:user@example.com
+    min_severity TEXT NOT NULL DEFAULT 'high',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+);
 """
 
 _lock = threading.Lock()
@@ -183,6 +199,15 @@ class Database:
             cur.execute(sql, params)
             return [self._scan_row(dict(r)) for r in cur.fetchall()]
 
+    def list_done_scans_for_target(self, target_id: int, limit: int = 10) -> list[dict]:
+        with self.cursor() as cur:
+            cur.execute(
+                """SELECT * FROM scans WHERE target_id=? AND status='done'
+                   ORDER BY finished_at DESC LIMIT ?""",
+                (target_id, limit),
+            )
+            return [self._scan_row(dict(r)) for r in cur.fetchall()]
+
     def get_scan(self, scan_id: int) -> dict | None:
         with self.cursor() as cur:
             cur.execute(
@@ -272,6 +297,70 @@ class Database:
             except json.JSONDecodeError:
                 d["references"] = []
             return d
+
+    # ---- schedules ----------------------------------------------------
+    def create_schedule(self, target_id: int, interval_hours: float, mode: str) -> int:
+        with self.cursor() as cur:
+            cur.execute(
+                """INSERT INTO schedules (target_id, interval_hours, mode,
+                       enabled, next_run, created_at)
+                   VALUES (?,?,?,1,?,?) RETURNING id""",
+                (target_id, interval_hours, mode, _now(), _now()),
+            )
+            return cur.fetchone()[0]
+
+    def list_schedules(self) -> list[dict]:
+        with self.cursor() as cur:
+            cur.execute(
+                """SELECT s.*, t.url AS target_url, t.label AS target_label
+                   FROM schedules s JOIN targets t ON t.id = s.target_id
+                   ORDER BY s.created_at DESC"""
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+    def list_due_schedules(self) -> list[dict]:
+        now = _now()
+        with self.cursor() as cur:
+            cur.execute(
+                """SELECT s.*, t.url AS target_url FROM schedules s
+                   JOIN targets t ON t.id = s.target_id
+                   WHERE s.enabled=1 AND (s.next_run IS NULL OR s.next_run <= ?)""",
+                (now,),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+    def update_schedule(self, schedule_id: int, **fields) -> None:
+        if not fields:
+            return
+        cols = ", ".join(f"{k}=?" for k in fields)
+        with self.cursor() as cur:
+            cur.execute(
+                f"UPDATE schedules SET {cols} WHERE id=?",
+                (*fields.values(), schedule_id),
+            )
+
+    def delete_schedule(self, schedule_id: int) -> None:
+        with self.cursor() as cur:
+            cur.execute("DELETE FROM schedules WHERE id=?", (schedule_id,))
+
+    # ---- notifiers ----------------------------------------------------
+    def create_notifier(self, kind: str, url: str, min_severity: str) -> int:
+        with self.cursor() as cur:
+            cur.execute(
+                """INSERT INTO notifiers (kind, url, min_severity, enabled, created_at)
+                   VALUES (?,?,?,1,?) RETURNING id""",
+                (kind, url, min_severity, _now()),
+            )
+            return cur.fetchone()[0]
+
+    def list_notifiers(self) -> list[dict]:
+        with self.cursor() as cur:
+            cur.execute("SELECT * FROM notifiers ORDER BY created_at DESC")
+            return [dict(r) for r in cur.fetchall()]
+
+    def delete_notifier(self, nid: int) -> None:
+        with self.cursor() as cur:
+            cur.execute("DELETE FROM notifiers WHERE id=?", (nid,))
 
     # ---- analytics ----------------------------------------------------
     def overview_stats(self) -> dict:
