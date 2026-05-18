@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Cyberloka Report - {{ target.host }}</title>
+<style>
+  :root {
+    --bg: #F8FAFC;
+    --card: #ffffff;
+    --ink: #111827;
+    --muted: #6B7280;
+    --border: #E5E7EB;
+    --accent: #1F77B4;
+    --critical: #7F1D1D;
+    --high: #B91C1C;
+    --medium: #B45309;
+    --low: #0E7490;
+    --info: #475569;
+  }
+  body { background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; }
+  .topbar { background: #1F2937; color: #fff; padding: 16px 32px; }
+  .topbar h1 { margin: 0; font-size: 18px; }
+  .topbar small { color: #cbd5e1; }
+  .container { max-width: 1100px; margin: 24px auto; padding: 0 24px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 16px; }
+  h2 { font-size: 16px; margin: 8px 0 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; word-break: break-word; }
+  th { background: #1F2937; color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: #F8FAFC; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 4px; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .03em; }
+  .pill.critical { background: var(--critical); }
+  .pill.high     { background: var(--high); }
+  .pill.medium   { background: var(--medium); }
+  .pill.low      { background: var(--low); }
+  .pill.info     { background: var(--info); }
+  .kv { display: grid; grid-template-columns: 140px 1fr; gap: 6px 14px; font-size: 13px; }
+  .kv .k { color: var(--muted); font-weight: 600; }
+  pre { background: #F3F4F6; border-radius: 6px; padding: 8px 10px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; }
+  a { color: var(--accent); }
+  .finding { border-left: 4px solid var(--border); padding-left: 12px; margin-top: 14px; }
+  .finding.critical { border-color: var(--critical); }
+  .finding.high     { border-color: var(--high); }
+  .finding.medium   { border-color: var(--medium); }
+  .finding.low      { border-color: var(--low); }
+  .finding.info     { border-color: var(--info); }
+  .finding h3 { margin: 6px 0 4px; font-size: 14px; }
+  .small { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>Cyberloka Security Report</h1>
+  <small>cyberloka v{{ tool_version }} &middot; generated {{ generated_at }}</small>
+</div>
+<div class="container">
+
+  <div class="card">
+    <h2>Scope</h2>
+    <div class="kv">
+      <div class="k">Target</div><div><a href="{{ target.base_url }}">{{ target.base_url }}</a></div>
+      <div class="k">Host</div><div>{{ target.host }}:{{ target.port }}</div>
+      <div class="k">Scheme</div><div>{{ target.scheme | upper }}</div>
+      <div class="k">Mode</div><div>{{ scan.mode }}</div>
+      <div class="k">Modules</div><div>{{ scan.modules | join(", ") }}</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Summary</h2>
+    <table>
+      <thead><tr><th>Severity</th><th>Total</th></tr></thead>
+      <tbody>
+        {% for sev, count in summary.by_severity.items() %}
+        <tr>
+          <td><span class="pill {{ sev }}">{{ sev | upper }}</span></td>
+          <td>{{ count }}</td>
+        </tr>
+        {% endfor %}
+        <tr><td><b>TOTAL</b></td><td><b>{{ summary.total }}</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  {% if findings %}
+  <div class="card">
+    <h2>Findings Overview</h2>
+    <table>
+      <thead><tr><th>#</th><th>Severity</th><th>Module</th><th>Title</th><th>Target</th></tr></thead>
+      <tbody>
+        {% for f in findings %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td><span class="pill {{ f.severity }}">{{ f.severity | upper }}</span></td>
+          <td>{{ f.module }}</td>
+          <td>{{ f.title }}</td>
+          <td>{{ f.target }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Findings Detail</h2>
+    {% for f in findings %}
+    <div class="finding {{ f.severity }}">
+      <h3>#{{ loop.index }} &mdash; {{ f.title }}</h3>
+      <div class="small">
+        <span class="pill {{ f.severity }}">{{ f.severity | upper }}</span>
+        &nbsp;module: <b>{{ f.module }}</b>
+        {% if f.cwe %} &nbsp;|&nbsp; {{ f.cwe }}{% endif %}
+        &nbsp;|&nbsp; confidence: <b>{{ f.confidence }}</b>
+      </div>
+      <p>{{ f.description }}</p>
+      <div class="kv">
+        <div class="k">Target</div><div>{{ f.target }}</div>
+        {% if f.evidence %}<div class="k">Evidence</div><div><pre>{{ f.evidence }}</pre></div>{% endif %}
+        {% if f.remediation %}<div class="k">Remediation</div><div>{{ f.remediation }}</div>{% endif %}
+        {% if f.references %}
+        <div class="k">References</div>
+        <div>
+          <ul style="margin:0; padding-left: 18px;">
+            {% for r in f.references %}<li><a href="{{ r }}">{{ r }}</a></li>{% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card"><i>Tidak ada temuan terverifikasi pada scan ini.</i></div>
+  {% endif %}
+
+</div>
+</body>
+</html>

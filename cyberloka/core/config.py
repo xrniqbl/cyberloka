@@ -29,6 +29,7 @@ class ScanConfig:
     quiet: bool = False
     json_out: str | None = None
     html_out: str | None = None
+    pdf_out: str | None = None
     proxy: str | None = None
 
     PASSIVE_MODULES = (
