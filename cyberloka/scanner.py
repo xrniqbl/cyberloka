@@ -17,6 +17,8 @@ MODULE_MAP: dict[str, str] = {
     "ports": "cyberloka.recon.ports",
     "subdomains": "cyberloka.recon.subdomains",
     "fingerprint": "cyberloka.recon.fingerprint",
+    "waf_detect": "cyberloka.recon.waf_detect",
+    "subdomain_takeover": "cyberloka.recon.subdomain_takeover",
     # passive
     "headers": "cyberloka.passive.headers",
     "tls": "cyberloka.passive.tls_check",
@@ -26,6 +28,14 @@ MODULE_MAP: dict[str, str] = {
     "methods": "cyberloka.passive.methods",
     "sensitive_files": "cyberloka.passive.sensitive_files",
     "robots": "cyberloka.passive.robots",
+    "api_discovery": "cyberloka.passive.api_discovery",
+    "graphql": "cyberloka.passive.graphql",
+    "csrf": "cyberloka.passive.csrf",
+    "jwt": "cyberloka.passive.jwt_audit",
+    "secrets": "cyberloka.passive.secrets",
+    "mixed_content": "cyberloka.passive.mixed_content",
+    "info_disclosure": "cyberloka.passive.info_disclosure",
+    "cache": "cyberloka.passive.cache",
     # active
     "sqli": "cyberloka.active.sqli",
     "xss": "cyberloka.active.xss",
@@ -33,6 +43,8 @@ MODULE_MAP: dict[str, str] = {
     "lfi": "cyberloka.active.lfi",
     "cmdi": "cyberloka.active.cmdi",
     "dirlist": "cyberloka.active.dirlist",
+    "host_header": "cyberloka.active.host_header",
+    "ssrf": "cyberloka.active.ssrf",
     # simulate
     "rate_limit": "cyberloka.simulate.rate_limit",
     "burst": "cyberloka.simulate.burst",
@@ -61,6 +73,23 @@ def _run_module(name: str, target: Target, config: ScanConfig) -> list[Finding]:
         return []
 
 
+def _enrich_findings(findings: list[Finding], target: Target) -> list[Finding]:
+    """Enrich findings with derived fields:
+
+    - `urls`: ensure the finding has at least one bug-link (target if it
+      looks like a URL). This is what the report displays as "Link Bug".
+    """
+    for f in findings:
+        if not f.urls:
+            t = (f.target or "").strip()
+            if t.startswith(("http://", "https://")):
+                f.urls = [t]
+            elif t and target.base_url:
+                # If target is just a host or path, attach base_url as fallback
+                f.urls = [target.base_url]
+    return findings
+
+
 def run_scan(target: Target, config: ScanConfig) -> list[Finding]:
     """Run all selected modules and return aggregated findings."""
     modules = config.resolve_modules()
@@ -75,4 +104,4 @@ def run_scan(target: Target, config: ScanConfig) -> list[Finding]:
         future_to_name = {ex.submit(_run_module, m, target, config): m for m in modules}
         for fut in as_completed(future_to_name):
             findings.extend(fut.result())
-    return findings
+    return _enrich_findings(findings, target)

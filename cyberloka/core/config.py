@@ -42,6 +42,15 @@ class ScanConfig:
         "fingerprint",
         "robots",
         "dns",
+        "api_discovery",
+        "graphql",
+        "csrf",
+        "jwt",
+        "secrets",
+        "mixed_content",
+        "info_disclosure",
+        "cache",
+        "waf_detect",
     )
     ACTIVE_MODULES = (
         "sqli",
@@ -50,6 +59,8 @@ class ScanConfig:
         "lfi",
         "cmdi",
         "dirlist",
+        "host_header",
+        "ssrf",
     )
     RECON_MODULES = (
         "dns",
@@ -57,6 +68,8 @@ class ScanConfig:
         "ports",
         "subdomains",
         "fingerprint",
+        "waf_detect",
+        "subdomain_takeover",
     )
 
     def resolve_modules(self) -> list[str]:

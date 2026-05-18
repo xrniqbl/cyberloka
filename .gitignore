@@ -19,6 +19,9 @@ reports/
 *.json.bak
 report*.html
 report*.json
+cyberloka-report-*.pdf
+*.pdf
+!cyberloka/reporting/templates/*.html
 
 # Cache
 .pytest_cache/

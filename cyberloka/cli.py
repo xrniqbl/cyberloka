@@ -78,6 +78,28 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--proxy", help="HTTP proxy URL (mis. http://127.0.0.1:8080)")
     p.add_argument("--json", dest="json_out", help="Path output JSON")
     p.add_argument("--html", dest="html_out", help="Path output HTML")
+    p.add_argument(
+        "--pdf",
+        dest="pdf_out",
+        nargs="?",
+        const="__auto__",
+        default="__auto__",
+        help=(
+            "Path output PDF. Tanpa nilai akan auto-naming: "
+            "`cyberloka-report-<host>-<timestamp>.pdf`. "
+            "Default tanpa flag: PDF tetap dihasilkan otomatis."
+        ),
+    )
+    p.add_argument(
+        "--no-pdf",
+        action="store_true",
+        help="Nonaktifkan generate PDF (default: aktif).",
+    )
+    p.add_argument(
+        "--report-dir",
+        default=None,
+        help="Direktori output untuk auto-named PDF (default: working directory).",
+    )
     p.add_argument("--quiet", action="store_true")
     p.add_argument("--yes", action="store_true", help="Lewati prompt konfirmasi")
     p.add_argument("--version", action="version", version=f"cyberloka {__version__}")
@@ -159,6 +181,29 @@ def main(argv: list[str] | None = None) -> int:
     if cfg.html_out:
         write_html(cfg.html_out, target, cfg, findings)
         log.info("[green]HTML report ditulis ke %s[/green]", cfg.html_out)
+
+    # PDF: enabled by default, disabled with --no-pdf
+    if not args.no_pdf:
+        pdf_path_arg: str | None
+        if args.pdf_out == "__auto__":
+            pdf_path_arg = None  # let writer auto-name
+        else:
+            pdf_path_arg = args.pdf_out
+        try:
+            # Lazy import: reportlab is heavy and only needed for PDF.
+            from cyberloka.reporting.pdf_report import write_pdf
+            actual_pdf = write_pdf(
+                pdf_path_arg, target, cfg, findings, out_dir=args.report_dir
+            )
+            log.info("[green]PDF report ditulis ke %s[/green]", actual_pdf)
+        except ImportError as e:
+            log.error(
+                "Gagal menulis PDF report: %s. "
+                "Pastikan paket `reportlab` terpasang: pip install reportlab",
+                e,
+            )
+        except Exception as e:  # noqa: BLE001
+            log.error("Gagal menulis PDF report: %s", e)
 
     # Exit code: 0 = no high+ findings; 1 = ada high/critical
     if any(f.severity.value in ("critical", "high") for f in findings):
