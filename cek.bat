@@ -306,31 +306,49 @@ if "%STASHED%"=="1" (
     )
 )
 
-REM Update dependencies juga
+REM Update dependencies juga.
+REM Catatan: kita sudah `cd /d "%~dp0"` di awal script, jadi pakai path
+REM relatif (`.` dan `requirements.txt`) saja. Hindari `"%~dp0"` karena
+REM trailing backslash + tanda kutip menyebabkan Windows menafsirkan
+REM `\"` sebagai escape sequence -> path jadi rusak.
 echo.
 echo === Mengecek apakah Python tersedia ===
 where python >nul 2>nul
 if errorlevel 1 (
     echo [WARN] Python tidak ditemukan di PATH. Skip pip install.
-) else (
-    if exist "%~dp0requirements.txt" (
-        echo === pip install -r requirements.txt ===
-        python -m pip install --upgrade -q -r "%~dp0requirements.txt"
-    )
-    if exist "%~dp0pyproject.toml" (
-        echo === pip install -e . ^(local install^) ===
-        python -m pip install --upgrade -q -e "%~dp0"
+    goto pipdone
+)
+
+if exist "requirements.txt" (
+    echo === pip install -r requirements.txt ===
+    python -m pip install --upgrade -r requirements.txt
+    if errorlevel 1 (
+        echo [WARN] pip install requirements.txt gagal. Lanjut.
     )
 )
+
+if exist "pyproject.toml" (
+    echo === pip install -e . ^(local install^) ===
+    python -m pip install --upgrade -e .
+    if errorlevel 1 (
+        echo [WARN] pip install -e . gagal. Coba manual:
+        echo        cd /d "%~dp0"
+        echo        python -m pip install -e .
+    )
+)
+:pipdone
 
 echo.
 echo ======================================================================
 echo   UPDATE SELESAI
 echo ======================================================================
-echo Branch     : 
-git rev-parse --abbrev-ref HEAD
-echo Commit     :
-git log -1 --oneline
+for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD') do echo  Branch : %%b
+for /f "delims=" %%c in ('git log -1 --oneline') do echo  Commit : %%c
+echo.
+echo  Verifikasi cepat:
+python -c "from cyberloka.scanner import MODULE_MAP; print('   - Total modul scanner :', len(MODULE_MAP))" 2>nul
+python -c "import reportlab; print('   - reportlab           :', reportlab.Version)" 2>nul
+python -c "from cyberloka.reporting import pdf_report, extras, scenarios; print('   - PDF reporter        : OK')" 2>nul
 echo.
 pause
 goto menu
