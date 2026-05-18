@@ -60,6 +60,8 @@ from cyberloka import __version__
 from cyberloka.core import Finding, Severity, Target
 from cyberloka.core.config import ScanConfig
 from cyberloka.reporting.explainer import EXPLAIN, GLOSSARY
+from cyberloka.reporting.extras import MITRE_MAP, OWASP_MAP, REPRO_MAP
+from cyberloka.reporting.scenarios import ACCESS_GAINED_MAP, is_access_gained
 
 # ----------------------------- color palette -----------------------------
 
@@ -88,80 +90,6 @@ SEV_LABEL_ID = {
 PRIMARY = colors.HexColor("#1F2A44")
 ACCENT = colors.HexColor("#C0392B")
 
-# Modul yang temuannya menandakan akses berhasil ditembus oleh attacker.
-# Map: module name -> (label akses, severity threshold).
-# threshold "any" = severity apa pun, "high" = hanya jika critical/high.
-ACCESS_GAINED_MAP: dict[str, tuple[str, str]] = {
-    "sensitive_files": ("Source code / kredensial via file ter-ekspos", "any"),
-    "source_leak": ("Source code internal bocor", "any"),
-    "env_leak": ("Kredensial environment bocor", "any"),
-    "sqli": ("Akses database (SQL Injection)", "any"),
-    "nosqli": ("Akses NoSQL database", "any"),
-    "xpath_injection": ("Pencurian data via XPath injection", "any"),
-    "ldap_injection": ("Akses direktori LDAP", "any"),
-    "cmdi": ("Remote Code Execution (Command Injection)", "any"),
-    "ssti": ("Remote Code Execution (Template Injection)", "any"),
-    "deserialization": ("Remote Code Execution (deserialization)", "any"),
-    "file_upload": ("Webshell upload / RCE via file upload", "any"),
-    "zip_slip": ("Penulisan file arbitrer (Zip Slip)", "any"),
-    "proto_pollution": ("Prototype pollution / RCE chain", "any"),
-    "ssrf": ("Akses internal network (SSRF)", "high"),
-    "ssrf_metadata": ("Akses cloud metadata (IAM credentials)", "any"),
-    "lfi": ("Pembacaan file server", "any"),
-    "xxe": ("Pencurian data via XXE", "any"),
-    "url_preview_ssrf": ("SSRF via URL preview", "any"),
-    "host_header": ("Account takeover via password-reset hijack", "high"),
-    "password_reset": ("Account takeover via password reset", "any"),
-    "oauth_takeover": ("Account takeover via OAuth flow", "any"),
-    "auth_bypass": ("Bypass autentikasi", "any"),
-    "jwt": ("Forgery token JWT (impersonation)", "high"),
-    "jwt_confusion": ("JWT algorithm confusion attack", "any"),
-    "session": ("Pengambilalihan session", "high"),
-    "logout_csrf": ("Forced logout / CSRF", "any"),
-    "otp_check": ("Bypass OTP / 2FA", "any"),
-    "captcha_bypass": ("Bypass captcha", "any"),
-    "idor_generic": ("Akses data user lain (IDOR)", "any"),
-    "mass_assignment": ("Eskalasi privilege via mass assignment", "any"),
-    "private_profile_bypass": ("Bypass private profile", "any"),
-    "media_persistence": ("Akses media setelah dihapus", "any"),
-    "pii_leak": ("Kebocoran data pribadi", "any"),
-    "dm_privacy": ("Kebocoran direct message", "any"),
-    "voucher": ("Penyalahgunaan voucher", "any"),
-    "payment": ("Manipulasi payment flow", "any"),
-    "balance": ("Manipulasi saldo", "any"),
-    "race_condition": ("Eksploitasi race condition", "any"),
-    "subdomain_takeover": ("Subdomain takeover (full content control)", "any"),
-    "cloud_buckets": ("Akses cloud storage publik", "any"),
-    "cf_origin": ("Bypass CDN/WAF (akses origin langsung)", "any"),
-    "xss": ("Eksekusi JS di browser korban (session theft)", "any"),
-    "stored_xss": ("Stored XSS aktif", "any"),
-    "dom_xss": ("DOM XSS aktif", "any"),
-    "social_csrf": ("CSRF di alur social media", "any"),
-    "csrf": ("Aksi sensitif via CSRF", "any"),
-    "redirect": ("Phishing via domain target", "any"),
-    "dirlist": ("Browsing folder server", "any"),
-    "rate_limit": ("Brute-force / credential stuffing terbuka", "high"),
-    "rate_limit_bypass": ("Bypass rate-limit", "any"),
-    "captcha_check": ("Captcha lemah", "high"),
-    "cors": ("Pembacaan API lintas-origin (data exfil)", "high"),
-    "cors_advanced": ("Pembacaan API lintas-origin (advanced)", "high"),
-    "cache_poison": ("Cache poisoning", "any"),
-    "http_smuggling": ("HTTP request smuggling", "any"),
-    "response_splitting": ("HTTP response splitting", "any"),
-    "crlf_injection": ("CRLF injection", "any"),
-    "log_injection": ("Log injection / forging", "any"),
-    "csv_injection": ("CSV / formula injection", "any"),
-    "rfd": ("Reflected file download", "any"),
-    "webhook_signature": ("Webhook signature bypass", "any"),
-    "api_discovery": ("Management console / dokumentasi API", "high"),
-    "api_auth": ("API tanpa autentikasi", "high"),
-    "graphql_deep": ("Schema GraphQL ter-ekspos", "high"),
-    "graphql_dos": ("GraphQL DoS", "any"),
-    "sentry_dsn_leak": ("Sentry DSN bocor", "any"),
-    "api_key_in_url": ("API key di URL", "any"),
-    "exif_leak": ("Geo-location bocor di EXIF", "any"),
-}
-
 # ------------------------------ utilities --------------------------------
 
 
@@ -182,18 +110,6 @@ def auto_pdf_path(target: Target, out_dir: str | None = None) -> str:
 def _para(text: str, style) -> Paragraph:
     safe = (text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
     return Paragraph(safe, style)
-
-
-def _is_access_gained(f: Finding) -> tuple[bool, str]:
-    cfg = ACCESS_GAINED_MAP.get(f.module)
-    if not cfg:
-        return False, ""
-    label, threshold = cfg
-    if threshold == "any":
-        return True, label
-    if threshold == "high" and f.severity in (Severity.CRITICAL, Severity.HIGH):
-        return True, label
-    return False, ""
 
 
 def _styles() -> dict:
@@ -544,7 +460,7 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
     story.append(_para("3. Akses Yang Dapat / Berhasil Ditembus", styles["h1"]))
     accesses: list[tuple[Finding, str]] = []
     for f in findings_sorted:
-        gained, label = _is_access_gained(f)
+        gained, label = is_access_gained(f)
         if gained:
             accesses.append((f, label))
 
@@ -616,9 +532,14 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
         ]
         if f.cwe:
             meta_rows.append(("CWE", f.cwe))
-        owasp_cat = f.owasp_category
+        # OWASP Top 10: prefer module-level mapping, fallback to CWE-derived
+        owasp_cat = OWASP_MAP.get(f.module.lower()) or f.owasp_category
         if owasp_cat:
             meta_rows.append(("OWASP Top 10", owasp_cat))
+        # MITRE ATT&CK technique per modul
+        mitre = MITRE_MAP.get(f.module.lower())
+        if mitre:
+            meta_rows.append(("MITRE ATT&CK", mitre))
         if f.bug_id:
             meta_rows.append(("Bug ID", f.bug_id))
         meta_rows.append(("Risk Score", f"{f.risk_score} / 100"))
@@ -658,6 +579,17 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
 
         story.append(_para("Cara Menanggulangi", styles["h3"]))
         story.append(_para(f.remediation or "Lihat referensi di bawah.", styles["body"]))
+
+        # Cara Reproduksi (manual) - perintah curl/dig/openssl siap copy-paste
+        repro_template = REPRO_MAP.get(f.module.lower(), "")
+        if repro_template:
+            url_for_repro = (f.urls[0] if f.urls else target.base_url)
+            try:
+                repro_text = repro_template.format(url=url_for_repro, host=target.host)
+            except (KeyError, IndexError, ValueError):
+                repro_text = repro_template
+            story.append(_para("Cara Reproduksi (Manual)", styles["h3"]))
+            story.append(Preformatted(repro_text, styles["evidence"]))
 
         if f.references:
             story.append(_para("Referensi", styles["h3"]))
