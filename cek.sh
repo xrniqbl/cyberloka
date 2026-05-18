@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================
 #   cek.sh - Cyberloka Interactive Menu (Linux/macOS)
-#   Versi: 0.9.1
+#   Versi: 0.9.2
 #
 #   Cara update:
 #     git pull && pip install -e .[web,pdf]
@@ -25,7 +25,7 @@ show_menu() {
     clear || true
     cat <<'BANNER'
 ================================================================
-  CYBERLOKA v0.9.1 - Web Vulnerability Scanner
+  CYBERLOKA v0.9.2 - Web Vulnerability Scanner
 ================================================================
 
  APA YANG MAU DICOBA?  (pilih nomor)
@@ -133,7 +133,7 @@ show_help() {
 list_modules() {
     cat <<'MOD'
 ================================================================
-  Daftar Modul Cyberloka v0.9.0 (105 modul, 103 jalan di full)
+  Daftar Modul Cyberloka v0.9.2 (114 modul, 112 jalan di full)
 ================================================================
 
 [RECON - 21]
@@ -143,17 +143,20 @@ list_modules() {
   graphql_deep, source_leak, crawler, cms_scan, cloud_buckets,
   k8s_exposure, dependency_confusion, favicon_hash
 
-[PASSIVE - 22] (+exif_leak, homoglyph_check)
+[PASSIVE - 26] (+secrets_scanner, waf_detect, tabnabbing, well_known_audit)
   headers, tls, cookies, cors, clickjacking, methods,
   sensitive_files, robots, outdated_libs, mixed_content, jwt,
   csp_evaluator, captcha_check, cache_control_audit, cors_advanced,
   cookie_scope, sentry_dsn_leak, server_timing_header,
-  api_key_in_url, autocomplete_audit, exif_leak, homoglyph_check
+  api_key_in_url, autocomplete_audit, exif_leak, homoglyph_check,
+  secrets_scanner, waf_detect, tabnabbing, well_known_audit
 
-[ACTIVE - 60] (+8 sosmed)
-  csrf, sqli, xss, redirect, lfi, cmdi, dirlist, ssrf, ssrf_metadata,
-  ssti, xxe, forms, session, voucher, payment, otp_check,
-  password_reset, file_upload, idor_generic, host_header,
+[ACTIVE - 65] (+rce_validator, json_csrf, prompt_injection,
+                admin_panel_finder, secrets_in_response_diff,
+                cors_credentials_probe)
+  csrf, sqli, xss, redirect, lfi, cmdi, rce_validator, dirlist,
+  ssrf, ssrf_metadata, ssti, xxe, forms, session, voucher, payment,
+  otp_check, password_reset, file_upload, idor_generic, host_header,
   cache_poison, hpp, rfd, dom_xss, oauth_check, pii_leak,
   race_condition, proto_pollution, http_smuggling, ws_check,
   auth_bypass, balance, env_leak, api_auth, mass_assignment,
@@ -164,7 +167,9 @@ list_modules() {
   response_splitting, timing_attack,
   stored_xss, url_preview_ssrf, private_profile_bypass,
   media_persistence, dm_privacy, social_csrf, oauth_takeover,
-  unicode_bypass
+  unicode_bypass,
+  json_csrf, prompt_injection, admin_panel_finder,
+  secrets_in_response_diff, cors_credentials_probe
 
 [SIMULATE - 2]  (hanya jika --simulate-attack)
   rate_limit, burst

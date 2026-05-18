@@ -1333,6 +1333,146 @@ EXPLAIN: dict[str, dict[str, str]] = {
         ),
         "category": "data",
     },
+
+    # ============ NEW (v0.9.2) ============
+    "secrets_scanner": {
+        "friendly_name": "Pemindai Kebocoran Kredensial (30+ jenis)",
+        "what_it_means": (
+            "Kami pindai response halaman utama dan file JavaScript yang "
+            "di-include untuk pola 30+ jenis kunci/kredensial: AWS, GCP, "
+            "Azure, GitHub, GitLab, Stripe, Midtrans, Xendit, Slack, Twilio, "
+            "SendGrid, MongoDB/Postgres connection string, JWT, private key, "
+            "Laravel APP_KEY, dll."
+        ),
+        "business_impact": (
+            "Kunci yang bocor di frontend bisa dipakai attacker langsung tanpa "
+            "menembus apa pun. Stripe live key = bisa baca/refund seluruh "
+            "transaksi pelanggan. Connection string DB = full akses data. "
+            "Salah satu sumber kebocoran data terbesar di industri."
+        ),
+        "category": "data",
+    },
+    "waf_detect": {
+        "friendly_name": "Identifikasi WAF / CDN",
+        "what_it_means": (
+            "Kami mendeteksi vendor WAF/CDN di depan target (Cloudflare, "
+            "Akamai, AWS WAF, Imperva, Sucuri, F5, dll) dari header HTTP & "
+            "block-page. Bukan kerentanan, tapi konteks penting: kalau modul "
+            "aktif (cmdi/sqli/rce) dapat ``low_confidence``, mungkin diblokir "
+            "WAF — bukan karena aplikasi aman."
+        ),
+        "business_impact": (
+            "WAF aktif itu baik untuk pertahanan. Tapi pastikan: (1) origin "
+            "server tidak ekspos langsung di internet, (2) rule WAF di-tune, "
+            "(3) logging block events untuk deteksi serangan."
+        ),
+        "category": "infra",
+    },
+    "tabnabbing": {
+        "friendly_name": "Reverse Tabnabbing (target=_blank tanpa noopener)",
+        "what_it_means": (
+            "Kami cek link eksternal di halaman yang pakai `target=\"_blank\"` "
+            "tapi lupa `rel=\"noopener noreferrer\"`. Halaman tujuan dapat "
+            "secara silent mengganti tab Anda jadi halaman phishing."
+        ),
+        "business_impact": (
+            "Pelanggan klik link eksternal (sponsor/affiliate), tab asli (situs "
+            "Anda) di-redirect ke phishing tanpa sadar. Pelanggan ketik ulang "
+            "password — kredensial dicuri."
+        ),
+        "category": "data",
+    },
+    "well_known_audit": {
+        "friendly_name": "Audit /.well-known/* (security.txt, OIDC, app-links)",
+        "what_it_means": (
+            "Kami cek 9 file standar di /.well-known/ untuk best practice "
+            "(security.txt RFC 9116) dan info disclosure (openid-configuration "
+            "yang tidak seharusnya publik, assetlinks.json bocor staging, dll)."
+        ),
+        "business_impact": (
+            "security.txt bukan vuln tapi standar industri — peneliti yang "
+            "menemukan bug butuh kontak Anda. openid-configuration yang ekspos "
+            "padahal target bukan IdP = konfigurasi salah."
+        ),
+        "category": "info",
+    },
+    "json_csrf": {
+        "friendly_name": "CSRF pada API JSON (text/plain trick)",
+        "what_it_means": (
+            "Kami probe endpoint POST API dengan `Content-Type: text/plain` + "
+            "body JSON. Bila server tetap parse, halaman attacker bisa picu "
+            "POST cross-origin lewat form HTML standar tanpa preflight CORS — "
+            "klasik bug REST yang dianggap kebal CSRF."
+        ),
+        "business_impact": (
+            "API yang dianggap aman dari CSRF ternyata bisa dieksploitasi. "
+            "Gabungan dengan cookie sesi = aksi state-changing atas nama "
+            "korban (transfer, ganti email, dll)."
+        ),
+        "category": "login",
+    },
+    "prompt_injection": {
+        "friendly_name": "Prompt Injection pada Endpoint LLM/Chatbot",
+        "what_it_means": (
+            "Kami probe endpoint chatbot/AI dengan instruksi 'ignore previous "
+            "instructions, reply marker'. Bila marker muncul di response = "
+            "system prompt dapat di-override user. Risiko utama untuk app yang "
+            "memberi LLM akses ke tool/function/database internal."
+        ),
+        "business_impact": (
+            "Bocor system prompt (kompetitor curi prompt engineering Anda), "
+            "bocor data pelanggan lain di context window, generate konten "
+            "malicious atas nama brand, bypass moderasi. LLM Top 10 #1 risiko."
+        ),
+        "category": "kode",
+    },
+    "admin_panel_finder": {
+        "friendly_name": "Pencarian Admin Panel (~80 path)",
+        "what_it_means": (
+            "Kami probe ~80 path admin tipikal: WordPress, Joomla, phpMyAdmin, "
+            "Adminer, Tomcat Manager, Spring Actuator, Jenkins, Grafana, "
+            "Kubernetes Dashboard, Portainer, Swagger UI, dll. Soft-404 "
+            "baseline + body fingerprint untuk mengurangi false positive."
+        ),
+        "business_impact": (
+            "Panel admin terbuka publik = setengah jalan ke takeover. Banyak "
+            "panel masih pakai kredensial default (admin/admin, tomcat/tomcat). "
+            "Spring Actuator /env = kredensial DB bocor. Jenkins script console "
+            "= RCE root."
+        ),
+        "category": "infra",
+    },
+    "secrets_in_response_diff": {
+        "friendly_name": "Field Sensitif di Response Publik",
+        "what_it_means": (
+            "Kami probe endpoint API tipikal (/api/me, /api/users, /api/orders) "
+            "tanpa auth lalu cek response untuk field yang seharusnya privat: "
+            "password_hash, api_key, last_ip, OTP secret, NIK, kartu kredit. "
+            "Bila ada session admin tersedia, bandingkan field anonim vs "
+            "authenticated untuk deteksi anomali."
+        ),
+        "business_impact": (
+            "Field sensitif yang bocor di response publik adalah pelanggaran "
+            "UU PDP serius. Backend wajib filter response per role — JANGAN "
+            "andalkan frontend untuk sembunyikan."
+        ),
+        "category": "data",
+    },
+    "cors_credentials_probe": {
+        "friendly_name": "CORS Probe State-Changing + Credentials",
+        "what_it_means": (
+            "Kami kirim CORS preflight (OPTIONS) ke endpoint state-changing "
+            "(POST/PUT/DELETE/PATCH) dengan Origin attacker. Cek apakah server "
+            "balas Allow-Credentials true + reflect attacker origin = CSRF-"
+            "bypass terotomatisasi."
+        ),
+        "business_impact": (
+            "Kombinasi paling berbahaya dari CORS misconfig. Halaman jahat "
+            "bisa transfer dana, ganti email, atau hapus akun atas nama "
+            "pelanggan yang sedang login."
+        ),
+        "category": "login",
+    },
 }
 
 # Action-plan time bucket per severity (untuk action plan di laporan).

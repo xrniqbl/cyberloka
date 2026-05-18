@@ -50,6 +50,7 @@ class ScanConfig:
         "cors_advanced", "cookie_scope", "sentry_dsn_leak",
         "server_timing_header", "api_key_in_url", "autocomplete_audit",
         "exif_leak", "homoglyph_check",
+        "secrets_scanner", "waf_detect", "tabnabbing", "well_known_audit",
     )
     ACTIVE_MODULES = (
         "crawler", "csrf", "sqli", "xss", "redirect", "lfi", "cmdi",
@@ -68,6 +69,9 @@ class ScanConfig:
         "stored_xss", "url_preview_ssrf", "private_profile_bypass",
         "media_persistence", "dm_privacy", "social_csrf", "oauth_takeover",
         "unicode_bypass",
+        # NEW (v0.9.2)
+        "json_csrf", "prompt_injection", "admin_panel_finder",
+        "secrets_in_response_diff", "cors_credentials_probe",
     )
 
     def resolve_modules(self) -> list[str]:
