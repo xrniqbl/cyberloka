@@ -45,10 +45,28 @@ penyebabnya, serta memberikan rekomendasi perbaikan.
 - Burst request test untuk melihat respons WAF / rate limiter
 - *Tidak* melakukan DoS sungguhan: dibatasi durasi & jumlah request.
 
-### 5. Reporting
+### 5. Pengecekan Tambahan (v0.2)
+- **Crawler in-scope** — menyusuri link, form, parameter untuk fuzz lebih dalam
+- **CSRF posture** (token form + SameSite cookie)
+- **JWT inspection** (alg=none, missing exp, HMAC weak hint)
+- **API discovery** (`/swagger.json`, `/openapi.json`, GraphQL introspection, `.well-known/`)
+- **Subdomain takeover** (dangling CNAME → fingerprint provider)
+- **Outdated JS libs** (jQuery, AngularJS, Bootstrap, lodash, Vue)
+- **SSRF probe** (parameter URL-shaped)
+- **SSTI probe** (Jinja/Twig/ERB/Velocity)
+- **Mixed content + Subresource Integrity**
+- **Form-aware fuzzing** untuk SQLi/XSS pada form yang ditemukan crawler
+
+### 6. Reporting & Dashboard
 - Output CLI berwarna (severity-coded) menggunakan `rich`
-- Export JSON terstruktur
-- Export HTML report (rapi, lengkap dengan remediasi per finding)
+- Export JSON terstruktur (dengan risk_score, OWASP mapping)
+- Export HTML report self-contained: dark/light theme, donut chart severity,
+  filter & search, mode print/PDF
+- **Web dashboard** (FastAPI + HTMX + Tailwind):
+  - Manajemen target & history scan
+  - Live progress per modul (HTMX polling)
+  - Severity heatmap & risk score per target
+  - Drill-down per finding dengan evidence + remediasi
 
 ---
 
@@ -59,15 +77,31 @@ git clone https://github.com/xrniqbl/cyberloka.git
 cd cyberloka
 python -m venv .venv
 source .venv/bin/activate           # Windows: .venv\Scripts\activate
-pip install -e .
+pip install -e '.[web]'             # tambahkan [web] untuk dashboard
 ```
 
-Atau tanpa install:
+Atau tanpa install (CLI saja):
 
 ```bash
 pip install -r requirements.txt
 python -m cyberloka --help
 ```
+
+## Web Dashboard
+
+```bash
+cyberloka-web --host 127.0.0.1 --port 8765
+```
+
+Buka `http://127.0.0.1:8765` di browser. Fitur:
+
+- Tambah target & jalankan scan dari UI
+- Live progress per modul (status, current module, progress bar)
+- Halaman scan detail dengan filter severity + search + drill-down per finding
+- Halaman finding detail dengan evidence + remediasi + referensi
+- API JSON (`/api/scans/{id}`, `/api/health`, `/api/docs`)
+
+Database SQLite default disimpan di `~/.cyberloka/dashboard.db`.
 
 ## Penggunaan
 

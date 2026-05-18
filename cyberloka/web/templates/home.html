@@ -1,0 +1,86 @@
+{% extends "_base.html" %}
+{% block title %}Cyberloka — Dashboard{% endblock %}
+{% block heading %}Overview{% endblock %}
+
+{% block body %}
+{% set total = stats.total_findings or 1 %}
+
+<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  <div class="bg-ink-800 border border-ink-600 rounded-2xl p-5">
+    <div class="text-xs uppercase tracking-wider text-slate-400">Targets</div>
+    <div class="text-3xl font-extrabold mt-1">{{ stats.targets }}</div>
+    <a href="/targets" class="text-xs text-brand-500 hover:underline mt-2 inline-block">Kelola targets →</a>
+  </div>
+  <div class="bg-ink-800 border border-ink-600 rounded-2xl p-5">
+    <div class="text-xs uppercase tracking-wider text-slate-400">Scans selesai</div>
+    <div class="text-3xl font-extrabold mt-1">{{ stats.scans }}</div>
+    <a href="/scans" class="text-xs text-brand-500 hover:underline mt-2 inline-block">Lihat history →</a>
+  </div>
+  <div class="bg-ink-800 border border-ink-600 rounded-2xl p-5">
+    <div class="text-xs uppercase tracking-wider text-slate-400">Total Findings</div>
+    <div class="text-3xl font-extrabold mt-1">{{ stats.total_findings }}</div>
+    <div class="text-xs text-slate-400 mt-2">
+      <span class="text-red-400">{{ stats.findings_by_severity.critical }} crit</span> ·
+      <span class="text-orange-400">{{ stats.findings_by_severity.high }} high</span>
+    </div>
+  </div>
+  <div class="bg-ink-800 border border-ink-600 rounded-2xl p-5">
+    <div class="text-xs uppercase tracking-wider text-slate-400">Status</div>
+    <div class="text-2xl font-extrabold mt-1 text-emerald-400">Online</div>
+    <div class="text-xs text-slate-400 mt-2">v{{ tool_version }}</div>
+  </div>
+</section>
+
+<section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+  <div class="lg:col-span-2 bg-ink-800 border border-ink-600 rounded-2xl p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-semibold">Distribusi severity</h2>
+      <span class="text-xs text-slate-400">Total {{ stats.total_findings }} findings</span>
+    </div>
+    <div class="space-y-3">
+      {% for sev, color in [
+          ('critical','bg-red-600'),
+          ('high','bg-orange-500'),
+          ('medium','bg-amber-500'),
+          ('low','bg-blue-500'),
+          ('info','bg-slate-500')] %}
+        {% set v = stats.findings_by_severity[sev] %}
+        {% set pct = (v * 100 / total) | round(1) %}
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="uppercase tracking-wider font-semibold">{{ sev }}</span>
+            <span class="text-slate-400">{{ v }} ({{ pct }}%)</span>
+          </div>
+          <div class="h-2 bg-ink-700 rounded-full overflow-hidden">
+            <div class="h-full {{ color }}" style="width: {{ pct if v else 0 }}%"></div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="bg-ink-800 border border-ink-600 rounded-2xl p-6">
+    <h2 class="font-semibold mb-4">Scan terbaru</h2>
+    {% if not stats.recent_scans %}
+      <div class="text-sm text-slate-400">Belum ada scan. <a class="text-brand-500" href="/scans/new">Mulai sekarang →</a></div>
+    {% else %}
+      <ul class="space-y-3">
+        {% for s in stats.recent_scans %}
+          <li class="flex items-center justify-between gap-3 text-sm">
+            <a href="/scans/{{ s.id }}" class="truncate hover:text-brand-500">
+              <span class="font-medium">{{ s.target_label or s.target_url }}</span>
+            </a>
+            <span class="text-xs px-2 py-0.5 rounded-full
+              {% if s.status == 'done' %}bg-emerald-700/40 text-emerald-300
+              {% elif s.status == 'running' %}bg-amber-700/40 text-amber-300
+              {% elif s.status == 'error' %}bg-red-700/40 text-red-300
+              {% else %}bg-slate-700/40 text-slate-300{% endif %}">
+              {{ s.status }}
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
