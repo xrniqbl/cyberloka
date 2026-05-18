@@ -129,7 +129,7 @@ def create_app() -> FastAPI:
     @app.post("/scans")
     def start_scan(
         target_id: int = Form(...),
-        mode: str = Form("passive"),
+        mode: str = Form("full"),
         modules: str = Form(""),
         rate: float = Form(8.0),
         threads: int = Form(8),
@@ -151,6 +151,8 @@ def create_app() -> FastAPI:
             timeout=timeout,
             rate_limit=rate,
             max_crawl_pages=max_crawl_pages,
+            # Mode passive di Cyberloka hanya melakukan observasi, jadi
+            # selalu dianggap authorized. Mode lain butuh konfirmasi.
             authorized=authorized or mode == "passive",
             simulate_attack=simulate_attack,
         )

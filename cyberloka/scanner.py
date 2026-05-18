@@ -43,6 +43,9 @@ MODULE_MAP: dict[str, str] = {
     "ssrf": "cyberloka.active.ssrf",
     "ssti": "cyberloka.active.ssti",
     "forms": "cyberloka.active.forms",
+    "session": "cyberloka.active.session",
+    "voucher": "cyberloka.active.voucher",
+    "payment": "cyberloka.active.payment",
     # simulate
     "rate_limit": "cyberloka.simulate.rate_limit",
     "burst": "cyberloka.simulate.burst",
