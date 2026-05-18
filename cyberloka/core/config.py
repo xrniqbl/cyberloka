@@ -20,6 +20,7 @@ class ScanConfig:
     verify_tls: bool = True
     follow_redirects: bool = True
     max_redirects: int = 5
+    max_crawl_pages: int = 30
     authorized: bool = False
     simulate_attack: bool = False
     login_url: str | None = None
@@ -42,21 +43,33 @@ class ScanConfig:
         "fingerprint",
         "robots",
         "dns",
+        "outdated_libs",
+        "mixed_content",
+        "jwt",
     )
     ACTIVE_MODULES = (
+        # crawler runs first to populate shared state
+        "crawler",
+        "csrf",
         "sqli",
         "xss",
         "redirect",
         "lfi",
         "cmdi",
         "dirlist",
+        "ssrf",
+        "ssti",
+        "forms",
+        "api_discovery",
     )
     RECON_MODULES = (
         "dns",
         "whois",
         "ports",
         "subdomains",
+        "subdomain_takeover",
         "fingerprint",
+        "api_discovery",
     )
 
     def resolve_modules(self) -> list[str]:

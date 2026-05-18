@@ -1,0 +1,32 @@
+<div id="progress-wrap" class="mt-6"
+     {% if scan.status in ['queued','running'] %}
+       hx-get="/scans/{{ scan.id }}/progress"
+       hx-trigger="every 2s"
+       hx-swap="outerHTML"
+     {% endif %}>
+  {% set total = scan.progress_total or 1 %}
+  {% set pct = (scan.progress * 100 / total) | round(1) %}
+  <div class="flex items-center gap-3 text-sm">
+    <span class="px-2 py-0.5 rounded-full text-xs uppercase font-semibold
+      {% if scan.status == 'done' %}bg-emerald-700/40 text-emerald-300
+      {% elif scan.status == 'running' %}bg-amber-700/40 text-amber-300
+      {% elif scan.status == 'error' %}bg-red-700/40 text-red-300
+      {% else %}bg-slate-700/40 text-slate-300{% endif %}">{{ scan.status }}</span>
+    <span class="text-slate-400">
+      {{ scan.progress }} / {{ scan.progress_total }} modul
+      {% if scan.current_module %}· <span class="font-mono text-slate-300">{{ scan.current_module }}</span>{% endif %}
+    </span>
+  </div>
+  <div class="h-2 bg-ink-700 rounded-full overflow-hidden mt-2">
+    <div class="h-full
+      {% if scan.status == 'done' %}bg-emerald-500
+      {% elif scan.status == 'error' %}bg-red-500
+      {% else %}bg-brand-500{% endif %}"
+      style="width: {{ pct }}%"></div>
+  </div>
+  {% if scan.error %}
+    <div class="mt-3 p-3 bg-red-900/40 border border-red-700 rounded-lg text-sm text-red-300">
+      {{ scan.error }}
+    </div>
+  {% endif %}
+</div>
