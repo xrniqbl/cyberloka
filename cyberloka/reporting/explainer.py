@@ -1173,6 +1173,147 @@ EXPLAIN: dict[str, dict[str, str]] = {
         ),
         "category": "login",
     },
+    # ============ SOSMED-SPECIFIC ============
+    "stored_xss": {
+        "friendly_name": "Stored XSS pada Profile / Post (Wormable)",
+        "what_it_means": (
+            "Kami coba simpan tag <script> di field bio/profile/post lalu "
+            "ambil ulang halaman untuk lihat apakah tag dieksekusi saat user "
+            "lain mengunjungi profile."
+        ),
+        "business_impact": (
+            "Jenis XSS paling berbahaya untuk sosmed — script yang ter-simpan "
+            "di profile attacker akan mengeksekusi di browser SETIAP user yang "
+            "melihat profile. Bisa membuat WORM yang menyebar otomatis "
+            "(klasik: Samy worm 2005, 1 juta akun MySpace dalam 20 jam)."
+        ),
+        "category": "data",
+    },
+    "url_preview_ssrf": {
+        "friendly_name": "SSRF lewat Link Preview / Open Graph Fetcher",
+        "what_it_means": (
+            "Sosmed otomatis fetch URL yang user paste untuk menampilkan "
+            "thumbnail/judul. Kami probe apakah fetcher bisa dipaksa fetch "
+            "endpoint metadata cloud (AWS/GCP) atau loopback."
+        ),
+        "business_impact": (
+            "Kalau berhasil mencapai metadata cloud, attacker dapat IAM "
+            "credentials → ambil alih seluruh infrastruktur cloud. "
+            "Salah satu vektor sosmed paling sering kena (Discord, Slack, "
+            "X pernah ada bug serupa)."
+        ),
+        "category": "infra",
+    },
+    "private_profile_bypass": {
+        "friendly_name": "Private Profile Bypass via API",
+        "what_it_means": (
+            "User klik 'akun privat' di setting, tapi API publik tetap "
+            "mengembalikan email/HP/alamat. Kami cek apakah filter privacy "
+            "hanya berlaku di frontend."
+        ),
+        "business_impact": (
+            "Pelanggaran serius UU PDP — data pribadi user yang berharap "
+            "private bocor publik. Stalker, scammer, dan pengusaha data bisa "
+            "scrape massal."
+        ),
+        "category": "data",
+    },
+    "media_persistence": {
+        "friendly_name": "Media yang Dihapus Tetap Bisa Diakses",
+        "what_it_means": (
+            "Kami scan URL CDN untuk media yang punya cache panjang/permanen "
+            "tanpa signed URL — indikator file akan tetap akses-able setelah "
+            "user delete dari profile."
+        ),
+        "business_impact": (
+            "User upload foto KTP, lalu hapus karena merasa salah upload. "
+            "File tetap di CDN selama bertahun-tahun. Pelanggaran 'Right to "
+            "be Forgotten' GDPR/UU PDP. Foto sensitif jadi 'permanent record'."
+        ),
+        "category": "data",
+    },
+    "exif_leak": {
+        "friendly_name": "Kebocoran Lokasi GPS di Foto Profil/Post",
+        "what_it_means": (
+            "Kami download foto JPEG dari halaman publik dan parse metadata "
+            "EXIF — apakah masih ada GPS, model kamera, tanggal-jam."
+        ),
+        "business_impact": (
+            "Stalker download foto profil → extract koordinat GPS dengan "
+            "exiftool → dapat alamat rumah korban. Banyak kasus KDRT, "
+            "doxxing, dan penculikan dimulai dari sini."
+        ),
+        "category": "data",
+    },
+    "homoglyph_check": {
+        "friendly_name": "Username Look-alike (Homoglyph Attack)",
+        "what_it_means": (
+            "Kami scan username yang muncul di halaman publik untuk "
+            "karakter Cyrillic/Greek yang terlihat identik dengan huruf "
+            "Latin (mis. @stаrbucks dengan 'а' Cyrillic)."
+        ),
+        "business_impact": (
+            "Brand impersonation skala besar. Follower brand asli mengira "
+            "akun homoglyph adalah official → klik link phishing → kredensial "
+            "dicuri. Reputasi brand rusak."
+        ),
+        "category": "login",
+    },
+    "dm_privacy": {
+        "friendly_name": "Kebocoran Direct Message (DM)",
+        "what_it_means": (
+            "Kami probe endpoint DM baik tanpa auth maupun dengan user_id "
+            "berbeda — apakah server return pesan private user lain."
+        ),
+        "business_impact": (
+            "Bocoran DM = headline berita. Pesan pribadi/bisnis/intim "
+            "user bisa dibaca/dijual. Pelanggaran besar UU PDP & ITE. "
+            "Trust pengguna ke platform hancur."
+        ),
+        "category": "data",
+    },
+    "social_csrf": {
+        "friendly_name": "CSRF pada Tombol Follow / Like / Post",
+        "what_it_means": (
+            "Kami coba kirim POST cross-origin (dengan Origin attacker) ke "
+            "endpoint follow/like/share — cek apakah ada CSRF guard."
+        ),
+        "business_impact": (
+            "Attacker buat halaman jahat. Setiap user yang sedang login "
+            "dan mengunjungi halaman jahat akan auto-follow attacker, "
+            "auto-like spam, atau auto-post iklan. Mass scam dalam menit."
+        ),
+        "category": "login",
+    },
+    "oauth_takeover": {
+        "friendly_name": "Pre-Account-Takeover via OAuth Email Match",
+        "what_it_means": (
+            "Site menyediakan registrasi email+password DAN OAuth login. "
+            "Tanpa email verification ketat, attacker bisa register dengan "
+            "email korban → korban login Google → akun di-merge ke akun "
+            "yang dibuat attacker."
+        ),
+        "business_impact": (
+            "Attacker punya kontrol penuh atas akun korban — bisa baca DM, "
+            "post atas nama korban, akses semua data. Korban sendiri tidak "
+            "tahu akunnya sudah dikontrol."
+        ),
+        "category": "login",
+    },
+    "unicode_bypass": {
+        "friendly_name": "Content Moderation Bypass via Unicode Tricks",
+        "what_it_means": (
+            "Kami post konten dengan zero-width space, homoglyph, atau RTL "
+            "override di tengah kata blacklist — cek apakah moderasi tetap "
+            "menerima."
+        ),
+        "business_impact": (
+            "Spam, phishing link, judi online, narkoba, pornografi, dan "
+            "harassment lolos filter. Konten illegal menyebar bebas → user "
+            "kabur, denda regulasi (Kominfo), kerusakan reputasi platform."
+        ),
+        "category": "data",
+    },
 }
 
 # Action-plan time bucket per severity (untuk action plan di laporan).

@@ -1,7 +1,7 @@
 @echo off
 REM ============================================================
 REM   cek.bat - Cyberloka Interactive Menu (Windows)
-REM   Versi: 0.8.0
+REM   Versi: 0.9.0
 REM
 REM   Cara update:
 REM     1. Update repo terbaru :  git pull
@@ -28,7 +28,7 @@ if not "%~1"=="" (
 :menu
 cls
 echo ================================================================
-echo   CYBERLOKA v0.8.0 - Web Vulnerability Scanner
+echo   CYBERLOKA v0.9.0 - Web Vulnerability Scanner
 echo ================================================================
 echo.
 echo  APA YANG MAU DICOBA?  (pilih nomor)
@@ -214,7 +214,7 @@ REM ============================================================
 :list_modules
 cls
 echo ================================================================
-echo   Daftar Modul Cyberloka v0.8.0 (95 modul, 93 jalan di full)
+echo   Daftar Modul Cyberloka v0.9.0 (105 modul, 103 jalan di full)
 echo ================================================================
 echo.
 echo [RECON - 21 modul]
@@ -224,14 +224,17 @@ echo   nextjs_specific, cf_origin, wayback, framework_default,
 echo   graphql_deep, source_leak, crawler, cms_scan, cloud_buckets,
 echo   k8s_exposure, dependency_confusion, favicon_hash
 echo.
-echo [PASSIVE - 20 modul]
+echo [PASSIVE - 22 modul] (+ exif_leak, homoglyph_check)
 echo   headers, tls, cookies, cors, clickjacking, methods,
 echo   sensitive_files, robots, outdated_libs, mixed_content, jwt,
 echo   csp_evaluator, captcha_check, cache_control_audit,
 echo   cors_advanced, cookie_scope, sentry_dsn_leak,
-echo   server_timing_header, api_key_in_url, autocomplete_audit
+echo   server_timing_header, api_key_in_url, autocomplete_audit,
+echo   exif_leak, homoglyph_check
 echo.
-echo [ACTIVE - 52 modul]
+echo [ACTIVE - 60 modul] (+8 sosmed: stored_xss, url_preview_ssrf,
+echo   private_profile_bypass, media_persistence, dm_privacy,
+echo   social_csrf, oauth_takeover, unicode_bypass)
 echo   csrf, sqli, xss, redirect, lfi, cmdi, dirlist, ssrf,
 echo   ssrf_metadata, ssti, xxe, forms, session, voucher, payment,
 echo   otp_check, password_reset, file_upload, idor_generic,
@@ -242,7 +245,10 @@ echo   mass_assignment, log_injection, jwt_confusion, crlf_injection,
 echo   nosqli, deserialization, webhook_signature, csv_injection,
 echo   graphql_dos, xpath_injection, logout_csrf, zip_slip,
 echo   ldap_injection, captcha_bypass, xslt_injection,
-echo   rate_limit_bypass, response_splitting, timing_attack
+echo   rate_limit_bypass, response_splitting, timing_attack,
+echo   stored_xss, url_preview_ssrf, private_profile_bypass,
+echo   media_persistence, dm_privacy, social_csrf, oauth_takeover,
+echo   unicode_bypass
 echo.
 echo [SIMULATE - 2 modul, hanya jika --simulate-attack]
 echo   rate_limit, burst

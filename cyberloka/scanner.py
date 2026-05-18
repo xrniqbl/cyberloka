@@ -108,6 +108,17 @@ MODULE_MAP: dict[str, str] = {
     "rate_limit_bypass": "cyberloka.active.rate_limit_bypass",
     "response_splitting": "cyberloka.active.response_splitting",
     "timing_attack": "cyberloka.active.timing_attack",
+    # ===== SOSMED-SPECIFIC =====
+    "stored_xss": "cyberloka.active.stored_xss",
+    "url_preview_ssrf": "cyberloka.active.url_preview_ssrf",
+    "private_profile_bypass": "cyberloka.active.private_profile_bypass",
+    "media_persistence": "cyberloka.active.media_persistence",
+    "exif_leak": "cyberloka.passive.exif_leak",
+    "homoglyph_check": "cyberloka.passive.homoglyph_check",
+    "dm_privacy": "cyberloka.active.dm_privacy",
+    "social_csrf": "cyberloka.active.social_csrf",
+    "oauth_takeover": "cyberloka.active.oauth_takeover",
+    "unicode_bypass": "cyberloka.active.unicode_bypass",
     # ===== SIMULATE =====
     "rate_limit": "cyberloka.simulate.rate_limit",
     "burst": "cyberloka.simulate.burst",

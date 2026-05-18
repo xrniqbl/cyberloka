@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================
 #   cek.sh - Cyberloka Interactive Menu (Linux/macOS)
-#   Versi: 0.8.0
+#   Versi: 0.9.0
 #
 #   Cara update:
 #     git pull && pip install -e .[web,pdf]
@@ -25,7 +25,7 @@ show_menu() {
     clear || true
     cat <<'BANNER'
 ================================================================
-  CYBERLOKA v0.8.0 - Web Vulnerability Scanner
+  CYBERLOKA v0.9.0 - Web Vulnerability Scanner
 ================================================================
 
  APA YANG MAU DICOBA?  (pilih nomor)
@@ -132,7 +132,7 @@ show_help() {
 list_modules() {
     cat <<'MOD'
 ================================================================
-  Daftar Modul Cyberloka v0.8.0 (95 modul, 93 jalan di full)
+  Daftar Modul Cyberloka v0.9.0 (105 modul, 103 jalan di full)
 ================================================================
 
 [RECON - 21]
@@ -142,14 +142,14 @@ list_modules() {
   graphql_deep, source_leak, crawler, cms_scan, cloud_buckets,
   k8s_exposure, dependency_confusion, favicon_hash
 
-[PASSIVE - 20]
+[PASSIVE - 22] (+exif_leak, homoglyph_check)
   headers, tls, cookies, cors, clickjacking, methods,
   sensitive_files, robots, outdated_libs, mixed_content, jwt,
   csp_evaluator, captcha_check, cache_control_audit, cors_advanced,
   cookie_scope, sentry_dsn_leak, server_timing_header,
-  api_key_in_url, autocomplete_audit
+  api_key_in_url, autocomplete_audit, exif_leak, homoglyph_check
 
-[ACTIVE - 52]
+[ACTIVE - 60] (+8 sosmed)
   csrf, sqli, xss, redirect, lfi, cmdi, dirlist, ssrf, ssrf_metadata,
   ssti, xxe, forms, session, voucher, payment, otp_check,
   password_reset, file_upload, idor_generic, host_header,
@@ -160,7 +160,10 @@ list_modules() {
   deserialization, webhook_signature, csv_injection, graphql_dos,
   xpath_injection, logout_csrf, zip_slip, ldap_injection,
   captcha_bypass, xslt_injection, rate_limit_bypass,
-  response_splitting, timing_attack
+  response_splitting, timing_attack,
+  stored_xss, url_preview_ssrf, private_profile_bypass,
+  media_persistence, dm_privacy, social_csrf, oauth_takeover,
+  unicode_bypass
 
 [SIMULATE - 2]  (hanya jika --simulate-attack)
   rate_limit, burst

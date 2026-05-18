@@ -49,6 +49,7 @@ class ScanConfig:
         "csp_evaluator", "captcha_check", "cache_control_audit",
         "cors_advanced", "cookie_scope", "sentry_dsn_leak",
         "server_timing_header", "api_key_in_url", "autocomplete_audit",
+        "exif_leak", "homoglyph_check",
     )
     ACTIVE_MODULES = (
         "crawler", "csrf", "sqli", "xss", "redirect", "lfi", "cmdi",
@@ -63,6 +64,9 @@ class ScanConfig:
         "graphql_dos", "xpath_injection", "logout_csrf", "zip_slip",
         "ldap_injection", "captcha_bypass", "xslt_injection",
         "rate_limit_bypass", "response_splitting", "timing_attack",
+        "stored_xss", "url_preview_ssrf", "private_profile_bypass",
+        "media_persistence", "dm_privacy", "social_csrf", "oauth_takeover",
+        "unicode_bypass",
     )
 
     def resolve_modules(self) -> list[str]:
