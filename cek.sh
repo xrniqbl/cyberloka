@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================
 #   cek.sh - Cyberloka Interactive Menu (Linux/macOS)
-#   Versi: 0.9.0
+#   Versi: 0.9.1
 #
 #   Cara update:
 #     git pull && pip install -e .[web,pdf]
@@ -25,7 +25,7 @@ show_menu() {
     clear || true
     cat <<'BANNER'
 ================================================================
-  CYBERLOKA v0.9.0 - Web Vulnerability Scanner
+  CYBERLOKA v0.9.1 - Web Vulnerability Scanner
 ================================================================
 
  APA YANG MAU DICOBA?  (pilih nomor)
@@ -39,6 +39,7 @@ show_menu() {
   6. Tampilkan --help
   7. Daftar semua module deteksi
   8. Update Cyberloka (git pull + pip install)
+  9. Validasi RCE / Command Injection (deep, non-destruktif)
   0. Keluar
 
 BANNER
@@ -186,6 +187,64 @@ update_cyberloka() {
     read -rp "[enter untuk lanjut]"
 }
 
+# ============================================================
+#  RCE VALIDATOR - deep, non-destruktif
+#  Modul: cyberloka.active.rce_validator
+#  Oracle: marker echo + hex round-trip + timing (sleep 5)
+#  Read-only: id, whoami, uname -a, hostname.
+#  HANYA jalan dengan --authorized.
+# ============================================================
+rce_validate() {
+    cat <<'INFO'
+
+================================================================
+  VALIDASI RCE / COMMAND INJECTION (deep, non-destruktif)
+================================================================
+  Modul       : rce_validator
+  Oracle      : marker echo, hex printf round-trip, timing 5s.
+  Read-only   : id, whoami, uname -a, hostname.
+  Klasifikasi : false_positive / low_confidence / firm / confirmed.
+
+  PERHATIAN ETIKA:
+    HANYA jalankan terhadap target yang Anda miliki atau yang
+    sudah memberi izin tertulis. Modul ini mengirim payload
+    eksekusi shell ke parameter URL.
+
+INFO
+    read -rp "Target URL (mis. https://example.com/run?cmd=1): " TARGET
+    [ -z "$TARGET" ] && return
+    read -rp "Apakah Anda berwenang men-scan target ini? [y/N]: " AUTHED
+    case "$AUTHED" in y|Y|yes|YES) ;; *) echo "Dibatalkan."; return ;; esac
+
+    read -rp "Parameter spesifik yang dicurigai (kosong = auto cmd/exec/host/ip): " RCE_PARAM
+    if [ -n "$RCE_PARAM" ]; then
+        if [[ "$TARGET" == *"?"* ]]; then
+            TARGET="${TARGET}&${RCE_PARAM}=1"
+        else
+            TARGET="${TARGET}?${RCE_PARAM}=1"
+        fi
+    fi
+
+    echo
+    echo "Menjalankan rce_validator pada: $TARGET"
+    echo
+    cyberloka -t "$TARGET" --modules rce_validator --authorized --yes \
+        --json report-rce.json --html report-rce.html \
+        --threads 4 --rate 5 --timeout 30 || true
+
+    echo
+    echo "================================================================"
+    echo "  Selesai. Laporan:"
+    echo "    - report-rce.json"
+    echo "    - report-rce.html"
+    echo "================================================================"
+    read -rp "Buka report-rce.html sekarang? [Y/n]: " OPEN
+    if [[ "${OPEN:-y}" =~ ^[yY]$ ]] && [ -f report-rce.html ]; then
+        if command -v xdg-open >/dev/null; then xdg-open report-rce.html
+        elif command -v open >/dev/null; then open report-rce.html; fi
+    fi
+}
+
 after_scan() {
     EXITCODE=$?
     echo
@@ -208,7 +267,7 @@ after_scan() {
 
 while true; do
     show_menu
-    read -rp "Pilih [0-8]: " CHOICE
+    read -rp "Pilih [0-9]: " CHOICE
     case "$CHOICE" in
         1) interactive_scan ;;
         2) quick_scan ;;
@@ -218,6 +277,7 @@ while true; do
         6) show_help ;;
         7) list_modules ;;
         8) update_cyberloka ;;
+        9) rce_validate ;;
         0) exit 0 ;;
         *) echo "Pilihan tidak valid"; sleep 1 ;;
     esac
