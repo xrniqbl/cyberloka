@@ -57,6 +57,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                         ),
                         target=url,
                         evidence=ev,
+                        urls=[url],
                         remediation=(
                             "Hapus file dari root web atau blokir lewat web server "
                             "(`location ~ /\\.git { deny all; }` di Nginx). Pastikan "

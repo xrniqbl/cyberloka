@@ -53,6 +53,7 @@ def _scan(text: str, source: str, target: str, base_url: str) -> list[Finding]:
                     ),
                     target=target or base_url,
                     evidence=truncate(evidence, 160),
+                    urls=[target] if target else [base_url],
                     cwe="CWE-798",
                     remediation=(
                         "Jangan menyimpan secret di kode frontend. Gunakan secret manager "

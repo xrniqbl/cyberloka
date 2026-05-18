@@ -51,6 +51,13 @@ from reportlab.platypus import (
 from cyberloka import __version__
 from cyberloka.core import Finding, Severity, Target
 from cyberloka.core.config import ScanConfig
+from cyberloka.reporting.extras import (
+    GLOSSARY,
+    IMPACT_MAP,
+    MITRE_MAP,
+    OWASP_MAP,
+    REPRO_MAP,
+)
 from cyberloka.reporting.scenarios import get_scenario, is_access_gained
 
 # ----------------------------- color palette -----------------------------
@@ -581,7 +588,10 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
         ("3.", "Akses Yang Dapat / Berhasil Ditembus"),
         ("4.", "Detail Temuan"),
         ("5.", "Rekomendasi Strategis & Roadmap"),
+        ("6.", "Daftar Link Bug & Endpoint Bermasalah"),
         ("A.", "Lampiran - Modul yang Dijalankan"),
+        ("B.", "Lampiran - Glossary Istilah Keamanan"),
+        ("C.", "Lampiran - Pemetaan OWASP Top 10 & MITRE ATT&amp;CK"),
     ]
     toc_data = [
         [_para(f"<b>{a}</b>", styles["body"]), _para(b, styles["body"])]
@@ -743,6 +753,14 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
         ]
         if f.cwe:
             meta_rows.append(("CWE", f.cwe))
+        owasp = OWASP_MAP.get(f.module)
+        if owasp:
+            meta_rows.append(("OWASP Top 10", owasp))
+        mitre = MITRE_MAP.get(f.module)
+        if mitre:
+            meta_rows.append(("MITRE ATT&CK", mitre))
+        if f.bug_id:
+            meta_rows.append(("Bug ID", f.bug_id))
         meta_rows.append(("Terdeteksi", f.detected_at))
         story.append(_kv_table(meta_rows, styles))
         story.append(Spacer(1, 0.2 * cm))
@@ -757,9 +775,44 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
         story.append(_para("Bagaimana Hacker Membobolnya", styles["h3"]))
         story.append(_para(sc.get("exploit", ""), styles["body"]))
 
+        # Dampak Bisnis
+        impact = IMPACT_MAP.get(f.module)
+        if impact:
+            story.append(_para("Dampak Bisnis", styles["h3"]))
+            story.append(_para(impact, styles["body"]))
+
         if f.evidence:
             story.append(_para("Bukti / Evidence", styles["h3"]))
             story.append(Preformatted(f.evidence, styles["evidence"]))
+
+        # Link Bug clickable
+        if f.urls:
+            story.append(_para("Link Bug / Endpoint Terkait", styles["h3"]))
+            for u in f.urls:
+                # Truncate display text but keep full link
+                disp = u if len(u) <= 100 else u[:97] + "..."
+                story.append(_para(
+                    f'&#8226; <link href="{u}"><font color="#1F77B4">{disp}</font></link>',
+                    styles["body"],
+                ))
+            story.append(_para(
+                "Catatan: Klik link di atas untuk verifikasi langsung di browser. "
+                "Untuk endpoint yang memerlukan autentikasi, login terlebih dahulu "
+                "ke aplikasi sebelum membuka link.",
+                styles["muted"],
+            ))
+
+        # Cara Reproduksi
+        repro = REPRO_MAP.get(f.module)
+        if repro:
+            host = target.host
+            url_for_repro = f.urls[0] if f.urls else target.base_url
+            try:
+                repro_text = repro.format(url=url_for_repro, host=host)
+            except (KeyError, IndexError):
+                repro_text = repro
+            story.append(_para("Cara Reproduksi (Manual)", styles["h3"]))
+            story.append(Preformatted(repro_text, styles["evidence"]))
 
         story.append(_para("Cara Menanggulangi", styles["h3"]))
         # Prefer scenario.mitigate; fall back to finding.remediation
@@ -826,6 +879,67 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
     ]))
     story.append(rec_table)
 
+    # =================== 6. DAFTAR LINK BUG ===============================
+    story.append(PageBreak())
+    story.append(_para("6. Daftar Link Bug & Endpoint Bermasalah", styles["h1"]))
+    story.append(_para(
+        "Bagian ini merangkum seluruh URL/endpoint yang menjadi bukti temuan agar "
+        "tim development dapat memverifikasi langsung. URL diurutkan dari severity "
+        "tertinggi.",
+        styles["body"],
+    ))
+
+    bug_rows = [[
+        _para("<b>#</b>", styles["body"]),
+        _para("<b>Severity</b>", styles["body"]),
+        _para("<b>Modul</b>", styles["body"]),
+        _para("<b>Link Bug</b>", styles["body"]),
+        _para("<b>Catatan</b>", styles["body"]),
+    ]]
+    bug_count = 0
+    for i, f in enumerate(findings_sorted, 1):
+        urls = f.urls or ([f.target] if (f.target or "").startswith(("http://", "https://")) else [])
+        if not urls:
+            continue
+        bug_count += 1
+        # Each finding can have multiple URLs; render them in one cell
+        link_html = "<br/>".join(
+            f'<link href="{u}"><font color="#1F77B4">{(u if len(u) <= 90 else u[:87] + "...")}</font></link>'
+            for u in urls
+        )
+        bug_rows.append([
+            _para(str(i), styles["body"]),
+            _severity_pill(f.severity, styles),
+            _para(f.module, styles["body"]),
+            _para(link_html, styles["body"]),
+            _para(f.title, styles["body"]),
+        ])
+
+    if bug_count == 0:
+        story.append(_para(
+            "Tidak ada link bug spesifik yang dapat diekstrak dari hasil scan. "
+            "Lihat bab 4 untuk detail tiap temuan.",
+            styles["muted"],
+        ))
+    else:
+        bug_table = Table(
+            bug_rows,
+            colWidths=[1.0 * cm, 2.4 * cm, 2.6 * cm, 6.5 * cm, 4.0 * cm],
+            repeatRows=1,
+            hAlign="LEFT",
+        )
+        bug_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), PRIMARY),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#D5D8DC")),
+        ]))
+        story.append(bug_table)
+
     # ============== LAMPIRAN A: MODULES YANG DIJALANKAN ===================
     story.append(PageBreak())
     story.append(_para("Lampiran A. Modul yang Dijalankan", styles["h1"]))
@@ -847,6 +961,70 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
         "Untuk daftar lengkap definisi setiap modul, lihat README repositori Cyberloka.",
         styles["muted"],
     ))
+
+    # ============== LAMPIRAN B: GLOSSARY ==================================
+    story.append(PageBreak())
+    story.append(_para("Lampiran B. Glossary Istilah Keamanan", styles["h1"]))
+    story.append(_para(
+        "Daftar istilah dan singkatan yang digunakan di laporan ini.",
+        styles["muted"],
+    ))
+    gl_rows = [[
+        _para("<b>Istilah</b>", styles["body"]),
+        _para("<b>Penjelasan</b>", styles["body"]),
+    ]]
+    for term, expl in GLOSSARY:
+        gl_rows.append([
+            _para(f"<b>{term}</b>", styles["body"]),
+            _para(expl, styles["body"]),
+        ])
+    gl_table = Table(gl_rows, colWidths=[3.5 * cm, 13 * cm], hAlign="LEFT", repeatRows=1)
+    gl_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), PRIMARY),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#D5D8DC")),
+    ]))
+    story.append(gl_table)
+
+    # ============== LAMPIRAN C: PEMETAAN OWASP / MITRE ====================
+    story.append(PageBreak())
+    story.append(_para("Lampiran C. Pemetaan OWASP Top 10 & MITRE ATT&CK", styles["h1"]))
+    story.append(_para(
+        "Setiap modul dipetakan ke kategori OWASP Top 10 2021 dan teknik MITRE "
+        "ATT&CK terkait. Ini membantu integrasi laporan ke kerangka manajemen "
+        "risiko enterprise (mis. NIST 800-53, ISO 27001).",
+        styles["body"],
+    ))
+    map_rows = [[
+        _para("<b>Modul</b>", styles["body"]),
+        _para("<b>OWASP Top 10 (2021)</b>", styles["body"]),
+        _para("<b>MITRE ATT&amp;CK</b>", styles["body"]),
+    ]]
+    # Only modules that were actually run
+    run_mods = config.resolve_modules()
+    for m in run_mods:
+        map_rows.append([
+            _para(m, styles["body"]),
+            _para(OWASP_MAP.get(m, "-"), styles["body"]),
+            _para(MITRE_MAP.get(m, "-"), styles["body"]),
+        ])
+    map_table = Table(map_rows, colWidths=[3.5 * cm, 7 * cm, 6 * cm], hAlign="LEFT", repeatRows=1)
+    map_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), PRIMARY),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#D5D8DC")),
+    ]))
+    story.append(map_table)
 
     doc.build(story)
 

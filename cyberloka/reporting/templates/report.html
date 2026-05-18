@@ -17,6 +17,7 @@
   section { background:white; border:1px solid #E5E7EB; border-radius:8px;
             padding: 20px; margin-bottom: 18px; }
   h2 { margin: 0 0 12px 0; color: var(--primary); }
+  h4 { margin: 12px 0 6px; color: var(--primary); }
   table { width: 100%; border-collapse: collapse; }
   th { background: var(--primary); color: white; text-align:left; padding: 8px; font-size: 13px; }
   td { padding: 8px; border-bottom: 1px solid #E5E7EB; font-size: 13px; vertical-align: top; }
@@ -31,9 +32,14 @@
             margin-bottom: 10px; background: #FBFCFD; }
   details summary { cursor: pointer; font-weight: 600; }
   pre { background: #F4F6F7; border:1px solid #D5D8DC; padding: 10px; overflow-x:auto;
-        font-size: 12px; border-radius: 4px; }
-  .kv { display:grid; grid-template-columns: 180px 1fr; gap: 4px 12px; margin: 8px 0; }
+        font-size: 12px; border-radius: 4px; white-space: pre-wrap; word-break: break-word; }
+  .kv { display:grid; grid-template-columns: 200px 1fr; gap: 4px 12px; margin: 8px 0; }
   .kv .k { color: #6B7280; }
+  .links { background: #F0F8FF; border-left: 4px solid var(--low);
+           padding: 8px 12px; margin: 8px 0; border-radius: 4px; }
+  .links a { word-break: break-all; }
+  .access { background: #FCF3CF; border-left: 4px solid var(--medium);
+            padding: 8px 12px; margin: 8px 0; border-radius: 4px; }
   footer { text-align:center; color:#7F8C8D; font-size: 12px; padding: 12px 0 24px; }
 </style>
 </head>
@@ -67,8 +73,58 @@
     </table>
   </section>
 
+  {# ---- Bagian Akses tertembus ---- #}
+  {% set access_findings = findings | selectattr('access_gained') | list %}
+  {% if access_findings %}
   <section>
-    <h2>Daftar Temuan</h2>
+    <h2>Akses Yang Dapat / Berhasil Ditembus</h2>
+    <table>
+      <thead>
+        <tr><th>Severity</th><th>Modul</th><th>Akses</th><th>Endpoint</th></tr>
+      </thead>
+      <tbody>
+        {% for f in access_findings %}
+        <tr>
+          <td><span class="pill {{ f.severity }}">{{ f.severity | upper }}</span></td>
+          <td>{{ f.module }}</td>
+          <td>{{ f.access_label }}</td>
+          <td>
+            {% if f.urls %}
+              {% for u in f.urls %}<div><a href="{{ u }}">{{ u }}</a></div>{% endfor %}
+            {% else %}{{ f.target }}{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  {# ---- Daftar Link Bug ---- #}
+  {% set bug_findings = findings | selectattr('urls') | list %}
+  {% if bug_findings %}
+  <section>
+    <h2>Daftar Link Bug &amp; Endpoint Bermasalah</h2>
+    <table>
+      <thead>
+        <tr><th>Severity</th><th>Modul</th><th>Link</th><th>Catatan</th></tr>
+      </thead>
+      <tbody>
+        {% for f in bug_findings %}
+        <tr>
+          <td><span class="pill {{ f.severity }}">{{ f.severity | upper }}</span></td>
+          <td>{{ f.module }}</td>
+          <td>{% for u in f.urls %}<div><a href="{{ u }}">{{ u }}</a></div>{% endfor %}</td>
+          <td>{{ f.title }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  <section>
+    <h2>Detail Temuan</h2>
     {% if findings | length == 0 %}
       <p>Tidak ada temuan.</p>
     {% else %}
@@ -79,19 +135,65 @@
           &nbsp;<span style="color:#6B7280;">[{{ f.module }}]</span>
           &nbsp;{{ f.title }}
         </summary>
+
         <div class="kv">
           <div class="k">Target</div><div>{{ f.target }}</div>
-          {% if f.cwe %}<div class="k">CWE</div><div>{{ f.cwe }}</div>{% endif %}
           <div class="k">Confidence</div><div>{{ f.confidence }}</div>
+          {% if f.cwe %}<div class="k">CWE</div><div>{{ f.cwe }}</div>{% endif %}
+          {% if f.owasp %}<div class="k">OWASP Top 10</div><div>{{ f.owasp }}</div>{% endif %}
+          {% if f.mitre %}<div class="k">MITRE ATT&amp;CK</div><div>{{ f.mitre }}</div>{% endif %}
+          {% if f.bug_id %}<div class="k">Bug ID</div><div>{{ f.bug_id }}</div>{% endif %}
         </div>
-        {% if f.description %}<p><b>Deskripsi:</b><br/>{{ f.description }}</p>{% endif %}
-        {% if f.evidence %}<p><b>Evidence:</b></p><pre>{{ f.evidence }}</pre>{% endif %}
-        {% if f.remediation %}<p><b>Remediasi:</b><br/>{{ f.remediation }}</p>{% endif %}
-        {% if f.references %}
-          <p><b>Referensi:</b></p>
+
+        {% if f.access_gained %}
+        <div class="access">
+          <b>Akses tertembus:</b> {{ f.access_label }}
+        </div>
+        {% endif %}
+
+        {% if f.urls %}
+        <h4>Link Bug / Endpoint Terkait</h4>
+        <div class="links">
           <ul>
-            {% for r in f.references %}<li><a href="{{ r }}">{{ r }}</a></li>{% endfor %}
+            {% for u in f.urls %}<li><a href="{{ u }}">{{ u }}</a></li>{% endfor %}
           </ul>
+          <small>Klik untuk verifikasi langsung di browser.</small>
+        </div>
+        {% endif %}
+
+        <h4>Apa Celahnya</h4>
+        <p>{{ f.scenario_what }}</p>
+        {% if f.description %}<p>{{ f.description }}</p>{% endif %}
+
+        <h4>Bagaimana Hacker Membobolnya</h4>
+        <p>{{ f.scenario_exploit }}</p>
+
+        {% if f.impact %}
+        <h4>Dampak Bisnis</h4>
+        <p>{{ f.impact }}</p>
+        {% endif %}
+
+        {% if f.evidence %}
+        <h4>Bukti / Evidence</h4>
+        <pre>{{ f.evidence }}</pre>
+        {% endif %}
+
+        {% if f.repro %}
+        <h4>Cara Reproduksi (Manual)</h4>
+        <pre>{{ f.repro }}</pre>
+        {% endif %}
+
+        <h4>Cara Menanggulangi</h4>
+        <p>{{ f.scenario_mitigate or f.remediation }}</p>
+        {% if f.remediation and f.scenario_mitigate and f.remediation != f.scenario_mitigate %}
+          <p><b>Remediasi spesifik dari modul:</b> {{ f.remediation }}</p>
+        {% endif %}
+
+        {% if f.references %}
+        <h4>Referensi</h4>
+        <ul>
+          {% for r in f.references %}<li><a href="{{ r }}">{{ r }}</a></li>{% endfor %}
+        </ul>
         {% endif %}
       </details>
       {% endfor %}

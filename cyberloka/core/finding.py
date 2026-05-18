@@ -36,6 +36,11 @@ class Finding:
     detected_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
+    # URLs / link bug terkait finding ini (endpoint vulnerable, PoC, screenshot, dll.)
+    # Dipakai di PDF/HTML report sebagai daftar "Link Bug" yang clickable.
+    urls: list[str] = field(default_factory=list)
+    # ID bug-tracker eksternal opsional (mis. JIRA SEC-1234, GitHub issue URL).
+    bug_id: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:

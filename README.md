@@ -63,9 +63,11 @@ penyebabnya, serta memberikan rekomendasi perbaikan.
 - Export HTML report (rapi, lengkap dengan remediasi per finding)
 - **Export PDF report (Bahasa Indonesia, otomatis dinamai sesuai host target)** — berisi
   cover page, ringkasan eksekutif, grafik distribusi severity, **flowchart alur serangan**,
-  bagian khusus *"Akses Yang Dapat / Berhasil Ditembus"*, detail per-finding (Apa Celahnya
-  / Bagaimana Hacker Membobolnya / Bukti / Cara Menanggulangi / Referensi), serta roadmap
-  hardening.
+  bagian khusus *"Akses Yang Dapat / Berhasil Ditembus"*, **daftar Link Bug & endpoint
+  bermasalah** (clickable), detail per-finding (Apa Celahnya / Bagaimana Hacker
+  Membobolnya / Dampak Bisnis / Bukti / Link Bug / Cara Reproduksi Manual / Cara
+  Menanggulangi / Referensi), pemetaan **OWASP Top 10 2021** & **MITRE ATT&CK**,
+  glossary istilah, serta roadmap hardening.
 
 ---
 
@@ -129,18 +131,29 @@ cyberloka -t https://example.com --no-pdf
 
 Isi PDF (Bahasa Indonesia):
 - Cover page (target, mode, timestamp, total finding, severity tertinggi).
-- Bab 1: Ringkasan Eksekutif + grafik distribusi severity.
+- Bab 1: Ringkasan Eksekutif + grafik distribusi severity + 5 temuan paling krusial.
 - Bab 2: **Flowchart alur serangan** (Recon -> Probe -> Exploit -> Post-Exploit -> Impact).
 - Bab 3: **Akses Yang Dapat / Berhasil Ditembus** — daftar akses (mis. database via SQLi,
   source code via `.git/`, account takeover via host header) lengkap dengan endpoint
   yang ter-tested.
-- Bab 4: Detail per-finding dengan empat sub-bagian:
+- Bab 4: Detail per-finding lengkap dengan:
   - **Apa Celahnya** (akar masalah teknis)
   - **Bagaimana Hacker Membobolnya** (skenario eksploitasi)
+  - **Dampak Bisnis** (bukan hanya teknis - kerugian operasional / regulasi)
   - **Bukti / Evidence** dari hasil scan
+  - **Link Bug / Endpoint Terkait** (clickable; tim dev langsung bisa verifikasi)
+  - **Cara Reproduksi (Manual)** - perintah `curl`/`dig`/`openssl` siap copy-paste,
+    dengan placeholder URL otomatis terisi
   - **Cara Menanggulangi** (langkah perbaikan konkret)
+  - **Referensi** (OWASP cheat sheet, dokumentasi vendor)
+  - Meta: CWE, OWASP Top 10 2021, MITRE ATT&CK, Bug ID (jika ada)
 - Bab 5: Roadmap hardening berdasar prioritas severity.
+- **Bab 6: Daftar Link Bug & Endpoint Bermasalah** - tabel ringkas seluruh URL
+  vulnerable di satu halaman, urut severity. Cocok dishare ke tim dev/QA.
 - Lampiran A: Modul yang dijalankan.
+- Lampiran B: **Glossary** istilah keamanan (CSP, HSTS, SSRF, BOLA, dll.).
+- Lampiran C: **Pemetaan OWASP Top 10 & MITRE ATT&CK** per modul (untuk integrasi
+  ke kerangka risiko enterprise / ISO 27001 / NIST 800-53).
 
 ### Attack simulation (butuh konfirmasi)
 ```bash
@@ -212,19 +225,20 @@ MIT — lihat [LICENSE](LICENSE).
 
 ## Quick launcher Windows (`cek.bat`)
 
-Untuk pengguna Windows tersedia menu interaktif `cek.bat`:
+Untuk pengguna Windows tersedia menu interaktif `cek.bat` (versi v0.9.0):
 
 ```
-1. Scan PASSIVE
-2. Scan ACTIVE
-3. Scan FULL
-4. Scan modul tertentu
-5. Recon saja
-6. Subdomain takeover check
-7. Simulate attack
-8. Update repo (git pull)
-9. Tampilkan daftar modul
-0. Keluar
+APA YANG MAU DICOBA?  (pilih nomor)
+----------------------------------------------------------------------
+   1. Buka menu interaktif Cyberloka     [RECOMMENDED]
+   2. Quick Scan         - passive, paling aman
+   3. Full Scan          - recon + passive + active, butuh izin
+   4. Buka folder laporan
+   5. Lihat laporan PDF terakhir
+   6. Tampilkan --help
+   7. Daftar semua module deteksi
+   8. Update Cyberloka (git pull + pip install)
+   0. Keluar
 ```
 
 Jalankan dari root folder repo:
@@ -233,4 +247,31 @@ Jalankan dari root folder repo:
 cek.bat
 ```
 
-Pilih `8` untuk menarik update terbaru dari remote (`git fetch --prune` + `git pull --ff-only`).
+### Cara Update Cyberloka (PENTING)
+
+> Jika menu `cek.bat` Anda tidak sama dengan dokumentasi (mis. masih menampilkan
+> menu lama), itu berarti file lokal Anda **belum di-pull** dari GitHub. Update
+> dengan salah satu cara berikut:
+
+**Cara 1 (paling mudah):** Buka `cek.bat` lalu pilih **8** (Update).
+Script akan otomatis:
+1. `git fetch --all --prune`
+2. `git pull --ff-only` (auto-stash perubahan lokal jika ada)
+3. `pip install -r requirements.txt` + `pip install -e .`
+
+**Cara 2 (shortcut):** Double-click **`update.bat`** di root folder. Sama
+dengan menu nomor 8 tetapi langsung jalan tanpa lewat menu.
+
+**Cara 3 (manual via terminal):**
+```bat
+cd path\to\cyberloka
+git pull
+pip install -r requirements.txt
+pip install -e .
+```
+
+### Auto-check update saat startup
+
+Setiap kali `cek.bat` dijalankan, ia melakukan `git fetch` lalu menghitung
+berapa commit yang tertinggal dari `origin`. Jika ada update tersedia, Anda
+akan diminta konfirmasi (Y/N) untuk update sebelum menu utama tampil.

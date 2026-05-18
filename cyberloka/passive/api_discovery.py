@@ -99,6 +99,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                         ),
                         target=url,
                         evidence=f"HTTP {status}\n{ev}",
+                        urls=[url],
                         remediation=(
                             "Batasi akses ke endpoint dokumentasi/management hanya untuk "
                             "internal network atau di belakang otentikasi. Untuk Spring Boot "

@@ -73,6 +73,23 @@ def _run_module(name: str, target: Target, config: ScanConfig) -> list[Finding]:
         return []
 
 
+def _enrich_findings(findings: list[Finding], target: Target) -> list[Finding]:
+    """Enrich findings with derived fields:
+
+    - `urls`: ensure the finding has at least one bug-link (target if it
+      looks like a URL). This is what the report displays as "Link Bug".
+    """
+    for f in findings:
+        if not f.urls:
+            t = (f.target or "").strip()
+            if t.startswith(("http://", "https://")):
+                f.urls = [t]
+            elif t and target.base_url:
+                # If target is just a host or path, attach base_url as fallback
+                f.urls = [target.base_url]
+    return findings
+
+
 def run_scan(target: Target, config: ScanConfig) -> list[Finding]:
     """Run all selected modules and return aggregated findings."""
     modules = config.resolve_modules()
@@ -87,4 +104,4 @@ def run_scan(target: Target, config: ScanConfig) -> list[Finding]:
         future_to_name = {ex.submit(_run_module, m, target, config): m for m in modules}
         for fut in as_completed(future_to_name):
             findings.extend(fut.result())
-    return findings
+    return _enrich_findings(findings, target)
