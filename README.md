@@ -21,6 +21,8 @@ penyebabnya, serta memberikan rekomendasi perbaikan.
 - Port scanning (top common ports, TCP connect)
 - Subdomain enumeration (wordlist-based)
 - Technology fingerprinting (server, framework, CMS) dari header & body
+- **WAF / CDN detection** (Cloudflare, Akamai, Imperva, AWS, F5, Fastly, ModSecurity, dll.)
+- **Subdomain takeover** check (CNAME dangling ke S3/Heroku/GitHub Pages/Azure/Netlify, dst.)
 
 ### 2. Passive Vulnerability Checks
 - Security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy)
@@ -30,6 +32,14 @@ penyebabnya, serta memberikan rekomendasi perbaikan.
 - Clickjacking exposure
 - HTTP method enumeration (TRACE, PUT, DELETE, OPTIONS)
 - Sensitive file exposure (`.git/`, `.env`, `backup.zip`, `phpinfo.php`, dll.)
+- **API discovery** (Swagger/OpenAPI/Spring Actuator/Tomcat manager/H2 console/pprof/metrics)
+- **GraphQL** endpoint detection + introspection check
+- **CSRF** form audit (POST tanpa token anti-CSRF)
+- **JWT audit** (`alg=none`, expired, weak HMAC)
+- **Secret scanning** di body & JS (AWS/Google/Stripe/GitHub/Slack/PEM/JDBC/Mongo URI)
+- **Mixed content** (HTTPS halaman me-load HTTP resource)
+- **Information disclosure** (HTML comment sensitif, stack trace, debug page)
+- **Cache audit** untuk halaman terotentikasi (`Cache-Control` permisif)
 
 ### 3. Active Vulnerability Checks
 - SQL Injection (error-based & boolean-based, payload aman)
@@ -39,6 +49,8 @@ penyebabnya, serta memberikan rekomendasi perbaikan.
 - Command Injection (time-based & marker)
 - Directory Listing exposure
 - Inspeksi `robots.txt` & `sitemap.xml`
+- **Host Header Injection** / cache poisoning probe
+- **SSRF** probe (parameter URL/callback/webhook, safe non-destructive)
 
 ### 4. Attack Simulation (Safe Mode)
 - Rate-limit & brute-force resistance test pada endpoint login
@@ -154,3 +166,30 @@ cyberloka/
 ## Lisensi
 
 MIT — lihat [LICENSE](LICENSE).
+
+
+
+## Quick launcher Windows (`cek.bat`)
+
+Untuk pengguna Windows tersedia menu interaktif `cek.bat`:
+
+```
+1. Scan PASSIVE
+2. Scan ACTIVE
+3. Scan FULL
+4. Scan modul tertentu
+5. Recon saja
+6. Subdomain takeover check
+7. Simulate attack
+8. Update repo (git pull)
+9. Tampilkan daftar modul
+0. Keluar
+```
+
+Jalankan dari root folder repo:
+
+```bat
+cek.bat
+```
+
+Pilih `8` untuk menarik update terbaru dari remote (`git fetch --prune` + `git pull --ff-only`).
