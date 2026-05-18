@@ -259,38 +259,70 @@ def create_app() -> FastAPI:
         if not scan:
             raise HTTPException(404)
         findings = db.list_findings(scan_id)
-        from cyberloka.reporting.html_report import compute_risk_score
-        env_template = Path(WEB_DIR.parent / "reporting" / "templates" / "report.html")
-        # Render via existing reporting template
+        from collections import Counter
         from jinja2 import Environment, FileSystemLoader, select_autoescape
+        from cyberloka.reporting.explainer import (
+            CATEGORIES, GLOSSARY, SEVERITY_ACTION,
+            build_executive_summary, explain_finding,
+        )
+        from cyberloka.reporting.html_report import (
+            CATEGORY_DESCRIPTIONS, _action_buckets, _categorize, _owasp_distribution,
+        )
+
+        env_template = Path(WEB_DIR.parent / "reporting" / "templates" / "report.html")
         env = Environment(
             loader=FileSystemLoader(str(env_template.parent)),
             autoescape=select_autoescape(["html"]),
         )
         tpl = env.get_template("report.html")
-        risk_score, risk_label = compute_risk_score([])  # already aggregated below
-        # Use scan's stored risk
+
         sev = scan.get("summary", {}).get("by_severity", {}) if scan.get("summary") else {}
         target_obj = type("T", (), {
             "host": scan.get("target_url", ""),
             "scheme": "https",
             "port": "",
+            "base_url": scan.get("target_url", ""),
         })
+        risk_score = scan.get("risk_score", 0)
+        risk_label = scan.get("risk_label") or "—"
+
+        findings_dicts = [explain_finding(f) for f in findings]
+        summary = {"total": sum(sev.values()), "by_severity": {
+            "critical": sev.get("critical", 0),
+            "high": sev.get("high", 0),
+            "medium": sev.get("medium", 0),
+            "low": sev.get("low", 0),
+            "info": sev.get("info", 0),
+        }}
+
+        pdp_pii = sum(1 for f in findings_dicts if f.get("module") == "pii_leak")
+        pdp_idor = sum(1 for f in findings_dicts if f.get("module") == "idor_generic")
+        pdp_cookie = sum(1 for f in findings_dicts if f.get("module") in ("cookies", "session"))
+        pdp_tls = sum(1 for f in findings_dicts if f.get("module") == "tls")
+
         html = tpl.render(
             target=target_obj,
             scan={"mode": scan.get("mode"), "modules": scan.get("modules", [])},
-            summary={"total": sum(sev.values()), "by_severity": {
-                "critical": sev.get("critical", 0),
-                "high": sev.get("high", 0),
-                "medium": sev.get("medium", 0),
-                "low": sev.get("low", 0),
-                "info": sev.get("info", 0),
-            }},
-            findings=findings,
+            summary=summary,
+            findings=findings_dicts,
             generated_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
             tool_version=__version__,
-            risk_score=scan.get("risk_score", 0),
-            risk_label=scan.get("risk_label") or "—",
+            risk_score=risk_score,
+            risk_label=risk_label,
+            exec=build_executive_summary(
+                findings_dicts, risk_score, risk_label, scan.get("target_url", "")
+            ),
+            categories=_categorize(findings_dicts),
+            category_labels=CATEGORIES,
+            category_descriptions=CATEGORY_DESCRIPTIONS,
+            action_buckets=_action_buckets(findings_dicts),
+            severity_action=SEVERITY_ACTION,
+            owasp_distribution=_owasp_distribution(findings_dicts),
+            pdp_pii=pdp_pii,
+            pdp_idor=pdp_idor,
+            pdp_cookie=pdp_cookie,
+            pdp_tls=pdp_tls,
+            glossary=GLOSSARY,
         )
         return HTMLResponse(html)
 

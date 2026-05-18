@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Laporan Keamanan — {{ target.host }}</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --paper: #ffffff;
+    --paper-2: #f1f3fb;
+    --border: #e3e6f3;
+    --text: #131734;
+    --muted: #5a6184;
+    --accent: #5b3df5;
+    --accent-2: #0891b2;
+    --critical: #dc2626;
+    --high: #ea580c;
+    --medium: #d97706;
+    --low: #2563eb;
+    --info: #64748b;
+    --emerald: #059669;
+  }
+  html[data-theme="dark"] {
+    --bg: #0b1020;
+    --paper: #111733;
+    --paper-2: #1a2247;
+    --border: #243066;
+    --text: #e6e9f5;
+    --muted: #8b93b8;
+    --accent: #7c5cff;
+    --accent-2: #22d3ee;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px 32px 80px; }
+  .actions { display: flex; gap: 8px; align-items: center; }
+  .btn {
+    background: var(--paper-2); color: var(--text); border: 1px solid var(--border);
+    padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
+
+  /* ---- Cover page ---- */
+  .cover {
+    min-height: 95vh;
+    display: flex; flex-direction: column; justify-content: center;
+    text-align: center;
+    page-break-after: always;
+    padding: 60px 0;
+  }
+  .cover .brand-mark {
+    width: 90px; height: 90px; margin: 0 auto 30px; border-radius: 22px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-weight: 800; font-size: 38px;
+  }
+  .cover h1 {
+    font-size: 40px; margin: 0 0 12px; letter-spacing: -0.02em;
+  }
+  .cover .subtitle { color: var(--muted); font-size: 18px; margin-bottom: 50px; }
+  .cover .target-card {
+    display: inline-block; padding: 26px 40px;
+    background: var(--paper); border: 1px solid var(--border); border-radius: 14px;
+    text-align: left; margin: 0 auto;
+  }
+  .cover .target-card .label {
+    text-transform: uppercase; font-size: 11px;
+    color: var(--muted); letter-spacing: 0.1em; font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .cover .target-card .value {
+    font-size: 22px; font-weight: 700; word-break: break-all;
+  }
+  .cover .meta-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px;
+    max-width: 700px; margin: 40px auto;
+  }
+  .cover .meta-grid > div {
+    background: var(--paper); border: 1px solid var(--border);
+    padding: 16px; border-radius: 10px;
+  }
+  .cover .meta-grid .label {
+    text-transform: uppercase; font-size: 10px;
+    color: var(--muted); letter-spacing: 0.1em; font-weight: 700;
+  }
+  .cover .meta-grid .value { font-size: 16px; margin-top: 6px; font-weight: 600; }
+  .cover .footer-note {
+    color: var(--muted); font-size: 12px; max-width: 600px; margin: 30px auto 0;
+    line-height: 1.5;
+  }
+
+  /* ---- TOC ---- */
+  .toc {
+    page-break-after: always; padding: 30px 0;
+  }
+  .toc h2 { font-size: 26px; margin: 0 0 24px; }
+  .toc ol { counter-reset: section; padding-left: 0; list-style: none; }
+  .toc li {
+    counter-increment: section;
+    border-bottom: 1px dashed var(--border);
+    padding: 10px 0;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .toc li::before {
+    content: counter(section, decimal) ". ";
+    color: var(--muted); margin-right: 10px;
+    font-variant-numeric: tabular-nums;
+  }
+  .toc a { color: var(--text); text-decoration: none; flex: 1; }
+  .toc a:hover { color: var(--accent); }
+
+  /* ---- Sections ---- */
+  .section { padding: 30px 0; }
+  .section + .section { border-top: 1px solid var(--border); }
+  .section h2 {
+    font-size: 26px; margin: 0 0 6px; letter-spacing: -0.01em;
+  }
+  .section .lede {
+    color: var(--muted); margin-bottom: 22px; font-size: 14px;
+  }
+
+  /* ---- Cards ---- */
+  .card {
+    background: var(--paper); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px; margin-bottom: 16px;
+  }
+  .grid { display: grid; gap: 16px; }
+  .grid-3 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+  .grid-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+
+  /* ---- Verdict ---- */
+  .verdict {
+    border-left: 6px solid var(--verdict-color, var(--accent));
+    padding: 22px 26px; background: var(--paper);
+    border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .verdict .label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--muted); font-weight: 700;
+  }
+  .verdict h3 {
+    font-size: 24px; margin: 6px 0 10px;
+    color: var(--verdict-color, var(--text));
+  }
+
+  /* ---- Stat cards ---- */
+  .stat {
+    background: var(--paper); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+  }
+  .stat .label {
+    font-size: 11px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.08em; font-weight: 600;
+  }
+  .stat .big { font-size: 32px; font-weight: 800; margin-top: 4px; }
+
+  /* ---- Severity pill ---- */
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; border-radius: 999px; font-size: 11px;
+    font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: white;
+  }
+  .pill.crit { background: var(--critical); }
+  .pill.high { background: var(--high); }
+  .pill.med  { background: var(--medium); }
+  .pill.low  { background: var(--low); }
+  .pill.info { background: var(--info); }
+
+  /* ---- Donut chart ---- */
+  .donut-wrap {
+    display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+  }
+  .legend { display: grid; gap: 8px; font-size: 14px; }
+  .legend .dot { display: inline-block; width: 11px; height: 11px;
+    border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+
+  /* ---- Action plan ---- */
+  .action-bucket {
+    border-left: 4px solid var(--bucket-color, var(--accent));
+    background: var(--paper); border-radius: 12px;
+    padding: 18px 22px; margin-bottom: 16px;
+  }
+  .action-bucket h3 {
+    margin: 0 0 4px; font-size: 16px;
+    color: var(--bucket-color, var(--text));
+  }
+  .action-bucket .subtitle {
+    color: var(--muted); font-size: 13px; margin-bottom: 12px;
+  }
+  .action-bucket ul { padding-left: 22px; margin: 0; }
+  .action-bucket li { margin-bottom: 8px; }
+
+  /* ---- Findings ---- */
+  details.finding {
+    background: var(--paper); border: 1px solid var(--border);
+    border-radius: 12px; padding: 0; margin-bottom: 10px; overflow: hidden;
+  }
+  details.finding[open] { border-color: var(--accent); }
+  details.finding summary {
+    list-style: none; cursor: pointer; padding: 14px 18px;
+    display: grid; grid-template-columns: 110px 1fr 90px; gap: 12px;
+    align-items: center;
+  }
+  details.finding summary::-webkit-details-marker { display: none; }
+  .finding-title { font-weight: 600; }
+  .finding-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .score {
+    text-align: right; font-variant-numeric: tabular-nums;
+    font-weight: 700; font-size: 14px;
+  }
+  .body {
+    border-top: 1px solid var(--border); padding: 18px;
+    display: grid; grid-template-columns: 1fr; gap: 14px;
+    background: var(--paper-2);
+  }
+  .body h4 { margin: 0 0 4px; font-size: 12px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+  pre.evidence {
+    background: rgba(0,0,0,0.04); color: #6b4500;
+    padding: 12px; border-radius: 8px; overflow-x: auto;
+    font-size: 12.5px; white-space: pre-wrap; word-break: break-word;
+    border: 1px solid var(--border);
+  }
+  html[data-theme="dark"] pre.evidence {
+    background: rgba(0,0,0,0.35); color: #f8c25c;
+  }
+  .refs a { color: var(--accent-2); text-decoration: none; }
+  .refs a:hover { text-decoration: underline; }
+  .business-impact {
+    background: rgba(220, 38, 38, 0.08); border-left: 3px solid var(--critical);
+    padding: 12px 14px; border-radius: 0 8px 8px 0;
+    color: var(--text);
+  }
+  .what-it-means {
+    background: rgba(91, 61, 245, 0.06); border-left: 3px solid var(--accent);
+    padding: 12px 14px; border-radius: 0 8px 8px 0;
+  }
+
+  /* ---- Category ---- */
+  .cat-section { margin-bottom: 22px; }
+  .cat-section h3 {
+    font-size: 18px; margin: 0 0 4px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .cat-section .desc { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .cat-badge {
+    background: var(--paper-2); padding: 2px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; color: var(--muted);
+  }
+
+  /* ---- Glossary ---- */
+  .glossary dt { font-weight: 700; margin-top: 12px; font-size: 14px; color: var(--accent); }
+  .glossary dd { margin: 2px 0 0; color: var(--text); font-size: 13px; }
+
+  /* ---- Sign block ---- */
+  .signatures {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 60px;
+    margin-top: 60px; page-break-inside: avoid;
+  }
+  .sig-block { border-top: 1px solid var(--border); padding-top: 8px; text-align: center; }
+  .sig-block .name { margin-top: 60px; font-weight: 600; }
+  .sig-block .role { color: var(--muted); font-size: 13px; }
+
+  /* ---- Toolbar (only screen) ---- */
+  .toolbar {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    margin: 14px 0 18px;
+  }
+  .toolbar input[type="search"] {
+    flex: 1; min-width: 220px; background: var(--paper);
+    border: 1px solid var(--border); color: var(--text);
+    padding: 9px 12px; border-radius: 8px; font-size: 14px;
+  }
+  .filter-btn {
+    background: var(--paper); border: 1px solid var(--border);
+    color: var(--text); padding: 7px 12px; border-radius: 999px;
+    font-size: 12px; cursor: pointer;
+  }
+  .filter-btn.active {
+    background: var(--accent); border-color: var(--accent); color: white;
+  }
+  .topbar {
+    position: sticky; top: 0; z-index: 5; padding: 10px 32px;
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(8px); border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  html[data-theme="dark"] .topbar { background: rgba(11,16,32,0.85); }
+
+  /* ---- Print styles ---- */
+  @media print {
+    .topbar, .actions, .toolbar { display: none !important; }
+    details.finding[open] .body { display: grid !important; }
+    details.finding { break-inside: avoid; border: 1px solid #ccc !important; }
+    .section { page-break-before: auto; }
+    .cover { page-break-after: always; }
+    body { background: white; color: black; }
+    .card, .stat, .verdict, .action-bucket, details.finding {
+      border-color: #ddd !important; box-shadow: none !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div style="font-weight: 700;">Cyberloka — Laporan Keamanan</div>
+  <div class="actions">
+    <button class="btn" onclick="toggleTheme()">Toggle theme</button>
+    <button class="btn" onclick="expandAll(true)">Buka semua</button>
+    <button class="btn" onclick="expandAll(false)">Tutup semua</button>
+    <button class="btn btn-primary" onclick="window.print()">Print / PDF</button>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- ====================================================== -->
+  <!--  COVER PAGE                                            -->
+  <!-- ====================================================== -->
+  <section class="cover">
+    <div class="brand-mark">CL</div>
+    <h1>Laporan Audit Keamanan Aplikasi Web</h1>
+    <p class="subtitle">Cyberloka Vulnerability Assessment Report</p>
+
+    <div class="target-card">
+      <div class="label">Target</div>
+      <div class="value">{{ target.host }}</div>
+    </div>
+
+    <div class="meta-grid">
+      <div>
+        <div class="label">Tanggal Audit</div>
+        <div class="value">{{ generated_at }}</div>
+      </div>
+      <div>
+        <div class="label">Mode Pemeriksaan</div>
+        <div class="value">{{ scan.mode | capitalize }}</div>
+      </div>
+      <div>
+        <div class="label">Modul Diuji</div>
+        <div class="value">{{ scan.modules | length }} modul</div>
+      </div>
+    </div>
+
+    <p class="footer-note">
+      Laporan ini disusun untuk tujuan audit keamanan internal. Informasi di
+      dalamnya bersifat <strong>rahasia</strong> dan hanya boleh digunakan oleh
+      pihak yang berwenang. Cyberloka v{{ tool_version }}.
+    </p>
+  </section>
+
+  <!-- ====================================================== -->
+  <!--  TABLE OF CONTENTS                                     -->
+  <!-- ====================================================== -->
+  <section class="toc">
+    <h2>Daftar Isi</h2>
+    <ol>
+      <li><a href="#executive">Ringkasan Eksekutif</a></li>
+      <li><a href="#methodology">Metodologi Audit</a></li>
+      <li><a href="#scope">Lingkup Pemeriksaan</a></li>
+      <li><a href="#statistics">Statistik Temuan</a></li>
+      <li><a href="#action-plan">Rencana Tindakan (Action Plan)</a></li>
+      <li><a href="#findings-by-category">Temuan per Kategori Bisnis</a></li>
+      <li><a href="#findings-detail">Detail Setiap Temuan</a></li>
+      <li><a href="#compliance">Pemetaan Kepatuhan (OWASP / UU PDP)</a></li>
+      <li><a href="#glossary">Glosarium Istilah</a></li>
+      <li><a href="#signatures">Tanda Tangan</a></li>
+    </ol>
+  </section>
+
+  <!-- ====================================================== -->
+  <!--  EXECUTIVE SUMMARY                                     -->
+  <!-- ====================================================== -->
+  <section id="executive" class="section">
+    <h2>1. Ringkasan Eksekutif</h2>
+    <p class="lede">
+      Bagian ini ditujukan untuk pemilik bisnis / manajemen — tidak memerlukan
+      latar belakang teknis.
+    </p>
+
+    <div class="verdict" style="--verdict-color: {{ exec.verdict_color }};">
+      <div class="label">Penilaian Keseluruhan</div>
+      <h3>{{ exec.verdict }}</h3>
+      <div>{{ exec.verdict_text }}</div>
+    </div>
+
+    <div class="grid grid-3" style="margin-top: 16px;">
+      <div class="stat">
+        <div class="label">Skor Risiko</div>
+        <div class="big" style="color: {{ exec.verdict_color }};">{{ risk_score }}/100</div>
+        <div style="color: var(--muted); font-size: 13px;">{{ risk_label }}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Total Temuan</div>
+        <div class="big">{{ summary.total }}</div>
+        <div style="color: var(--muted); font-size: 13px;">
+          {{ summary.by_severity.critical + summary.by_severity.high }} prioritas tinggi
+        </div>
+      </div>
+      <div class="stat">
+        <div class="label">Modul Diperiksa</div>
+        <div class="big">{{ scan.modules | length }}</div>
+        <div style="color: var(--muted); font-size: 13px;">{{ scan.mode }} mode</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 20px;">
+      <h3 style="margin-top: 0;">Distribusi Tingkat Bahaya</h3>
+      <div class="donut-wrap">
+        <svg viewBox="0 0 42 42" width="160" height="160" aria-hidden="true">
+          {% set total = summary.total or 1 %}
+          {% set offsets = namespace(prev=0) %}
+          <circle cx="21" cy="21" r="15.9155" fill="transparent" stroke="var(--border)" stroke-width="4"/>
+          {% for sev, color, label in [
+              ('critical','var(--critical)', 'Kritikal'),
+              ('high','var(--high)', 'Tinggi'),
+              ('medium','var(--medium)', 'Menengah'),
+              ('low','var(--low)', 'Rendah'),
+              ('info','var(--info)', 'Informasi')] %}
+            {% set count = summary.by_severity[sev] %}
+            {% if count > 0 %}
+              {% set pct = (count / total) * 100 %}
+              <circle cx="21" cy="21" r="15.9155" fill="transparent"
+                stroke="{{ color }}" stroke-width="4"
+                stroke-dasharray="{{ '%.2f'|format(pct) }} {{ '%.2f'|format(100 - pct) }}"
+                stroke-dashoffset="{{ '%.2f'|format(100 - offsets.prev) }}"
+                transform="rotate(-90 21 21)"/>
+              {% set offsets.prev = offsets.prev + pct %}
+            {% endif %}
+          {% endfor %}
+          <text x="21" y="22" text-anchor="middle" fill="var(--text)"
+            font-size="9" font-weight="700">{{ summary.total }}</text>
+          <text x="21" y="29" text-anchor="middle" fill="var(--muted)"
+            font-size="3.5">temuan</text>
+        </svg>
+        <div class="legend">
+          <div><span class="dot" style="background:var(--critical)"></span><strong>Kritikal:</strong> {{ summary.by_severity.critical }} <span style="color:var(--muted)">— harus diperbaiki dalam 1 minggu</span></div>
+          <div><span class="dot" style="background:var(--high)"></span><strong>Tinggi:</strong> {{ summary.by_severity.high }} <span style="color:var(--muted)">— diperbaiki dalam 2 minggu</span></div>
+          <div><span class="dot" style="background:var(--medium)"></span><strong>Menengah:</strong> {{ summary.by_severity.medium }} <span style="color:var(--muted)">— diperbaiki dalam 1 bulan</span></div>
+          <div><span class="dot" style="background:var(--low)"></span><strong>Rendah:</strong> {{ summary.by_severity.low }} <span style="color:var(--muted)">— hardening dalam 3 bulan</span></div>
+          <div><span class="dot" style="background:var(--info)"></span><strong>Informasi:</strong> {{ summary.by_severity.info }} <span style="color:var(--muted)">— catatan saja</span></div>
+        </div>
+      </div>
+    </div>
+
+    {% if exec.top_findings %}
+    <h3 style="margin-top: 28px;">5 Temuan Paling Penting</h3>
+    <p class="lede">Daftar singkat untuk fokus prioritas tim teknis.</p>
+    <div>
+      {% for f in exec.top_findings %}
+        {% set sev = f.severity %}
+        {% set pill = {'critical':'crit','high':'high','medium':'med','low':'low','info':'info'}[sev] %}
+        <div class="card" style="display: flex; gap: 16px; align-items: flex-start;">
+          <span class="pill {{ pill }}">{{ sev }}</span>
+          <div style="flex: 1;">
+            <div style="font-weight: 700; font-size: 15px;">{{ f.friendly_name }}</div>
+            <div style="color: var(--muted); font-size: 13px; margin-top: 4px;">
+              {{ f.what_it_means }}
+            </div>
+            {% if f.business_impact %}
+            <div style="margin-top: 8px; font-size: 13px;">
+              <strong>Dampak Bisnis:</strong> {{ f.business_impact }}
+            </div>
+            {% endif %}
+          </div>
+          <div style="text-align: right; font-weight: 800; font-size: 18px;">
+            {{ f.risk_score }}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- ====================================================== -->
+  <!--  METHODOLOGY                                           -->
+  <!-- ====================================================== -->
+  <section id="methodology" class="section">
+    <h2>2. Metodologi Audit</h2>
+    <p class="lede">Bagaimana cara Cyberloka memeriksa keamanan aplikasi Anda.</p>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <h3 style="margin-top:0;">Pendekatan Pemeriksaan</h3>
+        <p>Audit dijalankan dalam tiga fase:</p>
+        <ol style="padding-left: 22px;">
+          <li><strong>Reconnaissance</strong> — pemetaan domain, sub-domain, port terbuka, teknologi yang dipakai, dan endpoint API.</li>
+          <li><strong>Pemeriksaan Pasif</strong> — inspeksi konfigurasi tanpa mengirim payload uji (header, TLS, cookie, library).</li>
+          <li><strong>Pemeriksaan Aktif</strong> — pengujian kerentanan dengan payload uji yang aman ke parameter dan formulir yang ditemukan crawler.</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">Standar yang Diacu</h3>
+        <ul style="padding-left: 22px;">
+          <li><strong>OWASP Top 10 (2021)</strong> — standar keamanan aplikasi web internasional.</li>
+          <li><strong>OWASP ASVS / API Security Top 10</strong> — kontrol verifikasi dan keamanan API.</li>
+          <li><strong>CWE (Common Weakness Enumeration)</strong> — klasifikasi kelemahan keamanan.</li>
+          <li><strong>UU PDP No. 27/2022</strong> — Undang-Undang Perlindungan Data Pribadi Indonesia.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">Etika & Cakupan Aman</h3>
+        <ul style="padding-left: 22px;">
+          <li>Tidak melakukan exploit yang merusak data atau service.</li>
+          <li>Rate-limit otomatis untuk menghindari DoS pada target.</li>
+          <li>Payload uji bersifat probe (deteksi), bukan exploit nyata.</li>
+          <li>Hasil yang bersifat <em>tentative</em> harus diverifikasi manual oleh tim teknis.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">Tingkat Kepercayaan Temuan</h3>
+        <ul style="padding-left: 22px;">
+          <li><strong>Confirmed</strong> — sudah diverifikasi pasti rentan.</li>
+          <li><strong>Firm</strong> — kemungkinan besar rentan, perlu konfirmasi singkat.</li>
+          <li><strong>Tentative</strong> — sinyal awal, butuh verifikasi manual sebelum perbaikan.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!--  SCOPE                                                  -->
+  <!-- ====================================================== -->
+  <section id="scope" class="section">
+    <h2>3. Lingkup Pemeriksaan</h2>
+    <p class="lede">Modul yang dijalankan dalam audit ini.</p>
+    <div class="card">
+      <p>
+        <strong>Total {{ scan.modules | length }} modul</strong> dijalankan dalam mode
+        <code>{{ scan.mode }}</code> pada target <strong>{{ target.host }}</strong>.
+      </p>
+      <details>
+        <summary style="cursor: pointer; color: var(--accent); margin-top: 6px;">
+          Lihat daftar lengkap modul yang dijalankan
+        </summary>
+        <div style="margin-top: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; font-family: monospace; font-size: 12px;">
+          {% for m in scan.modules %}
+            <div>• {{ m }}</div>
+          {% endfor %}
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!--  STATISTICS                                             -->
+  <!-- ====================================================== -->
+  <section id="statistics" class="section">
+    <h2>4. Statistik Temuan</h2>
+    <p class="lede">Jumlah temuan per tingkat bahaya & per kategori bisnis.</p>
+
+    <div class="grid grid-3">
+      {% for sev, color, label in [
+          ('critical','var(--critical)', 'Kritikal'),
+          ('high','var(--high)', 'Tinggi'),
+          ('medium','var(--medium)', 'Menengah'),
+          ('low','var(--low)', 'Rendah'),
+          ('info','var(--info)', 'Informasi')] %}
+        <div class="stat">
+          <div class="label">{{ label }}</div>
+          <div class="big" style="color: {{ color }};">{{ summary.by_severity[sev] }}</div>
+        </div>
+      {% endfor %}
+    </div>
+
+    {% if categories %}
+    <h3 style="margin-top: 24px;">Per Kategori Bisnis</h3>
+    <div class="grid grid-2">
+      {% for cat_id, items in categories.items() %}
+        <div class="card">
+          <div class="label" style="font-size:11px; color:var(--muted); text-transform:uppercase; font-weight:700; letter-spacing:0.08em;">
+            {{ category_labels[cat_id] }}
+          </div>
+          <div class="big" style="font-size: 26px; font-weight:800; margin-top: 6px;">
+            {{ items|length }} temuan
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- ====================================================== -->
+  <!--  ACTION PLAN                                            -->
+  <!-- ====================================================== -->
+  <section id="action-plan" class="section">
+    <h2>5. Rencana Tindakan (Action Plan)</h2>
+    <p class="lede">
+      Daftar tindakan berdasarkan urgensi. Tim teknis dapat memakai bagian ini
+      sebagai checklist eksekusi.
+    </p>
+
+    {% for sev, label in [
+        ('critical', 'Kritikal — Segera (1-7 hari)'),
+        ('high', 'Tinggi — Minggu Ini (7-14 hari)'),
+        ('medium', 'Menengah — Bulan Ini (30 hari)'),
+        ('low', 'Rendah — Hardening (90 hari)')] %}
+      {% set bucket = action_buckets[sev] %}
+      {% if bucket %}
+        <div class="action-bucket" style="--bucket-color: {{ severity_action[sev].color }};">
+          <h3>{{ severity_action[sev].title }}</h3>
+          <div class="subtitle">{{ severity_action[sev].explainer }}</div>
+          <ul>
+            {% for f in bucket %}
+              <li>
+                <strong>{{ f.friendly_name }}</strong> —
+                <span style="color: var(--muted);">{{ f.target }}</span>
+                <br>
+                <small style="color: var(--muted);">{{ f.remediation }}</small>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    {% endfor %}
+
+    {% if not action_buckets.critical and not action_buckets.high
+       and not action_buckets.medium and not action_buckets.low %}
+      <div class="card" style="text-align: center; padding: 40px;">
+        <div style="font-size: 42px; color: var(--emerald);">✓</div>
+        <h3>Tidak ada tindakan perbaikan yang diperlukan</h3>
+        <p style="color: var(--muted);">
+          Tidak ada finding yang memerlukan perbaikan dari audit ini.
+        </p>
+      </div>
+    {% endif %}
+  </section>
+
+  <!-- ====================================================== -->
+  <!--  FINDINGS BY CATEGORY                                   -->
+  <!-- ====================================================== -->
+  <section id="findings-by-category" class="section">
+    <h2>6. Temuan per Kategori Bisnis</h2>
+    <p class="lede">Pengelompokan temuan berdasarkan area bisnis yang terdampak.</p>
+
+    {% if not categories %}
+      <div class="card" style="text-align: center; padding: 40px;">
+        <div style="font-size: 42px; color: var(--emerald);">✓</div>
+        <h3>Tidak ada finding terdeteksi</h3>
+      </div>
+    {% endif %}
+
+    {% for cat_id, items in categories.items() %}
+      <div class="cat-section card">
+        <h3>
+          {{ category_labels[cat_id] }}
+          <span class="cat-badge">{{ items | length }} temuan</span>
+        </h3>
+        <div class="desc">{{ category_descriptions[cat_id] }}</div>
+        <ul style="padding-left: 22px; margin: 0;">
+          {% for f in items %}
+            {% set pill = {'critical':'crit','high':'high','medium':'med','low':'low','info':'info'}[f.severity] %}
+            <li style="margin-bottom: 6px;">
+              <span class="pill {{ pill }}" style="font-size: 9px; padding: 1px 6px;">{{ f.severity }}</span>
+              <strong>{{ f.friendly_name }}</strong>
+              <span style="color: var(--muted);">— {{ f.title }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endfor %}
+  </section>
+
+  <!-- ====================================================== -->
+  <!--  FINDINGS DETAIL                                        -->
+  <!-- ====================================================== -->
+  <section id="findings-detail" class="section">
+    <h2>7. Detail Setiap Temuan</h2>
+    <p class="lede">
+      Klik tiap baris untuk melihat penjelasan lengkap, dampak bisnis,
+      bukti teknis, dan rekomendasi perbaikan.
+    </p>
+
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="Cari nama temuan, modul, atau deskripsi..." oninput="filterFindings()" />
+      <button class="filter-btn active" data-sev="all" onclick="setSev(this)">Semua</button>
+      <button class="filter-btn" data-sev="critical" onclick="setSev(this)">Kritikal</button>
+      <button class="filter-btn" data-sev="high" onclick="setSev(this)">Tinggi</button>
+      <button class="filter-btn" data-sev="medium" onclick="setSev(this)">Menengah</button>
+      <button class="filter-btn" data-sev="low" onclick="setSev(this)">Rendah</button>
+      <button class="filter-btn" data-sev="info" onclick="setSev(this)">Info</button>
+    </div>
+
+    <div id="findings-list">
+      {% if not findings %}
+        <div class="card" style="text-align:center; padding:36px;">
+          <div style="font-size:42px; color: var(--emerald);">✓</div>
+          <h3>Tidak ada finding terdeteksi</h3>
+        </div>
+      {% endif %}
+      {% for f in findings %}
+        {% set sev = f.severity %}
+        {% set pill = {'critical':'crit','high':'high','medium':'med','low':'low','info':'info'}[sev] %}
+        <details class="finding" data-sev="{{ sev }}" data-haystack="{{ (f.title ~ ' ' ~ f.module ~ ' ' ~ (f.description or '') ~ ' ' ~ (f.friendly_name or ''))|lower }}">
+          <summary>
+            <span class="pill {{ pill }}">{{ sev }}</span>
+            <div>
+              <div class="finding-title">{{ f.friendly_name or f.title }}</div>
+              <div class="finding-sub">
+                <span>modul: <strong>{{ f.module }}</strong></span>
+                {% if f.cwe %} · <span>{{ f.cwe }}</span>{% endif %}
+                {% if f.owasp_category %} · <span>{{ f.owasp_category }}</span>{% endif %}
+                · <span>tingkat keyakinan: {{ f.confidence }}</span>
+              </div>
+            </div>
+            <div class="score">{{ f.risk_score }}</div>
+          </summary>
+          <div class="body">
+            {% if f.what_it_means %}
+            <div class="what-it-means">
+              <h4>Penjelasan</h4>
+              <div>{{ f.what_it_means }}</div>
+            </div>
+            {% endif %}
+
+            {% if f.business_impact %}
+            <div class="business-impact">
+              <h4>Dampak terhadap Bisnis</h4>
+              <div>{{ f.business_impact }}</div>
+            </div>
+            {% endif %}
+
+            <div>
+              <h4>URL / Resource yang Terdampak</h4>
+              <div style="word-break: break-all; font-family: monospace; font-size: 13px;">{{ f.target }}</div>
+            </div>
+
+            {% if f.description %}
+            <div>
+              <h4>Detail Teknis</h4>
+              <div>{{ f.description }}</div>
+            </div>
+            {% endif %}
+
+            {% if f.evidence %}
+            <div>
+              <h4>Bukti</h4>
+              <pre class="evidence">{{ f.evidence }}</pre>
+            </div>
+            {% endif %}
+
+            {% if f.remediation %}
+            <div>
+              <h4>Cara Memperbaiki</h4>
+              <div style="background: rgba(5,150,105,0.08); border-left: 3px solid var(--emerald); padding: 12px 14px; border-radius: 0 8px 8px 0;">
+                {{ f.remediation }}
+              </div>
+            </div>
+            {% endif %}
+
+            {% if f.references %}
+            <div class="refs">
+              <h4>Referensi & Dokumentasi</h4>
+              <ul style="margin:6px 0; padding-left:18px;">
+                {% for r in f.references %}
+                  <li><a href="{{ r }}" target="_blank" rel="noopener">{{ r }}</a></li>
+                {% endfor %}
+              </ul>
+            </div>
+            {% endif %}
+          </div>
+        </details>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!--  COMPLIANCE                                             -->
+  <!-- ====================================================== -->
+  <section id="compliance" class="section">
+    <h2>8. Pemetaan Kepatuhan (OWASP / UU PDP)</h2>
+    <p class="lede">
+      Pemetaan temuan ke standar keamanan dan regulasi yang berlaku.
+    </p>
+
+    <div class="card">
+      <h3 style="margin-top:0;">OWASP Top 10 (2021)</h3>
+      <p>
+        Berdasarkan pemetaan CWE → OWASP, temuan yang masuk kategori OWASP Top 10:
+      </p>
+      <ul style="padding-left: 22px;">
+        {% for cat, count in owasp_distribution.items() %}
+          <li><strong>{{ cat }}</strong>: {{ count }} temuan</li>
+        {% endfor %}
+        {% if not owasp_distribution %}
+          <li style="color: var(--muted);">Tidak ada temuan yang dipetakan ke OWASP Top 10.</li>
+        {% endif %}
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">UU Perlindungan Data Pribadi (UU PDP No. 27/2022)</h3>
+      <p>
+        Modul-modul yang relevan untuk kepatuhan UU PDP, beserta hasilnya:
+      </p>
+      <ul style="padding-left: 22px;">
+        <li><strong>PII Leak</strong>: pemindaian kebocoran data pribadi (NIK, NPWP, HP, kartu kredit) di response publik. {% if pdp_pii %}<span style="color:var(--critical)">⚠ {{ pdp_pii }} temuan</span>{% else %}<span style="color: var(--emerald);">✓ Tidak ada</span>{% endif %}</li>
+        <li><strong>IDOR</strong>: pengujian akses data pengguna lain. {% if pdp_idor %}<span style="color:var(--critical)">⚠ {{ pdp_idor }} temuan</span>{% else %}<span style="color: var(--emerald);">✓ Tidak ada</span>{% endif %}</li>
+        <li><strong>Cookies & Sesi</strong>: enkripsi & atribut keamanan cookie sesi. {% if pdp_cookie %}<span style="color:var(--high)">⚠ {{ pdp_cookie }} temuan</span>{% else %}<span style="color: var(--emerald);">✓ Tidak ada</span>{% endif %}</li>
+        <li><strong>TLS/HTTPS</strong>: enkripsi data saat transit. {% if pdp_tls %}<span style="color:var(--high)">⚠ {{ pdp_tls }} temuan</span>{% else %}<span style="color: var(--emerald);">✓ Tidak ada</span>{% endif %}</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!--  GLOSSARY                                               -->
+  <!-- ====================================================== -->
+  <section id="glossary" class="section">
+    <h2>9. Glosarium Istilah</h2>
+    <p class="lede">Daftar istilah teknis yang dipakai di laporan ini, dijelaskan dalam bahasa awam.</p>
+    <div class="card">
+      <dl class="glossary">
+        {% for term, definition in glossary %}
+          <dt>{{ term }}</dt>
+          <dd>{{ definition }}</dd>
+        {% endfor %}
+      </dl>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!--  SIGNATURES                                             -->
+  <!-- ====================================================== -->
+  <section id="signatures" class="section">
+    <h2>10. Tanda Tangan</h2>
+    <p class="lede">Halaman tanda tangan untuk validasi laporan.</p>
+
+    <div class="card">
+      <p>Disusun oleh tim audit:</p>
+      <div class="signatures">
+        <div class="sig-block">
+          <div style="height: 80px;"></div>
+          <div class="name">________________________</div>
+          <div class="role">Auditor / Security Engineer</div>
+        </div>
+        <div class="sig-block">
+          <div style="height: 80px;"></div>
+          <div class="name">________________________</div>
+          <div class="role">Pemilik Sistem / IT Manager</div>
+        </div>
+      </div>
+
+      <p style="margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px;">
+        Laporan ini digenerate otomatis oleh <strong>Cyberloka v{{ tool_version }}</strong>
+        pada {{ generated_at }}. Hasil audit hanya berlaku untuk waktu pemeriksaan
+        ini — kerentanan baru dapat muncul seiring perubahan aplikasi.
+      </p>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  function toggleTheme() {
+    const root = document.documentElement;
+    root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+  }
+  function expandAll(open) {
+    document.querySelectorAll('details.finding').forEach(d => d.open = open);
+  }
+  let activeSev = 'all';
+  function setSev(btn) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeSev = btn.dataset.sev;
+    filterFindings();
+  }
+  function filterFindings() {
+    const q = (document.getElementById('q').value || '').toLowerCase();
+    document.querySelectorAll('details.finding').forEach(el => {
+      const sevOk = activeSev === 'all' || el.dataset.sev === activeSev;
+      const qOk = !q || el.dataset.haystack.includes(q);
+      el.style.display = (sevOk && qOk) ? '' : 'none';
+    });
+  }
+</script>
+</body>
+</html>
