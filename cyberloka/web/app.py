@@ -1,6 +1,7 @@
 """FastAPI application factory for the Cyberloka dashboard."""
 from __future__ import annotations
 
+import io
 import json
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +13,7 @@ from fastapi.responses import (
     PlainTextResponse,
     RedirectResponse,
     Response,
+    StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -20,8 +22,9 @@ from cyberloka import __version__
 from cyberloka.core.config import ScanConfig
 from cyberloka.core.target import parse_target
 from cyberloka.scanner import MODULE_MAP
+from cyberloka.web import diff as diff_mod
 from cyberloka.web.db import Database
-from cyberloka.web.runner import start_scan_thread
+from cyberloka.web.runner import ensure_scheduler, start_scan_thread
 
 WEB_DIR = Path(__file__).parent
 TEMPLATES_DIR = WEB_DIR / "templates"
@@ -39,6 +42,10 @@ def create_app() -> FastAPI:
         docs_url="/api/docs",
         redoc_url=None,
     )
+
+    @app.on_event("startup")
+    def _startup() -> None:
+        ensure_scheduler()
 
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -83,11 +90,7 @@ def create_app() -> FastAPI:
     def targets_page(request: Request, db: Database = Depends(get_db)) -> Response:
         return templates.TemplateResponse(
             "targets.html",
-            {
-                "request": request,
-                "targets": db.list_targets(),
-                "page": "targets",
-            },
+            {"request": request, "targets": db.list_targets(), "page": "targets"},
         )
 
     @app.post("/targets")
@@ -155,8 +158,6 @@ def create_app() -> FastAPI:
             timeout=timeout,
             rate_limit=rate,
             max_crawl_pages=max_crawl_pages,
-            # Mode passive di Cyberloka hanya melakukan observasi, jadi
-            # selalu dianggap authorized. Mode lain butuh konfirmasi.
             authorized=authorized or mode == "passive",
             simulate_attack=simulate_attack,
             login_url=login_url.strip() or None,
@@ -175,11 +176,7 @@ def create_app() -> FastAPI:
     def scans_index(request: Request, db: Database = Depends(get_db)) -> Response:
         return templates.TemplateResponse(
             "scan_list.html",
-            {
-                "request": request,
-                "scans": db.list_scans(),
-                "page": "scans",
-            },
+            {"request": request, "scans": db.list_scans(), "page": "scans"},
         )
 
     @app.get("/scans/{scan_id}", response_class=HTMLResponse)
@@ -192,12 +189,19 @@ def create_app() -> FastAPI:
         if not scan:
             raise HTTPException(404)
         findings = db.list_findings(scan_id) if scan["status"] == "done" else []
+        previous = []
+        if scan["status"] == "done":
+            previous = [
+                s for s in db.list_done_scans_for_target(scan["target_id"], 10)
+                if s["id"] != scan_id
+            ]
         return templates.TemplateResponse(
             "scan_detail.html",
             {
                 "request": request,
                 "scan": scan,
                 "findings": findings,
+                "previous_scans": previous,
                 "page": "scans",
             },
         )
@@ -221,6 +225,173 @@ def create_app() -> FastAPI:
             "finding_detail.html",
             {"request": request, "f": f, "scan": scan, "page": "scans"},
         )
+
+    # ------------------------------------------------------------------
+    # Diff
+    # ------------------------------------------------------------------
+    @app.get("/scans/{scan_id}/diff", response_class=HTMLResponse)
+    def scan_diff(
+        scan_id: int,
+        previous: int,
+        request: Request,
+        db: Database = Depends(get_db),
+    ) -> Response:
+        curr = db.get_scan(scan_id)
+        prev = db.get_scan(previous)
+        if not curr or not prev:
+            raise HTTPException(404)
+        result = diff_mod.diff_scans(
+            db.list_findings(prev["id"]),
+            db.list_findings(curr["id"]),
+        )
+        return templates.TemplateResponse(
+            "scan_diff.html",
+            {"request": request, "curr": curr, "prev": prev,
+             "diff": result, "page": "scans"},
+        )
+
+    # ------------------------------------------------------------------
+    # PDF / HTML export
+    # ------------------------------------------------------------------
+    @app.get("/scans/{scan_id}/report.html")
+    def scan_report_html(scan_id: int, db: Database = Depends(get_db)) -> Response:
+        scan = db.get_scan(scan_id)
+        if not scan:
+            raise HTTPException(404)
+        findings = db.list_findings(scan_id)
+        from cyberloka.reporting.html_report import compute_risk_score
+        env_template = Path(WEB_DIR.parent / "reporting" / "templates" / "report.html")
+        # Render via existing reporting template
+        from jinja2 import Environment, FileSystemLoader, select_autoescape
+        env = Environment(
+            loader=FileSystemLoader(str(env_template.parent)),
+            autoescape=select_autoescape(["html"]),
+        )
+        tpl = env.get_template("report.html")
+        risk_score, risk_label = compute_risk_score([])  # already aggregated below
+        # Use scan's stored risk
+        sev = scan.get("summary", {}).get("by_severity", {}) if scan.get("summary") else {}
+        target_obj = type("T", (), {
+            "host": scan.get("target_url", ""),
+            "scheme": "https",
+            "port": "",
+        })
+        html = tpl.render(
+            target=target_obj,
+            scan={"mode": scan.get("mode"), "modules": scan.get("modules", [])},
+            summary={"total": sum(sev.values()), "by_severity": {
+                "critical": sev.get("critical", 0),
+                "high": sev.get("high", 0),
+                "medium": sev.get("medium", 0),
+                "low": sev.get("low", 0),
+                "info": sev.get("info", 0),
+            }},
+            findings=findings,
+            generated_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+            tool_version=__version__,
+            risk_score=scan.get("risk_score", 0),
+            risk_label=scan.get("risk_label") or "—",
+        )
+        return HTMLResponse(html)
+
+    @app.get("/scans/{scan_id}/report.pdf")
+    def scan_report_pdf(scan_id: int, db: Database = Depends(get_db)) -> Response:
+        # Try to convert via weasyprint or wkhtmltopdf if available;
+        # otherwise fall back to a server-rendered HTML the user can print to PDF
+        # via the browser.
+        scan = db.get_scan(scan_id)
+        if not scan:
+            raise HTTPException(404)
+        html_resp = scan_report_html(scan_id, db)  # type: ignore[arg-type]
+        html_bytes = html_resp.body if isinstance(html_resp, HTMLResponse) else b""
+        # Try weasyprint
+        try:
+            from weasyprint import HTML  # type: ignore
+
+            buf = io.BytesIO()
+            HTML(string=html_bytes.decode("utf-8")).write_pdf(buf)
+            buf.seek(0)
+            return StreamingResponse(
+                buf,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f"attachment; filename=cyberloka-scan-{scan_id}.pdf"},
+            )
+        except Exception:
+            pass
+        # Fallback: HTML with print stylesheet hint
+        return HTMLResponse(
+            html_bytes,
+            headers={
+                "X-Cyberloka-PDF-Fallback": "weasyprint-not-installed",
+                "Content-Disposition": f"inline; filename=cyberloka-scan-{scan_id}.html",
+            },
+        )
+
+    # ------------------------------------------------------------------
+    # Schedules
+    # ------------------------------------------------------------------
+    @app.get("/schedules", response_class=HTMLResponse)
+    def schedules_page(request: Request, db: Database = Depends(get_db)) -> Response:
+        return templates.TemplateResponse(
+            "schedules.html",
+            {
+                "request": request,
+                "schedules": db.list_schedules(),
+                "targets": db.list_targets(),
+                "page": "schedules",
+            },
+        )
+
+    @app.post("/schedules")
+    def create_schedule(
+        target_id: int = Form(...),
+        interval_hours: float = Form(24.0),
+        mode: str = Form("passive"),
+        db: Database = Depends(get_db),
+    ) -> Response:
+        db.create_schedule(target_id, interval_hours, mode)
+        return RedirectResponse("/schedules", status_code=status.HTTP_303_SEE_OTHER)
+
+    @app.post("/schedules/{schedule_id}/delete")
+    def delete_schedule(schedule_id: int, db: Database = Depends(get_db)) -> Response:
+        db.delete_schedule(schedule_id)
+        return RedirectResponse("/schedules", status_code=status.HTTP_303_SEE_OTHER)
+
+    @app.post("/schedules/{schedule_id}/toggle")
+    def toggle_schedule(schedule_id: int, db: Database = Depends(get_db)) -> Response:
+        scheds = {s["id"]: s for s in db.list_schedules()}
+        s = scheds.get(schedule_id)
+        if not s:
+            raise HTTPException(404)
+        db.update_schedule(schedule_id, enabled=0 if s["enabled"] else 1)
+        return RedirectResponse("/schedules", status_code=status.HTTP_303_SEE_OTHER)
+
+    # ------------------------------------------------------------------
+    # Notifiers
+    # ------------------------------------------------------------------
+    @app.get("/notifiers", response_class=HTMLResponse)
+    def notifiers_page(request: Request, db: Database = Depends(get_db)) -> Response:
+        return templates.TemplateResponse(
+            "notifiers.html",
+            {"request": request, "notifiers": db.list_notifiers(), "page": "notifiers"},
+        )
+
+    @app.post("/notifiers")
+    def create_notifier(
+        kind: str = Form(...),
+        url: str = Form(...),
+        min_severity: str = Form("high"),
+        db: Database = Depends(get_db),
+    ) -> Response:
+        if kind not in ("webhook", "slack", "email"):
+            raise HTTPException(400, "kind harus webhook|slack|email")
+        db.create_notifier(kind, url.strip(), min_severity)
+        return RedirectResponse("/notifiers", status_code=status.HTTP_303_SEE_OTHER)
+
+    @app.post("/notifiers/{nid}/delete")
+    def delete_notifier(nid: int, db: Database = Depends(get_db)) -> Response:
+        db.delete_notifier(nid)
+        return RedirectResponse("/notifiers", status_code=status.HTTP_303_SEE_OTHER)
 
     # ------------------------------------------------------------------
     # HTMX partials & JSON API

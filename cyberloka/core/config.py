@@ -78,6 +78,7 @@ class ScanConfig:
         "mixed_content",
         "jwt",
         "csp_evaluator",
+        "captcha_check",
     )
     ACTIVE_MODULES = (
         # Crawler dijalankan dulu agar discovery state (URL, form, parameter)
@@ -110,6 +111,9 @@ class ScanConfig:
         "oauth_check",
         "pii_leak",
         "race_condition",
+        "proto_pollution",
+        "http_smuggling",
+        "ws_check",
     )
 
     def resolve_modules(self) -> list[str]:
