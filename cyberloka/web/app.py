@@ -259,7 +259,6 @@ def create_app() -> FastAPI:
         if not scan:
             raise HTTPException(404)
         findings = db.list_findings(scan_id)
-        from collections import Counter
         from jinja2 import Environment, FileSystemLoader, select_autoescape
         from cyberloka.reporting.explainer import (
             CATEGORIES, GLOSSARY, SEVERITY_ACTION,

@@ -45,10 +45,10 @@ goto :loop
 
 echo.
 echo ====================================================================
-echo   CYBERLOKA v0.5.0 - Full Security Scan
+echo   CYBERLOKA v0.7.0 - Full Security Scan
 echo ====================================================================
 echo   Target  : %TARGET%
-echo   Mode    : full (58 modul)
+echo   Mode    : full (63 modul)
 echo   Output  : report.json + report.html
 echo ====================================================================
 echo.
@@ -101,7 +101,8 @@ echo         ssrf_metadata, ssti, xxe, forms, session, voucher, payment,
 echo         otp_check, password_reset, file_upload, idor_generic,
 echo         host_header, cache_poison, hpp, rfd, dom_xss, oauth_check,
 echo         pii_leak, race_condition, proto_pollution, http_smuggling,
-echo         ws_check
+echo         ws_check, auth_bypass, balance, env_leak, api_auth,
+echo         mass_assignment
 echo.
 echo SIMULATE: rate_limit, burst (hanya jika --simulate-attack)
 echo -----------------------------------
