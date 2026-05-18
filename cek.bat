@@ -24,18 +24,29 @@ if not errorlevel 1 (
     git rev-parse --is-inside-work-tree >nul 2>nul
     if not errorlevel 1 (
         echo Memeriksa update dari repository...
+        REM Tampilkan branch aktif + tracking branch supaya jelas update dari mana.
+        for /f "delims=" %%a in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set "CURBRANCH=%%a"
+        for /f "delims=" %%a in ('git rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2^>nul') do set "UPSTREAM=%%a"
+        if defined CURBRANCH echo   Branch aktif : !CURBRANCH!
+        if defined UPSTREAM echo   Tracking     : !UPSTREAM!
         git fetch --quiet origin 2>nul
         for /f %%a in ('git rev-list HEAD..@{u} --count 2^>nul') do set "BEHIND=%%a"
         if not "!BEHIND!"=="" (
             if not "!BEHIND!"=="0" (
                 echo.
                 echo ====================================================================
-                echo  ADA UPDATE!  !BEHIND! commit baru tersedia di repository.
+                echo  ADA UPDATE!  !BEHIND! commit baru tersedia di !UPSTREAM!.
                 echo  Pilih [Y] untuk update sekarang ^(git pull + pip install^)
                 echo  atau [N] untuk lanjut tanpa update.
                 echo ====================================================================
                 set /p UPDATE_NOW="Update sekarang? (Y/N): "
                 if /i "!UPDATE_NOW!"=="Y" goto gitpull_silent
+            ) else (
+                echo   Status       : up-to-date dengan !UPSTREAM!.
+                echo.
+                echo   Catatan: kalau ada commit/PR di branch lain ^(mis. fix/...^),
+                echo   commit itu BELUM masuk sampai PR di-merge ke branch ini.
+                echo   Untuk pindah branch sementara: git checkout ^<nama-branch^>
             )
         )
     )
@@ -308,6 +319,10 @@ if errorlevel 1 (
 
 echo Branch aktif sebelum update:
 git rev-parse --abbrev-ref HEAD
+for /f "delims=" %%a in ('git rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2^>nul') do set "UPSTREAM=%%a"
+if defined UPSTREAM echo Tracking remote: !UPSTREAM!
+for /f "delims=" %%a in ('git rev-parse --short HEAD 2^>nul') do set "BEFORE=%%a"
+if defined BEFORE echo Commit lokal sekarang: !BEFORE!
 echo.
 
 REM Stash perubahan lokal otomatis biar pull mulus
@@ -387,6 +402,19 @@ echo   UPDATE SELESAI
 echo ======================================================================
 for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD') do echo  Branch : %%b
 for /f "delims=" %%c in ('git log -1 --oneline') do echo  Commit : %%c
+for /f "delims=" %%d in ('git rev-parse --short HEAD 2^>nul') do set "AFTER=%%d"
+if defined BEFORE if defined AFTER (
+    if "!BEFORE!"=="!AFTER!" (
+        echo.
+        echo  [INFO] Commit hash TIDAK berubah ^(!BEFORE!^).
+        echo         Branch ini sudah up-to-date dengan remote-nya.
+        echo         Kalau Anda mengharapkan commit dari PR di branch lain,
+        echo         PR itu mungkin belum di-merge ke branch ini.
+        echo         Cek: https://github.com/xrniqbl/cyberloka/pulls
+    ) else (
+        echo  Update : !BEFORE! -^> !AFTER!
+    )
+)
 echo.
 echo  Verifikasi cepat:
 python -c "from cyberloka.scanner import MODULE_MAP; print('   - Total modul scanner :', len(MODULE_MAP))" 2>nul
