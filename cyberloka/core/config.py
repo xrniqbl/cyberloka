@@ -114,6 +114,11 @@ class ScanConfig:
         "proto_pollution",
         "http_smuggling",
         "ws_check",
+        "auth_bypass",
+        "balance",
+        "env_leak",
+        "api_auth",
+        "mass_assignment",
     )
 
     def resolve_modules(self) -> list[str]:

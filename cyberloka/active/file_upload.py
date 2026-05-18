@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import io
 import re
-from urllib.parse import urljoin
 
 from cyberloka.core import Finding, HttpClient, Severity, Target
 from cyberloka.core.config import ScanConfig
