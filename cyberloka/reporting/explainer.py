@@ -439,6 +439,25 @@ EXPLAIN: dict[str, dict[str, str]] = {
         ),
         "category": "infra",
     },
+    "rce_validator": {
+        "friendly_name": "Validasi Mendalam Command Injection / RCE",
+        "what_it_means": (
+            "Modul ini melakukan validasi multi-oracle (marker echo, hex "
+            "round-trip, timing 5-sample) dengan payload non-destruktif "
+            "(echo, whoami, id, uname, hostname, sleep) untuk memastikan "
+            "apakah parameter benar-benar mengeksekusi shell, hanya "
+            "memantulkan input, atau diblokir WAF. Hasil dilabeli "
+            "False Positive / Low Confidence / Firm / Confirmed."
+        ),
+        "business_impact": (
+            "Memberi tim keamanan keyakinan apakah RCE benar-benar "
+            "exploitable sebelum melakukan remediasi. Confirmed RCE = "
+            "darurat (rotasi kredensial, isolasi server, tindak respon "
+            "insiden); False Positive = tetap perlu input validation tapi "
+            "tidak emergency."
+        ),
+        "category": "infra",
+    },
     "dirlist": {
         "friendly_name": "Directory Listing Terbuka",
         "what_it_means": (

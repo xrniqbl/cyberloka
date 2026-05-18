@@ -53,6 +53,7 @@ class ScanConfig:
     )
     ACTIVE_MODULES = (
         "crawler", "csrf", "sqli", "xss", "redirect", "lfi", "cmdi",
+        "rce_validator",
         "dirlist", "ssrf", "ssrf_metadata", "ssti", "xxe", "forms",
         "session", "voucher", "payment", "otp_check", "password_reset",
         "file_upload", "idor_generic", "host_header", "cache_poison",

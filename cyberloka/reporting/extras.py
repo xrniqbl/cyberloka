@@ -75,6 +75,7 @@ OWASP_MAP: dict[str, str] = {
     "stored_xss": "A03:2021 Injection",
     "dom_xss": "A03:2021 Injection",
     "cmdi": "A03:2021 Injection",
+    "rce_validator": "A03:2021 Injection",
     "ldap_injection": "A03:2021 Injection",
     "xpath_injection": "A03:2021 Injection",
     "xslt_injection": "A03:2021 Injection",
@@ -199,6 +200,7 @@ MITRE_MAP: dict[str, str] = {
     "stored_xss": "T1059.007 JavaScript (persistent)",
     "dom_xss": "T1059.007 JavaScript (DOM)",
     "cmdi": "T1059 Command and Scripting Interpreter",
+    "rce_validator": "T1059 Command and Scripting Interpreter (validasi)",
     "ldap_injection": "T1190 Exploit Public-Facing Application",
     "xpath_injection": "T1190 Exploit Public-Facing Application",
     "xslt_injection": "T1190 Exploit Public-Facing Application",
@@ -352,6 +354,15 @@ REPRO_MAP: dict[str, str] = {
     "stored_xss": "# Submit payload XSS ke field profile/komentar, akses sebagai user lain",
     "dom_xss": "# Pakai DOM Invader (Burp) atau cari sink innerHTML/document.write",
     "cmdi": "# Tambah ke parameter: ;sleep 5  |sleep 5  `sleep 5`  $(sleep 5)",
+    "rce_validator": (
+        "# Validasi non-destruktif (gunakan akun pengujian / izin tertulis):\n"
+        "#   curl -sS \"{url}\" --get --data-urlencode 'PARAM=1;echo CYBMARKER123'\n"
+        "# -> respons HARUS memuat 'CYBMARKER123' agar exec confirmed.\n"
+        "# Lalu:\n"
+        "#   curl -sS \"{url}\" --get --data-urlencode 'PARAM=1;sleep 5'\n"
+        "# -> latency >= 5s = shell exec confirmed via timing oracle.\n"
+        "# JANGAN gunakan rm/curl-out/wget/nc untuk eskalasi."
+    ),
     "ldap_injection": "# Coba: *)(uid=*  atau  *)(|(uid=*",
     "xpath_injection": "# Coba: ' or '1'='1  atau  '] | //*[@user='admin",
     "xslt_injection": "# Submit XML dengan elemen XSLT yang membaca system-property",

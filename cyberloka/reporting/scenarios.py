@@ -114,6 +114,7 @@ ACCESS_GAINED_MAP: dict[str, tuple[str, str]] = {
     "ldap_injection": ("Akses direktori LDAP", "any"),
     # RCE
     "cmdi": ("Remote Code Execution (Command Injection)", "any"),
+    "rce_validator": ("Remote Code Execution TERVERIFIKASI (multi-oracle)", "any"),
     "ssti": ("Remote Code Execution (Template Injection)", "any"),
     "deserialization": ("Remote Code Execution (deserialization)", "any"),
     "file_upload": ("Webshell upload / RCE via file upload", "any"),

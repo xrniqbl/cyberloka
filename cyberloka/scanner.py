@@ -62,6 +62,7 @@ MODULE_MAP: dict[str, str] = {
     "redirect": "cyberloka.active.redirect",
     "lfi": "cyberloka.active.lfi",
     "cmdi": "cyberloka.active.cmdi",
+    "rce_validator": "cyberloka.active.rce_validator",
     "dirlist": "cyberloka.active.dirlist",
     "ssrf": "cyberloka.active.ssrf",
     "ssrf_metadata": "cyberloka.active.ssrf_metadata",
