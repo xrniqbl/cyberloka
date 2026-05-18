@@ -1,71 +1,214 @@
-"""Detect (likely) SQL injection — error-based + boolean-based."""
+"""SQL Injection detection - confirmed via baseline diff & timing.
+
+Strategi:
+
+1. **Baseline**: ambil 2 sample respons normal per URL untuk dapat status,
+   panjang body, dan signature error 'tidak ada SQL error' (kontrol negatif).
+2. **Error-based**: kirim payload yang merusak quoting (`'`, `"`, `\`, `'')`).
+   Konfirmasi hanya bila signature error DB muncul **dan tidak muncul di
+   baseline** (banyak halaman PHP dev memang sudah memuat kata 'mysql' di
+   footer/breadcrumb).
+3. **Boolean-based**: kirim pasangan TRUE (`AND 1=1`) vs FALSE (`AND 1=2`).
+   Anggap firm hanya kalau panjang/status TRUE ~= baseline DAN FALSE berbeda
+   signifikan dari TRUE (kontrol asimetri).
+4. **Time-based**: kirim payload `SLEEP(5)`/`pg_sleep(5)` untuk MySQL/Postgres.
+   Anggap confirmed kalau latency >= sleep_s - threshold dan baseline latency
+   jauh lebih kecil. Dilakukan dua kali untuk meredam jitter.
+
+Semua finding membawa ``confidence`` yang sebenarnya:
+- ``confirmed`` = error/time/boolean reproducible.
+- ``firm`` = error-based atau time-based satu-shot.
+- ``tentative`` = hanya boolean-diff.
+"""
 from __future__ import annotations
 
 import re
+import time
+import urllib.parse
 
-from cyberloka.active._helpers import append_param, iter_param_urls
+from cyberloka.active._helpers import (
+    append_param,
+    baseline,
+    candidate_params,
+    diff_significant,
+    iter_param_urls,
+    replace_param,
+    stable_latency,
+)
 from cyberloka.core import Finding, HttpClient, Severity, Target
 from cyberloka.core.config import ScanConfig
 from cyberloka.core.util import truncate
 
+# DBMS error signatures (RegEx). Kept tight to avoid false positives.
 ERROR_SIGNATURES = [
-    r"sql syntax.*mysql",
-    r"warning.*mysql",
-    r"valid mysql result",
+    r"you have an error in your sql syntax",
+    r"warning:\s+mysql_",
     r"unclosed quotation mark after the character string",
     r"quoted string not properly terminated",
-    r"sqlstate\[",
+    r"sqlstate\[\d+\]",
     r"odbc.*sql server",
-    r"microsoft sql native client",
+    r"microsoft\s+sql\s+native\s+client",
     r"pg::syntaxerror",
-    r"postgresql.*error",
-    r"sqlite\.",
-    r"sqlite3::sqlexception",
+    r"pg_query\(\)",
+    r"postgresql\.util\.psqlexception",
+    r"sqlite3\.\w+error",
+    r"sqlite\.exception",
     r"oracle.*ora-\d{4,}",
-    r"you have an error in your sql syntax",
+    r"db2\s+sql\s+error",
+    r"mariadb\s+server\s+version",
+    r"sql\s+syntax.*near",
 ]
 ERROR_RE = re.compile("|".join(ERROR_SIGNATURES), re.I)
 
-QUOTE_PAYLOAD = "'\""
-TRUE_PAYLOAD = " AND 1=1-- -"
-FALSE_PAYLOAD = " AND 1=2-- -"
+ERROR_PAYLOADS = ["'", "\"", "')", "\\", "';", "' OR '1"]
+TRUE_PAYLOADS = [" AND 1=1-- -", "' AND '1'='1", "\" AND \"1\"=\"1"]
+FALSE_PAYLOADS = [" AND 1=2-- -", "' AND '1'='2", "\" AND \"1\"=\"2"]
+
+SLEEP_S = 5
+TIME_PAYLOADS_TPL = [
+    # MySQL
+    "1' AND SLEEP({s})-- -",
+    "1) AND SLEEP({s})-- -",
+    # Postgres
+    "1; SELECT pg_sleep({s})-- -",
+    "1' || (SELECT pg_sleep({s}))::text || '",
+    # MSSQL
+    "1; WAITFOR DELAY '0:0:{s}'--",
+]
 
 
-def _scan_url(client: HttpClient, url: str) -> list[tuple[str, str, str]]:
-    """Return list of (param, signature, evidence)."""
-    hits: list[tuple[str, str, str]] = []
+def _baseline_already_has_error(text: str) -> bool:
+    return bool(ERROR_RE.search(text or ""))
+
+
+def _scan_url(client: HttpClient, url: str) -> list[tuple[str, str, str, str, Severity]]:
+    """Return list of (param, signature, evidence, confidence, severity)."""
+    hits: list[tuple[str, str, str, str, Severity]] = []
     if "?" not in url:
-        url = append_param(url, "id", "1")
+        # Try common parameter names
+        for cand in candidate_params(url):
+            url = append_param(url, cand, "1")
+            break
 
-    # Error-based
-    for param, mutated in iter_param_urls(url, "1" + QUOTE_PAYLOAD):
-        resp = client.get(mutated)
-        if resp is None:
-            continue
-        m = ERROR_RE.search(resp.text or "")
-        if m:
-            hits.append((param, "error-based", truncate(m.group(0), 120)))
+    base = baseline(client, url, samples=2)
+    if base is None:
+        return hits
 
-    # Boolean-based
-    for param, mutated_true in iter_param_urls(url, "1" + TRUE_PAYLOAD):
-        # craft matching false url
-        false_url = mutated_true.replace(
-            "1+AND+1%3D1--+-", "1+AND+1%3D2--+-"
-        ).replace(TRUE_PAYLOAD, FALSE_PAYLOAD)
-        if false_url == mutated_true:
-            continue
-        r1 = client.get(mutated_true)
-        r2 = client.get(false_url)
-        if r1 is None or r2 is None:
-            continue
-        if r1.status_code == r2.status_code and abs(len(r1.text) - len(r2.text)) > 200:
-            hits.append(
-                (
-                    param,
-                    "boolean-based",
-                    f"len_true={len(r1.text)} vs len_false={len(r2.text)}",
+    base_has_error = _baseline_already_has_error(base["body"])
+
+    seen_params: set[str] = set()
+
+    # ---- Error-based --------------------------------------------------------
+    for payload in ERROR_PAYLOADS:
+        for param, mutated in iter_param_urls(url, "1" + payload):
+            if param in seen_params:
+                continue
+            resp = client.get(mutated)
+            if resp is None:
+                continue
+            body = resp.text or ""
+            m = ERROR_RE.search(body)
+            if m and not base_has_error:
+                # Reproduce once with a different payload to be sure.
+                second_payload = next((p for p in ERROR_PAYLOADS if p != payload), payload)
+                second_url = replace_param(url, param, "1" + second_payload)
+                second = client.get(second_url)
+                conf = "confirmed" if (second and ERROR_RE.search(second.text or "")) else "firm"
+                hits.append(
+                    (
+                        param,
+                        "error-based",
+                        f"payload={payload!r}\nDBMS error: {truncate(m.group(0), 120)}",
+                        conf,
+                        Severity.CRITICAL,
+                    )
                 )
+                seen_params.add(param)
+                break  # one error confirmation per param is enough
+
+    # ---- Boolean-based ------------------------------------------------------
+    for tp, fp in zip(TRUE_PAYLOADS, FALSE_PAYLOADS):
+        for param, mutated_t in iter_param_urls(url, "1" + tp):
+            if param in seen_params:
+                continue
+            mutated_f = replace_param(url, param, "1" + fp)
+            r_t = client.get(mutated_t)
+            r_f = client.get(mutated_f)
+            if r_t is None or r_f is None:
+                continue
+            t_text = r_t.text or ""
+            f_text = r_f.text or ""
+
+            # TRUE response should resemble baseline; FALSE should differ.
+            true_close_to_base = (
+                r_t.status_code == base["status"]
+                and abs(len(t_text) - base["length"]) <= max(200, base["length"] * 0.10)
             )
+            false_diff_from_true = (
+                r_t.status_code == r_f.status_code
+                and abs(len(t_text) - len(f_text)) > 200
+                and len(t_text) and abs(len(t_text) - len(f_text)) / max(len(t_text), 1) > 0.10
+            )
+            if true_close_to_base and false_diff_from_true:
+                # Reproduce
+                r_t2 = client.get(mutated_t)
+                r_f2 = client.get(mutated_f)
+                stable = (
+                    r_t2 is not None and r_f2 is not None
+                    and abs(len(r_t2.text or "") - len(t_text)) < 100
+                    and abs(len(r_f2.text or "") - len(f_text)) < 100
+                )
+                conf = "confirmed" if stable else "tentative"
+                hits.append(
+                    (
+                        param,
+                        "boolean-based",
+                        (
+                            f"baseline_len={base['length']}, "
+                            f"true_len={len(t_text)} ({tp!r}), "
+                            f"false_len={len(f_text)} ({fp!r})"
+                        ),
+                        conf,
+                        Severity.CRITICAL if stable else Severity.HIGH,
+                    )
+                )
+                seen_params.add(param)
+                break
+
+    # ---- Time-based ---------------------------------------------------------
+    base_lat = base["latency"] or stable_latency(client, url)
+    for tpl in TIME_PAYLOADS_TPL:
+        payload = tpl.format(s=SLEEP_S)
+        for param, mutated in iter_param_urls(url, urllib.parse.quote_plus(payload)):
+            if param in seen_params:
+                continue
+            t0 = time.monotonic()
+            r = client.get(mutated)
+            dt = time.monotonic() - t0
+            if r is None:
+                continue
+            # Need the response to actually be slow AND baseline to be fast.
+            if dt >= SLEEP_S - 0.7 and base_lat < SLEEP_S - 1.5:
+                # Reproduce once to remove network blip.
+                t0b = time.monotonic()
+                r2 = client.get(mutated)
+                dt2 = time.monotonic() - t0b
+                conf = "confirmed" if r2 and dt2 >= SLEEP_S - 0.7 else "firm"
+                hits.append(
+                    (
+                        param,
+                        "time-based",
+                        (
+                            f"payload={payload!r}\n"
+                            f"baseline_latency={base_lat:.2f}s, injected={dt:.2f}s, "
+                            f"reproduced={dt2:.2f}s"
+                        ),
+                        conf,
+                        Severity.CRITICAL,
+                    )
+                )
+                seen_params.add(param)
+                break
     return hits
 
 
@@ -75,24 +218,28 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
     try:
         url = target.base_url
         hits = _scan_url(client, url)
-        for param, sig, ev in hits:
+        for param, sig, ev, conf, sev in hits:
             findings.append(
                 Finding(
                     module="sqli",
-                    title=f"Kemungkinan SQL Injection ({sig}) pada parameter `{param}`",
-                    severity=Severity.CRITICAL,
+                    title=f"SQL Injection ({sig}) terverifikasi pada parameter `{param}`",
+                    severity=sev,
                     description=(
-                        "Respons aplikasi berubah / memuat error SQL setelah disuntik payload. "
-                        "SQL Injection memungkinkan attacker membaca/menulis seluruh database."
+                        "Aplikasi terbukti mengeksekusi input yang disuntikkan ke query SQL. "
+                        "Attacker dapat membaca/menulis seluruh database, eksfiltrasi "
+                        "kredensial, atau dalam beberapa kasus eksekusi kode (RCE via UDF, "
+                        "xp_cmdshell, COPY...PROGRAM)."
                     ),
                     target=url,
                     evidence=ev,
                     cwe="CWE-89",
-                    confidence="firm" if sig == "error-based" else "tentative",
+                    confidence=conf,
                     remediation=(
-                        "Gunakan parameterized query / prepared statements. JANGAN concatenate "
-                        "input ke query. Untuk ORM, hindari raw SQL dengan input user. Tambahkan "
-                        "validasi tipe + WAF sebagai lapis pertahanan tambahan."
+                        "Gunakan parameterized query / prepared statements pada SEMUA jalur "
+                        "(SELECT/INSERT/UPDATE/DELETE). JANGAN concatenate input ke query. "
+                        "Pada ORM hindari raw SQL berisi input user. Tambahkan validasi "
+                        "tipe (whitelist) + WAF sebagai lapis pertahanan tambahan, dan "
+                        "batasi privilege akun DB ke yang minimal."
                     ),
                     references=[
                         "https://owasp.org/www-community/attacks/SQL_Injection",

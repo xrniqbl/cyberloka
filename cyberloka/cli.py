@@ -11,6 +11,7 @@ from cyberloka.core.target import parse_target
 from cyberloka.reporting import console as console_report
 from cyberloka.reporting.html_report import write_html
 from cyberloka.reporting.json_report import write_json
+from cyberloka.reporting.pdf_report import write_pdf
 from cyberloka.scanner import MODULE_MAP, run_scan
 
 ETHICS_NOTICE = (
@@ -78,6 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--proxy", help="HTTP proxy URL (mis. http://127.0.0.1:8080)")
     p.add_argument("--json", dest="json_out", help="Path output JSON")
     p.add_argument("--html", dest="html_out", help="Path output HTML")
+    p.add_argument("--pdf", dest="pdf_out", help="Path output PDF")
     p.add_argument("--quiet", action="store_true")
     p.add_argument("--yes", action="store_true", help="Lewati prompt konfirmasi")
     p.add_argument("--version", action="version", version=f"cyberloka {__version__}")
@@ -118,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
         quiet=args.quiet,
         json_out=args.json_out,
         html_out=args.html_out,
+        pdf_out=args.pdf_out,
         proxy=args.proxy,
     )
 
@@ -159,6 +162,9 @@ def main(argv: list[str] | None = None) -> int:
     if cfg.html_out:
         write_html(cfg.html_out, target, cfg, findings)
         log.info("[green]HTML report ditulis ke %s[/green]", cfg.html_out)
+    if cfg.pdf_out:
+        write_pdf(cfg.pdf_out, target, cfg, findings)
+        log.info("[green]PDF report ditulis ke %s[/green]", cfg.pdf_out)
 
     # Exit code: 0 = no high+ findings; 1 = ada high/critical
     if any(f.severity.value in ("critical", "high") for f in findings):
