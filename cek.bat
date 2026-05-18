@@ -1,25 +1,41 @@
 @echo off
-REM ============================================================
-REM   cek.bat - Cyberloka Interactive Menu (Windows)
-REM   Versi: 0.9.0
+REM =====================================================================
+REM  Cyberloka quick launcher (Windows)  -  cek.bat
 REM
-REM   Cara update:
-REM     1. Update repo terbaru :  git pull
-REM     2. Re-install package  :  pip install -e .[web,pdf]
-REM     3. Atau dari PyPI       :  pip install --upgrade cyberloka[web,pdf]
-REM     4. Jalankan ini lagi    :  cek.bat
-REM ============================================================
+REM  Bagian update otomatis: setiap kali script ini dijalankan, ia akan
+REM  mengecek apakah ada commit baru di remote (origin). Jika ada, user
+REM  ditanya untuk update. Pilihan #8 di menu adalah update manual
+REM  (git pull + pip install) yang sama.
+REM =====================================================================
+setlocal EnableDelayedExpansion
+title Cyberloka v0.9.0 - Web Vulnerability Scanner
+chcp 65001 >nul 2>&1
 
-setlocal enabledelayedexpansion
+REM Pindah ke folder script ini
+cd /d "%~dp0"
 
-REM --- Mode non-interaktif: kalau ada arg URL, langsung scan full ---
-if not "%~1"=="" (
-    if "%~1" NEQ "/?" (
-        if "%~1" NEQ "-h" (
-            if "%~1" NEQ "--help" (
-                set TARGET=%~1
-                shift
-                goto :run_full_direct
+REM Folder untuk menampung file laporan PDF/JSON/HTML
+set "REPORTDIR=%~dp0reports"
+if not exist "%REPORTDIR%" mkdir "%REPORTDIR%"
+
+REM ----- Auto-check update saat start (silent jika repo up-to-date) ------
+where git >nul 2>nul
+if not errorlevel 1 (
+    git rev-parse --is-inside-work-tree >nul 2>nul
+    if not errorlevel 1 (
+        echo Memeriksa update dari repository...
+        git fetch --quiet origin 2>nul
+        for /f %%a in ('git rev-list HEAD..@{u} --count 2^>nul') do set "BEHIND=%%a"
+        if not "!BEHIND!"=="" (
+            if not "!BEHIND!"=="0" (
+                echo.
+                echo ====================================================================
+                echo  ADA UPDATE!  !BEHIND! commit baru tersedia di repository.
+                echo  Pilih [Y] untuk update sekarang ^(git pull + pip install^)
+                echo  atau [N] untuk lanjut tanpa update.
+                echo ====================================================================
+                set /p UPDATE_NOW="Update sekarang? (Y/N): "
+                if /i "!UPDATE_NOW!"=="Y" goto gitpull_silent
             )
         )
     )
@@ -27,291 +43,318 @@ if not "%~1"=="" (
 
 :menu
 cls
-echo ================================================================
+echo ======================================================================
 echo   CYBERLOKA v0.9.0 - Web Vulnerability Scanner
-echo ================================================================
+echo ======================================================================
 echo.
-echo  APA YANG MAU DICOBA?  (pilih nomor)
-echo ----------------------------------------------------------------
+echo   APA YANG MAU DICOBA?   ^(pilih nomor^)
+echo ----------------------------------------------------------------------
 echo.
-echo   1. Buka menu interaktif Cyberloka  [RECOMMENDED]
-echo   2. Quick Scan    - passive, paling aman
-echo   3. Full Scan     - recon + passive + active, butuh izin
-echo   4. Buka Dashboard di browser
-echo   5. Lihat laporan HTML terakhir
-echo   6. Tampilkan --help
-echo   7. Daftar semua module deteksi
-echo   8. Update Cyberloka (git pull + pip install)
-echo   0. Keluar
+echo    1. Buka menu interaktif Cyberloka     [RECOMMENDED]
+echo    2. Quick Scan         - passive, paling aman
+echo    3. Full Scan          - recon + passive + active, butuh izin
+echo    4. Buka folder laporan
+echo    5. Lihat laporan PDF terakhir
+echo    6. Tampilkan --help
+echo    7. Daftar semua module deteksi
+echo    8. Update Cyberloka ^(git pull + pip install^)
+echo    0. Keluar
 echo.
-set /p CHOICE="Pilih [0-8]: "
+set /p choice="Pilih [0-8]: "
 
-if "%CHOICE%"=="1" goto :interactive
-if "%CHOICE%"=="2" goto :quick
-if "%CHOICE%"=="3" goto :full
-if "%CHOICE%"=="4" goto :dashboard
-if "%CHOICE%"=="5" goto :open_report
-if "%CHOICE%"=="6" goto :show_help
-if "%CHOICE%"=="7" goto :list_modules
-if "%CHOICE%"=="8" goto :update
-if "%CHOICE%"=="0" goto :end
-
+if "%choice%"=="1" goto interactive
+if "%choice%"=="2" goto quickscan
+if "%choice%"=="3" goto fullscan
+if "%choice%"=="4" goto openrep
+if "%choice%"=="5" goto lastpdf
+if "%choice%"=="6" goto showhelp
+if "%choice%"=="7" goto listmod
+if "%choice%"=="8" goto gitpull
+if "%choice%"=="0" goto end
 echo.
-echo Pilihan tidak valid.
-timeout /t 2 >nul
-goto :menu
+echo Pilihan tidak dikenal: %choice%
+pause
+goto menu
 
+REM =====================================================================
+REM  HELPER: minta target
+REM =====================================================================
+:askTarget
+set "TARGET="
+set /p TARGET="Masukkan target (URL/IP, mis. https://example.com): "
+if "%TARGET%"=="" (
+    echo Target wajib diisi.
+    pause
+    goto menu
+)
+goto :eof
 
-REM ============================================================
-REM   1. INTERACTIVE: tanya target + opsi
-REM ============================================================
+REM =====================================================================
+REM  1. INTERACTIVE MENU  - sub-menu lengkap untuk power users
+REM =====================================================================
 :interactive
-echo.
-set /p TARGET="Target URL (mis. https://example.com): "
-if "%TARGET%"=="" (
-    echo [ERROR] Target wajib diisi.
-    pause
-    goto :menu
-)
-
-echo.
-echo Pilih mode:
-echo   p = passive  (aman, observasi saja)
-echo   a = active   (kirim payload uji + recon)
-echo   f = full     (semua modul, recommended utk audit lengkap)
-set /p MODE="Mode [p/a/f] (default f): "
-if "%MODE%"=="" set MODE=f
-if /I "%MODE%"=="p" set MODESTR=passive
-if /I "%MODE%"=="a" set MODESTR=active
-if /I "%MODE%"=="f" set MODESTR=full
-if "%MODESTR%"=="" set MODESTR=full
-
-echo.
-set /p AUTHED="Apakah Anda berwenang men-scan target ini? [y/N]: "
-if /I "%AUTHED%" NEQ "y" (
-    if /I "%AUTHED%" NEQ "yes" (
-        echo Dibatalkan.
-        pause
-        goto :menu
-    )
-)
-
-echo.
-set /p WANT_AUTH="Pakai authenticated scan (login dulu)? [y/N]: "
-set AUTH_ARGS=
-if /I "%WANT_AUTH%"=="y" (
-    set /p LOGIN_URL="Login URL (mis. https://example.com/login): "
-    set /p LOGIN_USER="Username/email: "
-    set /p LOGIN_PASS="Password: "
-    set AUTH_ARGS=--login-url "!LOGIN_URL!" --login-username "!LOGIN_USER!" --login-password "!LOGIN_PASS!"
-)
-
-echo.
-echo ================================================================
-echo   Menjalankan Cyberloka...
-echo ================================================================
-cyberloka -t "%TARGET%" --mode %MODESTR% --authorized --yes ^
-    --json report.json --html report.html ^
-    --threads 10 --rate 10 --timeout 12 ^
-    %AUTH_ARGS%
-goto :after_scan
-
-
-REM ============================================================
-REM   2. QUICK (passive)
-REM ============================================================
-:quick
-echo.
-set /p TARGET="Target URL: "
-if "%TARGET%"=="" (
-    pause
-    goto :menu
-)
-echo.
-echo ================================================================
-echo   Quick Scan (passive) - 41 modul
-echo ================================================================
-cyberloka -t "%TARGET%" --mode passive --authorized --yes ^
-    --json report.json --html report.html ^
-    --threads 10 --rate 10 --timeout 10
-goto :after_scan
-
-
-REM ============================================================
-REM   3. FULL
-REM ============================================================
-:full
-echo.
-set /p TARGET="Target URL: "
-if "%TARGET%"=="" (
-    pause
-    goto :menu
-)
-echo.
-set /p AUTHED="Apakah Anda berwenang men-scan target ini? [y/N]: "
-if /I "%AUTHED%" NEQ "y" (
-    if /I "%AUTHED%" NEQ "yes" (
-        echo Dibatalkan.
-        pause
-        goto :menu
-    )
-)
-
-:run_full_direct
-echo.
-echo ================================================================
-echo   Full Scan (93 modul recon + passive + active)
-echo ================================================================
-cyberloka -t "%TARGET%" --mode full --authorized --yes ^
-    --json report.json --html report.html ^
-    --threads 10 --rate 10 --timeout 12 ^
-    %*
-goto :after_scan
-
-
-REM ============================================================
-REM   4. DASHBOARD
-REM ============================================================
-:dashboard
-echo.
-echo ================================================================
-echo   Membuka dashboard di http://127.0.0.1:8765
-echo   (tekan Ctrl-C di window ini untuk stop)
-echo ================================================================
-start "" "http://127.0.0.1:8765"
-cyberloka-web --host 127.0.0.1 --port 8765
-goto :menu
-
-
-REM ============================================================
-REM   5. BUKA REPORT
-REM ============================================================
-:open_report
-if exist report.html (
-    start "" "report.html"
-) else (
-    echo.
-    echo report.html tidak ditemukan. Jalankan scan dulu.
-    pause
-)
-goto :menu
-
-
-REM ============================================================
-REM   6. HELP
-REM ============================================================
-:show_help
-echo.
-cyberloka --help
-echo.
-pause
-goto :menu
-
-
-REM ============================================================
-REM   7. DAFTAR MODUL
-REM ============================================================
-:list_modules
 cls
-echo ================================================================
-echo   Daftar Modul Cyberloka v0.9.0 (105 modul, 103 jalan di full)
-echo ================================================================
+echo ======================================================================
+echo   CYBERLOKA - Menu Interaktif
+echo ======================================================================
+echo   Folder laporan : %REPORTDIR%
+echo   PDF auto-named : cyberloka-report-^<host^>-^<timestamp^>.pdf
+echo ----------------------------------------------------------------------
+echo  a. Scan PASSIVE  (paling aman)
+echo  b. Scan ACTIVE   (passive + active, butuh izin tertulis)
+echo  c. Scan FULL     (recon + passive + active)
+echo  d. Scan modul tertentu (input: headers,tls,sqli,...)
+echo  e. Recon saja    (dns, whois, ports, subdomains, fingerprint, waf)
+echo  f. Subdomain takeover check
+echo  g. Simulate attack (burst + rate-limit, butuh --login-url)
+echo  x. Kembali ke menu utama
+echo ----------------------------------------------------------------------
+set /p subchoice="Pilih: "
+if /i "%subchoice%"=="a" goto passive
+if /i "%subchoice%"=="b" goto active
+if /i "%subchoice%"=="c" goto fullscan
+if /i "%subchoice%"=="d" goto custom
+if /i "%subchoice%"=="e" goto recon
+if /i "%subchoice%"=="f" goto takeover
+if /i "%subchoice%"=="g" goto simulate
+if /i "%subchoice%"=="x" goto menu
+echo Pilihan tidak dikenal.
+pause
+goto interactive
+
+REM =====================================================================
+REM  2. QUICK SCAN (passive)
+REM =====================================================================
+:quickscan
+:passive
+call :askTarget
+python -m cyberloka -t "%TARGET%" --mode passive --report-dir "%REPORTDIR%" --json "%REPORTDIR%\report.json" --html "%REPORTDIR%\report.html"
 echo.
-echo [RECON - 21 modul]
-echo   dns, whois, ports, fingerprint, subdomains, subdomain_takeover,
-echo   api_discovery, email_security, email_security_extended,
-echo   nextjs_specific, cf_origin, wayback, framework_default,
-echo   graphql_deep, source_leak, crawler, cms_scan, cloud_buckets,
-echo   k8s_exposure, dependency_confusion, favicon_hash
+echo Laporan tersimpan di: %REPORTDIR%
+pause
+goto menu
+
+REM =====================================================================
+REM  3. FULL SCAN
+REM =====================================================================
+:fullscan
+:full
+call :askTarget
+python -m cyberloka -t "%TARGET%" --mode full --authorized --report-dir "%REPORTDIR%" --json "%REPORTDIR%\report.json" --html "%REPORTDIR%\report.html"
 echo.
-echo [PASSIVE - 22 modul] (+ exif_leak, homoglyph_check)
-echo   headers, tls, cookies, cors, clickjacking, methods,
-echo   sensitive_files, robots, outdated_libs, mixed_content, jwt,
-echo   csp_evaluator, captcha_check, cache_control_audit,
-echo   cors_advanced, cookie_scope, sentry_dsn_leak,
-echo   server_timing_header, api_key_in_url, autocomplete_audit,
-echo   exif_leak, homoglyph_check
+echo Laporan tersimpan di: %REPORTDIR%
+pause
+goto menu
+
+:active
+call :askTarget
+python -m cyberloka -t "%TARGET%" --mode active --authorized --report-dir "%REPORTDIR%" --json "%REPORTDIR%\report.json" --html "%REPORTDIR%\report.html"
 echo.
-echo [ACTIVE - 60 modul] (+8 sosmed: stored_xss, url_preview_ssrf,
-echo   private_profile_bypass, media_persistence, dm_privacy,
-echo   social_csrf, oauth_takeover, unicode_bypass)
-echo   csrf, sqli, xss, redirect, lfi, cmdi, dirlist, ssrf,
-echo   ssrf_metadata, ssti, xxe, forms, session, voucher, payment,
-echo   otp_check, password_reset, file_upload, idor_generic,
-echo   host_header, cache_poison, hpp, rfd, dom_xss, oauth_check,
-echo   pii_leak, race_condition, proto_pollution, http_smuggling,
-echo   ws_check, auth_bypass, balance, env_leak, api_auth,
-echo   mass_assignment, log_injection, jwt_confusion, crlf_injection,
-echo   nosqli, deserialization, webhook_signature, csv_injection,
-echo   graphql_dos, xpath_injection, logout_csrf, zip_slip,
-echo   ldap_injection, captcha_bypass, xslt_injection,
-echo   rate_limit_bypass, response_splitting, timing_attack,
-echo   stored_xss, url_preview_ssrf, private_profile_bypass,
-echo   media_persistence, dm_privacy, social_csrf, oauth_takeover,
-echo   unicode_bypass
+echo Laporan tersimpan di: %REPORTDIR%
+pause
+goto menu
+
+:custom
+call :askTarget
+set "MODS="
+set /p MODS="Modul (comma, contoh: headers,tls,api_discovery,jwt): "
+if "%MODS%"=="" ( echo Modul wajib diisi. & pause & goto menu )
+python -m cyberloka -t "%TARGET%" --modules %MODS% --authorized --report-dir "%REPORTDIR%" --json "%REPORTDIR%\report.json" --html "%REPORTDIR%\report.html"
 echo.
-echo [SIMULATE - 2 modul, hanya jika --simulate-attack]
-echo   rate_limit, burst
+echo Laporan tersimpan di: %REPORTDIR%
+pause
+goto menu
+
+:recon
+call :askTarget
+python -m cyberloka -t "%TARGET%" --modules dns,whois,ports,subdomains,fingerprint,waf_detect --report-dir "%REPORTDIR%" --json "%REPORTDIR%\report.json" --html "%REPORTDIR%\report.html"
+echo.
+echo Laporan tersimpan di: %REPORTDIR%
+pause
+goto menu
+
+:takeover
+call :askTarget
+python -m cyberloka -t "%TARGET%" --modules subdomain_takeover --report-dir "%REPORTDIR%" --json "%REPORTDIR%\report.json" --html "%REPORTDIR%\report.html"
+echo.
+echo Laporan tersimpan di: %REPORTDIR%
+pause
+goto menu
+
+:simulate
+call :askTarget
+set "LOGIN="
+set /p LOGIN="Login URL (mis. https://example.com/login): "
+if "%LOGIN%"=="" ( echo Login URL wajib untuk simulate. & pause & goto menu )
+python -m cyberloka -t "%TARGET%" --simulate-attack --login-url "%LOGIN%" --authorized --report-dir "%REPORTDIR%" --json "%REPORTDIR%\report.json" --html "%REPORTDIR%\report.html"
+echo.
+echo Laporan tersimpan di: %REPORTDIR%
+pause
+goto menu
+
+REM =====================================================================
+REM  4. BUKA FOLDER LAPORAN
+REM =====================================================================
+:openrep
+start "" "%REPORTDIR%"
+goto menu
+
+REM =====================================================================
+REM  5. LIHAT LAPORAN PDF TERAKHIR
+REM =====================================================================
+:lastpdf
+set "LAST_PDF="
+for /f "delims=" %%f in ('dir /b /o-d "%REPORTDIR%\cyberloka-report-*.pdf" 2^>nul') do (
+    if not defined LAST_PDF set "LAST_PDF=%REPORTDIR%\%%f"
+)
+if not defined LAST_PDF (
+    echo Belum ada laporan PDF di %REPORTDIR%.
+    echo Jalankan scan dulu (menu 2 atau 3).
+    pause
+    goto menu
+)
+echo Membuka: %LAST_PDF%
+start "" "%LAST_PDF%"
+goto menu
+
+REM =====================================================================
+REM  6. TAMPILKAN --help
+REM =====================================================================
+:showhelp
+echo.
+python -m cyberloka --help
 echo.
 pause
-goto :menu
+goto menu
 
-
-REM ============================================================
-REM   8. UPDATE
-REM ============================================================
-:update
+REM =====================================================================
+REM  7. DAFTAR MODUL
+REM =====================================================================
+:listmod
 echo.
-echo ================================================================
-echo   Update Cyberloka
-echo ================================================================
-echo.
-echo Pilih sumber update:
-echo   g = git pull (kalau Anda clone dari github)
-echo   p = pip install --upgrade
-echo.
-set /p UPD="Pilih [g/p]: "
-
-if /I "%UPD%"=="g" (
-    git pull
-    pip install -e .[web,pdf]
-) else if /I "%UPD%"=="p" (
-    pip install --upgrade "cyberloka[web,pdf]"
-) else (
-    echo Pilihan tidak valid.
-)
+echo === Daftar modul Cyberloka ===
+python -c "from cyberloka.scanner import MODULE_MAP; [print(' -', k) for k in sorted(MODULE_MAP)]"
 echo.
 pause
-goto :menu
+goto menu
 
+REM =====================================================================
+REM  8. UPDATE CYBERLOKA  (git pull + pip install)
+REM =====================================================================
+:gitpull
+cls
+echo ======================================================================
+echo   UPDATE CYBERLOKA  (git pull + pip install)
+echo ======================================================================
+echo.
+:gitpull_silent
+where git >nul 2>nul
+if errorlevel 1 (
+    echo [ERROR] git tidak ditemukan di PATH.
+    echo         Install Git for Windows: https://git-scm.com/download/win
+    pause
+    goto menu
+)
+git rev-parse --is-inside-work-tree >nul 2>nul
+if errorlevel 1 (
+    echo [ERROR] Folder ini bukan git repository.
+    echo         Clone ulang: git clone https://github.com/xrniqbl/cyberloka.git
+    pause
+    goto menu
+)
 
-REM ============================================================
-REM   AFTER SCAN
-REM ============================================================
-:after_scan
-set EXITCODE=%ERRORLEVEL%
+echo Branch aktif sebelum update:
+git rev-parse --abbrev-ref HEAD
 echo.
-echo ================================================================
-if %EXITCODE% EQU 0 (
-    echo   [OK] Scan selesai. Tidak ada finding critical/high.
-) else if %EXITCODE% EQU 1 (
-    echo   [!] Scan selesai. ADA finding CRITICAL atau HIGH.
-) else (
-    echo   [ERROR] Scan gagal exit code %EXITCODE%.
+
+REM Stash perubahan lokal otomatis biar pull mulus
+git diff --quiet >nul 2>nul
+set "STASHED=0"
+if errorlevel 1 (
+    echo [INFO] Ada perubahan lokal yang belum di-commit.
+    echo        Otomatis di-stash sementara: 'cyberloka-auto-stash'.
+    git stash push -u -m "cyberloka-auto-stash" >nul
+    set "STASHED=1"
 )
-echo   Laporan: report.json + report.html
-echo ================================================================
+
+echo === git fetch ===
+git fetch --all --prune
 echo.
-set /p OPEN="Buka report.html di browser sekarang? [Y/n]: "
-if /I "%OPEN%" NEQ "n" (
-    if exist report.html start "" "report.html"
+echo === git pull ===
+git pull --ff-only
+if errorlevel 1 (
+    echo.
+    echo [WARN] git pull gagal ^(kemungkinan konflik / non fast-forward^).
+    echo        Lakukan resolve manual lalu jalankan ulang menu 8.
+    if "%STASHED%"=="1" (
+        echo.
+        echo [INFO] Mengembalikan perubahan lokal dari stash...
+        git stash pop >nul 2>nul
+    )
+    pause
+    goto menu
 )
+
+if "%STASHED%"=="1" (
+    echo.
+    echo [INFO] Mengembalikan perubahan lokal dari stash...
+    git stash pop >nul 2>nul
+    if errorlevel 1 (
+        echo [WARN] Konflik saat stash pop. Resolve manual: git status
+        pause
+        goto menu
+    )
+)
+
+REM Update dependencies juga.
+REM Catatan: kita sudah `cd /d "%~dp0"` di awal script, jadi pakai path
+REM relatif (`.` dan `requirements.txt`) saja. Hindari `"%~dp0"` karena
+REM trailing backslash + tanda kutip menyebabkan Windows menafsirkan
+REM `\"` sebagai escape sequence -> path jadi rusak.
+echo.
+echo === Mengecek apakah Python tersedia ===
+where python >nul 2>nul
+if errorlevel 1 (
+    echo [WARN] Python tidak ditemukan di PATH. Skip pip install.
+    goto pipdone
+)
+
+if exist "requirements.txt" (
+    echo === pip install -r requirements.txt ===
+    python -m pip install --upgrade -r requirements.txt
+    if errorlevel 1 (
+        echo [WARN] pip install requirements.txt gagal. Lanjut.
+    )
+)
+
+if exist "pyproject.toml" (
+    echo === pip install -e . ^(local install^) ===
+    python -m pip install --upgrade -e .
+    if errorlevel 1 (
+        echo [WARN] pip install -e . gagal. Coba manual:
+        echo        cd /d "%~dp0"
+        echo        python -m pip install -e .
+    )
+)
+:pipdone
+
+echo.
+echo ======================================================================
+echo   UPDATE SELESAI
+echo ======================================================================
+for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD') do echo  Branch : %%b
+for /f "delims=" %%c in ('git log -1 --oneline') do echo  Commit : %%c
+echo.
+echo  Verifikasi cepat:
+python -c "from cyberloka.scanner import MODULE_MAP; print('   - Total modul scanner :', len(MODULE_MAP))" 2>nul
+python -c "import reportlab; print('   - reportlab           :', reportlab.Version)" 2>nul
+python -c "from cyberloka.reporting import pdf_report, extras, scenarios; print('   - PDF reporter        : OK')" 2>nul
 echo.
 pause
-if not "%~1"=="" goto :end
-goto :menu
+goto menu
 
-
+REM =====================================================================
 :end
+echo Sampai jumpa.
 endlocal
 exit /b 0
