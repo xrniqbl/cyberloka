@@ -822,6 +822,357 @@ EXPLAIN: dict[str, dict[str, str]] = {
         ),
         "category": "infra",
     },
+    # ============ TIER 1 — KRITIKAL ============
+    "log_injection": {
+        "friendly_name": "Log4Shell & Log Injection",
+        "what_it_means": (
+            "Kami kirim payload JNDI (`${jndi:ldap://...}`) lewat berbagai "
+            "header (User-Agent, X-Forwarded-For, Referer) dan parameter URL."
+        ),
+        "business_impact": (
+            "Log4Shell adalah salah satu CVE paling berbahaya — kalau server "
+            "Java pakai log4j vulnerable, attacker dapat RCE root cuma dengan "
+            "satu request HTTP. Banyak server belum patch."
+        ),
+        "category": "infra",
+    },
+    "jwt_confusion": {
+        "friendly_name": "JWT Algorithm Confusion & KID Injection",
+        "what_it_means": (
+            "Kami coba forge token dengan algoritma berbeda (alg=none, RS256→HS256), "
+            "dan periksa apakah field `kid` rentan path traversal/SQL injection."
+        ),
+        "business_impact": (
+            "JWT yang lemah konfigurasinya = forge token admin = ambil alih "
+            "semua akun pelanggan + admin. Sangat berbahaya untuk e-commerce."
+        ),
+        "category": "login",
+    },
+    "crlf_injection": {
+        "friendly_name": "CRLF Injection / HTTP Response Splitting",
+        "what_it_means": (
+            "Kami sisipkan karakter newline (CR/LF) di parameter URL untuk "
+            "melihat apakah dipantulkan ke header response."
+        ),
+        "business_impact": (
+            "Berhasil = attacker dapat menambah header Set-Cookie sendiri, "
+            "meracuni cache, atau XSS via header. Cookie pelanggan bisa dicuri."
+        ),
+        "category": "data",
+    },
+    "nosqli": {
+        "friendly_name": "NoSQL Injection (MongoDB / CouchDB)",
+        "what_it_means": (
+            "Kami kirim operator MongoDB seperti `{\"$ne\":null}`, `{\"$regex\":\".*\"}` "
+            "ke endpoint login dan API JSON."
+        ),
+        "business_impact": (
+            "Kalau backend Node.js + MongoDB tidak filter input, payload `$ne` "
+            "bisa bypass login total. Sangat umum di app modern."
+        ),
+        "category": "data",
+    },
+    "deserialization": {
+        "friendly_name": "Insecure Deserialization (Java/PHP/Python/.NET)",
+        "what_it_means": (
+            "Kami pindai response untuk pola data terserialisasi: Java (rO0AB), "
+            "PHP (`O:`), Python pickle, .NET ViewState."
+        ),
+        "business_impact": (
+            "Insecure deserialization = RCE klasik. Salah satu CVE paling sering "
+            "jadi PoC publik. Attacker dapat eksekusi kode arbitrary."
+        ),
+        "category": "infra",
+    },
+    "cloud_buckets": {
+        "friendly_name": "Enumerasi S3 / GCS / Azure Bucket Publik",
+        "what_it_means": (
+            "Kami coba nama-nama bucket umum berdasarkan domain (cth. "
+            "`<company>-backup`, `<company>-prod`) di S3, Google Cloud Storage, "
+            "dan Azure Blob."
+        ),
+        "business_impact": (
+            "Bucket publik dengan listing terbuka = sumber kebocoran data terbesar. "
+            "Banyak insiden besar (Verizon, Pentagon, dll) berasal dari S3 yang salah konfigurasi."
+        ),
+        "category": "data",
+    },
+    # ============ TIER 2 — HIGH-PRIORITY ============
+    "cms_scan": {
+        "friendly_name": "Scan CMS (WordPress / Drupal / Joomla)",
+        "what_it_means": (
+            "Kami deteksi versi CMS dan plugin yang dipakai (mis. WP Plugin "
+            "WooCommerce, Elementor, Wordfence) dengan membaca readme.txt."
+        ),
+        "business_impact": (
+            "Plugin WP yang lama sering punya RCE/SQLi tanpa auth. Cek WPScan DB "
+            "untuk versi yang vulnerable."
+        ),
+        "category": "kode",
+    },
+    "k8s_exposure": {
+        "friendly_name": "Kubernetes API / Dashboard Terbuka",
+        "what_it_means": (
+            "Kami cek port 6443 (API server), 10250 (kubelet), 8443 (dashboard) "
+            "untuk akses anonymous."
+        ),
+        "business_impact": (
+            "Cluster Kubernetes terbuka = attacker bisa exec ke pod, baca semua "
+            "secret, ambil alih cluster + bisa lateral move ke seluruh service."
+        ),
+        "category": "infra",
+    },
+    "webhook_signature": {
+        "friendly_name": "Webhook Tanpa Verifikasi Signature",
+        "what_it_means": (
+            "Kami kirim payload payment-callback palsu (mis. Midtrans-style "
+            "settlement notification) ke endpoint webhook umum."
+        ),
+        "business_impact": (
+            "Webhook payment yang tidak verify signature = attacker bisa forge "
+            "'transaksi sukses' palsu. Saldo masuk tanpa pembayaran asli. Klasik "
+            "fraud e-commerce."
+        ),
+        "category": "uang",
+    },
+    "cors_advanced": {
+        "friendly_name": "CORS Bypass Lanjutan (suffix, null origin)",
+        "what_it_means": (
+            "Kami coba berbagai trik origin: arbitrary domain, suffix bypass "
+            "(`https://target.com.evil.com`), null origin."
+        ),
+        "business_impact": (
+            "CORS misconfig + Allow-Credentials = cookie pelanggan dicuri lewat "
+            "JavaScript di domain attacker."
+        ),
+        "category": "data",
+    },
+    "cache_control_audit": {
+        "friendly_name": "Audit Cache-Control pada Halaman Sensitif",
+        "what_it_means": (
+            "Kami periksa header Cache-Control di halaman /account, /order, "
+            "/cart, /admin — apakah memuat `no-store` atau `private`."
+        ),
+        "business_impact": (
+            "Halaman sensitif yang ter-cache di Cloudflare/CDN = data pelanggan "
+            "lain bisa dilihat. Pernah jadi insiden besar di banyak e-commerce."
+        ),
+        "category": "data",
+    },
+    "csv_injection": {
+        "friendly_name": "CSV / Formula Injection",
+        "what_it_means": (
+            "Kami cek file CSV yang di-export — apakah ada cell yang dimulai "
+            "dengan `=`, `+`, `-`, `@`, atau TAB."
+        ),
+        "business_impact": (
+            "Saat dibuka di Excel, cell yang mulai `=` dieksekusi sebagai formula. "
+            "Attacker bisa kirim data dengan `=cmd|...` untuk RCE di komputer staff."
+        ),
+        "category": "data",
+    },
+    "graphql_dos": {
+        "friendly_name": "GraphQL DoS (depth & alias bombing)",
+        "what_it_means": (
+            "Kami kirim query nested 9 level dan 50 alias dalam satu request "
+            "untuk lihat apakah server membatasi cost."
+        ),
+        "business_impact": (
+            "Tanpa cost-analysis, satu request bisa membuat database down. "
+            "Risiko outage produksi."
+        ),
+        "category": "infra",
+    },
+    "dependency_confusion": {
+        "friendly_name": "Dependency Confusion via package.json",
+        "what_it_means": (
+            "Kami unduh package.json/composer.json dari webroot dan cek apakah "
+            "ada paket scoped/internal yang bisa di-claim publik."
+        ),
+        "business_impact": (
+            "Attacker publish paket dengan nama sama versi lebih tinggi → "
+            "masuk ke build pipeline = supply chain attack. Klasik CVE 2021+."
+        ),
+        "category": "kode",
+    },
+    # ============ TIER 3 — HARDENING ============
+    "cookie_scope": {
+        "friendly_name": "Audit Scope Cookie",
+        "what_it_means": (
+            "Kami cek atribut Domain dan Path cookie — apakah terlalu lebar."
+        ),
+        "business_impact": (
+            "Cookie dengan Domain=.example.com dikirim ke SEMUA subdomain. "
+            "Subdomain takeover atau XSS di dev.example.com = curi cookie utama."
+        ),
+        "category": "login",
+    },
+    "sentry_dsn_leak": {
+        "friendly_name": "Token Analytics di Bundle JS",
+        "what_it_means": (
+            "Kami pindai bundle JS untuk Sentry DSN, Mixpanel token, Datadog "
+            "client token, Segment write key, Firebase config."
+        ),
+        "business_impact": (
+            "Token client biasanya tidak fatal, tapi kalau yang bocor SECRET key "
+            "(AWS, dll) — bisa langsung dipakai. Sentry DSN bisa di-spam attacker."
+        ),
+        "category": "info",
+    },
+    "server_timing_header": {
+        "friendly_name": "Header Server-Timing Membocorkan Internal",
+        "what_it_means": (
+            "Header `Server-Timing` mengekspos waktu DB query, cache hit/miss."
+        ),
+        "business_impact": (
+            "Membantu attacker timing attack dan memetakan arsitektur internal."
+        ),
+        "category": "info",
+    },
+    "xpath_injection": {
+        "friendly_name": "XPath Injection",
+        "what_it_means": (
+            "Kami coba payload `' or '1'='1` di parameter yang mungkin ke XPath query."
+        ),
+        "business_impact": (
+            "Bypass otentikasi XML-based, atau ekstrak data dari XML database."
+        ),
+        "category": "data",
+    },
+    "api_key_in_url": {
+        "friendly_name": "API Key Lewat URL Query",
+        "what_it_means": (
+            "Kami cek URL yang ditemukan crawler — apakah ada parameter "
+            "`api_key`, `token`, `password`, `jwt` di query string."
+        ),
+        "business_impact": (
+            "Credential di URL bocor lewat: header Referer ke domain lain, log "
+            "proxy, browser history, dan share URL."
+        ),
+        "category": "data",
+    },
+    "logout_csrf": {
+        "friendly_name": "Logout Bisa Dipicu via GET",
+        "what_it_means": (
+            "Kami cek apakah endpoint logout bisa diakses lewat GET tanpa "
+            "CSRF token — bisa dipicu via `<img src=...>` di domain lain."
+        ),
+        "business_impact": (
+            "Bukan kerentanan kritikal, tapi mengganggu UX dan setup phishing."
+        ),
+        "category": "login",
+    },
+    "zip_slip": {
+        "friendly_name": "Zip Slip (Path Traversal di Extract Zip)",
+        "what_it_means": (
+            "Kami upload zip dengan entry `../../../../tmp/file.txt` ke endpoint "
+            "yang menerima upload zip."
+        ),
+        "business_impact": (
+            "Berhasil = attacker bisa overwrite file critical (mis. authorized_keys, "
+            "cron) → RCE root atau persistence."
+        ),
+        "category": "infra",
+    },
+    "ldap_injection": {
+        "friendly_name": "LDAP Filter Injection",
+        "what_it_means": (
+            "Kami kirim karakter LDAP filter (`*)(`, `*`) pada form login enterprise."
+        ),
+        "business_impact": (
+            "Berhasil = bypass otentikasi enterprise (Active Directory)."
+        ),
+        "category": "login",
+    },
+    "autocomplete_audit": {
+        "friendly_name": "Form Sensitif tanpa autocomplete=off",
+        "what_it_means": (
+            "Kami cek input password/CC/CVV — apakah ada `autocomplete=\"off\"`."
+        ),
+        "business_impact": (
+            "Browser simpan password/card di komputer publik = bocor di Wi-Fi cafe."
+        ),
+        "category": "login",
+    },
+    "captcha_bypass": {
+        "friendly_name": "Captcha Bypass via Token Empty/Replay",
+        "what_it_means": (
+            "Kami coba submit form dengan captcha token kosong, '0', 'true', "
+            "atau token duplikat."
+        ),
+        "business_impact": (
+            "Server yang tidak verify token captcha ke API Google/hCaptcha = "
+            "captcha jadi tidak guna. Bot bebas brute-force."
+        ),
+        "category": "login",
+    },
+    "xslt_injection": {
+        "friendly_name": "XSLT Injection (sangat jarang tapi RCE)",
+        "what_it_means": (
+            "Kami kirim XSL stylesheet ke endpoint XML transformation."
+        ),
+        "business_impact": (
+            "XSLT processor yang menerima stylesheet dari klien = RCE langsung."
+        ),
+        "category": "infra",
+    },
+    "rate_limit_bypass": {
+        "friendly_name": "Rate-Limit Bypass via X-Forwarded-For Rotation",
+        "what_it_means": (
+            "Setelah deteksi rate-limit aktif, kami coba rotasi header "
+            "X-Forwarded-For untuk lihat apakah server pakai header sebagai "
+            "source IP."
+        ),
+        "business_impact": (
+            "Bypass berhasil = brute-force tanpa batas. Login + OTP rentan."
+        ),
+        "category": "login",
+    },
+    "email_security_extended": {
+        "friendly_name": "BIMI / MTA-STS / TLS-RPT",
+        "what_it_means": (
+            "Lapisan tambahan keamanan email modern: MTA-STS memaksa TLS, "
+            "TLS-RPT untuk reporting, BIMI untuk logo brand."
+        ),
+        "business_impact": (
+            "Tanpa MTA-STS, MITM downgrade SMTP mungkin. BIMI penting untuk "
+            "brand visibility di Gmail."
+        ),
+        "category": "email",
+    },
+    "response_splitting": {
+        "friendly_name": "HTTP Response Splitting via Redirect",
+        "what_it_means": (
+            "Kami sisipkan CRLF di parameter `redirect`/`next` untuk lihat "
+            "apakah response Location membelah."
+        ),
+        "business_impact": (
+            "Sama dengan CRLF injection — Set-Cookie attacker, cache poisoning."
+        ),
+        "category": "data",
+    },
+    "favicon_hash": {
+        "friendly_name": "Hash Favicon untuk Identifikasi Vendor",
+        "what_it_means": (
+            "Kami hitung hash favicon — bisa dipakai cari instance lain "
+            "dari framework yang sama via Shodan/FOFA."
+        ),
+        "business_impact": (
+            "Kalau favicon = default framework, membocorkan teknologi internal."
+        ),
+        "category": "info",
+    },
+    "timing_attack": {
+        "friendly_name": "Timing Attack pada Login",
+        "what_it_means": (
+            "Kami ukur waktu respons login untuk user valid vs invalid — "
+            "jika berbeda >150ms, attacker bisa enumerasi akun."
+        ),
+        "business_impact": (
+            "Account enumeration = persiapan untuk brute force terarah."
+        ),
+        "category": "login",
+    },
 }
 
 # Action-plan time bucket per severity (untuk action plan di laporan).

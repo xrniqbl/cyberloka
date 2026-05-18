@@ -1,7 +1,7 @@
 @echo off
 REM ============================================================
 REM   cek.bat - Cyberloka Interactive Menu (Windows)
-REM   Versi: 0.7.0
+REM   Versi: 0.8.0
 REM
 REM   Cara update:
 REM     1. Update repo terbaru :  git pull
@@ -28,7 +28,7 @@ if not "%~1"=="" (
 :menu
 cls
 echo ================================================================
-echo   CYBERLOKA v0.7.0 - Web Vulnerability Scanner
+echo   CYBERLOKA v0.8.0 - Web Vulnerability Scanner
 echo ================================================================
 echo.
 echo  APA YANG MAU DICOBA?  (pilih nomor)
@@ -129,7 +129,7 @@ if "%TARGET%"=="" (
 )
 echo.
 echo ================================================================
-echo   Quick Scan (passive) - 27 modul
+echo   Quick Scan (passive) - 41 modul
 echo ================================================================
 cyberloka -t "%TARGET%" --mode passive --authorized --yes ^
     --json report.json --html report.html ^
@@ -160,7 +160,7 @@ if /I "%AUTHED%" NEQ "y" (
 :run_full_direct
 echo.
 echo ================================================================
-echo   Full Scan (63 modul recon + passive + active)
+echo   Full Scan (93 modul recon + passive + active)
 echo ================================================================
 cyberloka -t "%TARGET%" --mode full --authorized --yes ^
     --json report.json --html report.html ^
@@ -214,81 +214,38 @@ REM ============================================================
 :list_modules
 cls
 echo ================================================================
-echo   Daftar Modul Cyberloka v0.7.0 (65 modul, 63 jalan di full)
+echo   Daftar Modul Cyberloka v0.8.0 (95 modul, 93 jalan di full)
 echo ================================================================
 echo.
-echo [RECON - 15 modul]
-echo   dns                  - Catatan domain (A, MX, NS, TXT, CNAME, SOA)
-echo   whois                - WHOIS lookup
-echo   ports                - Port scan + intrusion test (FTP, Redis, Mongo, dll)
-echo   fingerprint          - Deteksi teknologi (server, framework, CMS)
-echo   subdomains           - Enumerasi subdomain
-echo   subdomain_takeover   - Cek subdomain dangling (GitHub, S3, dll)
-echo   api_discovery        - Cari Swagger, OpenAPI, GraphQL
-echo   email_security       - SPF, DKIM, DMARC, CAA, DNSSEC
-echo   nextjs_specific      - Build ID, source map, dev endpoint Next.js
-echo   cf_origin            - Cari IP origin di balik Cloudflare
-echo   wayback              - Wayback Machine + crt.sh
-echo   framework_default    - Halaman default (WP, Spring, Tomcat, dll)
-echo   graphql_deep         - Introspection + field suggestion
-echo   source_leak          - .git, .env, backup, kunci SSH/AWS
-echo   crawler              - Pemetaan halaman + form
+echo [RECON - 21 modul]
+echo   dns, whois, ports, fingerprint, subdomains, subdomain_takeover,
+echo   api_discovery, email_security, email_security_extended,
+echo   nextjs_specific, cf_origin, wayback, framework_default,
+echo   graphql_deep, source_leak, crawler, cms_scan, cloud_buckets,
+echo   k8s_exposure, dependency_confusion, favicon_hash
 echo.
-echo [PASSIVE - 13 modul]
-echo   headers              - Header keamanan HTTP
-echo   tls                  - Sertifikat HTTPS
-echo   cookies              - Atribut cookie sesi
-echo   cors                 - CORS misconfig
-echo   clickjacking         - X-Frame-Options
-echo   methods              - Metode HTTP tidak aman (TRACE, PUT, DELETE)
-echo   sensitive_files      - File sensitif terbuka
-echo   robots               - robots.txt + sitemap
-echo   outdated_libs        - Library JS lama (jQuery, lodash, dll)
-echo   mixed_content        - Resource HTTP di halaman HTTPS
-echo   jwt                  - Token JWT (alg=none, exp, dll)
-echo   csp_evaluator        - Kekuatan Content-Security-Policy
-echo   captcha_check        - Captcha pada form sensitif
+echo [PASSIVE - 20 modul]
+echo   headers, tls, cookies, cors, clickjacking, methods,
+echo   sensitive_files, robots, outdated_libs, mixed_content, jwt,
+echo   csp_evaluator, captcha_check, cache_control_audit,
+echo   cors_advanced, cookie_scope, sentry_dsn_leak,
+echo   server_timing_header, api_key_in_url, autocomplete_audit
 echo.
-echo [ACTIVE - 35 modul]
-echo   csrf                 - Token anti-CSRF
-echo   sqli                 - SQL Injection
-echo   xss                  - Cross-Site Scripting
-echo   redirect             - Open Redirect
-echo   lfi                  - Local File Inclusion
-echo   cmdi                 - Command Injection
-echo   dirlist              - Directory Listing
-echo   ssrf                 - Server-Side Request Forgery
-echo   ssrf_metadata        - SSRF ke cloud metadata
-echo   ssti                 - Server-Side Template Injection
-echo   xxe                  - XML External Entity
-echo   forms                - Fuzz form discovered
-echo   session              - Sesi login + atribut cookie
-echo   voucher              - Kupon umum + stack abuse
-echo   payment              - Tampering harga + IDOR order + leak gateway
-echo   otp_check            - Rate-limit + panjang OTP
-echo   password_reset       - User enum + token leak
-echo   file_upload          - Bypass ekstensi (.php.jpg, .phtml, dll)
-echo   idor_generic         - IDOR via mutasi ID
-echo   host_header          - Host header injection
-echo   cache_poison         - Web cache poisoning
-echo   hpp                  - HTTP Parameter Pollution
-echo   rfd                  - Reflected File Download
-echo   dom_xss              - DOM-based XSS (static analysis)
-echo   oauth_check          - OAuth state, PKCE, redirect_uri
-echo   pii_leak             - NIK, NPWP, HP, kartu kredit
-echo   race_condition       - Voucher/withdraw double
-echo   proto_pollution      - __proto__, constructor[prototype]
-echo   http_smuggling       - CL.TE / TE.CL
-echo   ws_check             - WebSocket origin hijack
-echo   auth_bypass          - Default credentials + admin path probe
-echo   balance              - Saldo/wallet manipulation
-echo   env_leak             - AWS/Stripe/JWT secret + debug endpoint
-echo   api_auth             - API tanpa auth + mass export + rate limit
-echo   mass_assignment      - is_admin=true, role=admin di register
+echo [ACTIVE - 52 modul]
+echo   csrf, sqli, xss, redirect, lfi, cmdi, dirlist, ssrf,
+echo   ssrf_metadata, ssti, xxe, forms, session, voucher, payment,
+echo   otp_check, password_reset, file_upload, idor_generic,
+echo   host_header, cache_poison, hpp, rfd, dom_xss, oauth_check,
+echo   pii_leak, race_condition, proto_pollution, http_smuggling,
+echo   ws_check, auth_bypass, balance, env_leak, api_auth,
+echo   mass_assignment, log_injection, jwt_confusion, crlf_injection,
+echo   nosqli, deserialization, webhook_signature, csv_injection,
+echo   graphql_dos, xpath_injection, logout_csrf, zip_slip,
+echo   ldap_injection, captcha_bypass, xslt_injection,
+echo   rate_limit_bypass, response_splitting, timing_attack
 echo.
 echo [SIMULATE - 2 modul, hanya jika --simulate-attack]
-echo   rate_limit           - Tes rate-limit login
-echo   burst                - Burst request
+echo   rate_limit, burst
 echo.
 pause
 goto :menu

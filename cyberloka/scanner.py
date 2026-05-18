@@ -12,7 +12,7 @@ from cyberloka.core.logger import get_logger
 
 # Module name -> dotted import path
 MODULE_MAP: dict[str, str] = {
-    # recon
+    # ===== RECON =====
     "dns": "cyberloka.recon.dns_recon",
     "whois": "cyberloka.recon.whois_recon",
     "ports": "cyberloka.recon.ports",
@@ -22,13 +22,19 @@ MODULE_MAP: dict[str, str] = {
     "api_discovery": "cyberloka.recon.api_discovery",
     "crawler": "cyberloka.recon.crawler",
     "email_security": "cyberloka.recon.email_security",
+    "email_security_extended": "cyberloka.recon.email_security_extended",
     "nextjs_specific": "cyberloka.recon.nextjs_specific",
     "cf_origin": "cyberloka.recon.cf_origin",
     "wayback": "cyberloka.recon.wayback",
     "framework_default": "cyberloka.recon.framework_default",
     "graphql_deep": "cyberloka.recon.graphql_deep",
     "source_leak": "cyberloka.recon.source_leak",
-    # passive
+    "cms_scan": "cyberloka.recon.cms_scan",
+    "cloud_buckets": "cyberloka.recon.cloud_buckets",
+    "k8s_exposure": "cyberloka.recon.k8s_exposure",
+    "dependency_confusion": "cyberloka.recon.dependency_confusion",
+    "favicon_hash": "cyberloka.recon.favicon_hash",
+    # ===== PASSIVE =====
     "headers": "cyberloka.passive.headers",
     "tls": "cyberloka.passive.tls_check",
     "cookies": "cyberloka.passive.cookies",
@@ -43,7 +49,14 @@ MODULE_MAP: dict[str, str] = {
     "mixed_content": "cyberloka.passive.mixed_content",
     "csp_evaluator": "cyberloka.passive.csp_evaluator",
     "captcha_check": "cyberloka.passive.captcha_check",
-    # active
+    "cache_control_audit": "cyberloka.passive.cache_control_audit",
+    "cors_advanced": "cyberloka.passive.cors_advanced",
+    "cookie_scope": "cyberloka.passive.cookie_scope",
+    "sentry_dsn_leak": "cyberloka.passive.sentry_dsn_leak",
+    "server_timing_header": "cyberloka.passive.server_timing_header",
+    "api_key_in_url": "cyberloka.passive.api_key_in_url",
+    "autocomplete_audit": "cyberloka.passive.autocomplete_audit",
+    # ===== ACTIVE =====
     "sqli": "cyberloka.active.sqli",
     "xss": "cyberloka.active.xss",
     "redirect": "cyberloka.active.redirect",
@@ -78,12 +91,28 @@ MODULE_MAP: dict[str, str] = {
     "env_leak": "cyberloka.active.env_leak",
     "api_auth": "cyberloka.active.api_auth",
     "mass_assignment": "cyberloka.active.mass_assignment",
-    # simulate
+    "log_injection": "cyberloka.active.log_injection",
+    "jwt_confusion": "cyberloka.active.jwt_confusion",
+    "crlf_injection": "cyberloka.active.crlf_injection",
+    "nosqli": "cyberloka.active.nosqli",
+    "deserialization": "cyberloka.active.deserialization",
+    "webhook_signature": "cyberloka.active.webhook_signature",
+    "csv_injection": "cyberloka.active.csv_injection",
+    "graphql_dos": "cyberloka.active.graphql_dos",
+    "xpath_injection": "cyberloka.active.xpath_injection",
+    "logout_csrf": "cyberloka.active.logout_csrf",
+    "zip_slip": "cyberloka.active.zip_slip",
+    "ldap_injection": "cyberloka.active.ldap_injection",
+    "captcha_bypass": "cyberloka.active.captcha_bypass",
+    "xslt_injection": "cyberloka.active.xslt_injection",
+    "rate_limit_bypass": "cyberloka.active.rate_limit_bypass",
+    "response_splitting": "cyberloka.active.response_splitting",
+    "timing_attack": "cyberloka.active.timing_attack",
+    # ===== SIMULATE =====
     "rate_limit": "cyberloka.simulate.rate_limit",
     "burst": "cyberloka.simulate.burst",
 }
 
-# Modules that must run before others (e.g. crawler populates shared state).
 PREREQ_MODULES: tuple[str, ...] = ("crawler",)
 
 
@@ -94,7 +123,7 @@ def _run_module(name: str, target: Target, config: ScanConfig) -> list[Finding]:
         return []
     try:
         mod = importlib.import_module(MODULE_MAP[name])
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         log.error("Gagal import modul %s: %s", name, e)
         return []
     try:
@@ -104,27 +133,18 @@ def _run_module(name: str, target: Target, config: ScanConfig) -> list[Finding]:
         dt = time.monotonic() - t0
         log.info("  -> %s: %d finding (%.2fs)", name, len(findings), dt)
         return findings
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         log.exception("Error in module %s: %s", name, e)
         return []
 
 
-def run_scan(
-    target: Target,
-    config: ScanConfig,
-    progress_cb=None,
-) -> list[Finding]:
-    """Run all selected modules and return aggregated findings.
-
-    progress_cb(name, done, total) is invoked after each module completes.
-    """
+def run_scan(target: Target, config: ScanConfig, progress_cb=None) -> list[Finding]:
     log = get_logger()
-    # Authenticated scan: try login once before crawling.
     if config.login_username or config.auth_bearer_token:
         try:
             ok = perform_login(config)
             log.info("[auth] result=%s", ok)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             log.warning("[auth] login error: %s", e)
 
     modules = list(config.resolve_modules())
@@ -137,7 +157,6 @@ def run_scan(
     total = len(modules)
     done = 0
 
-    # Run prereqs sequentially so their state is available downstream.
     prereqs = [m for m in PREREQ_MODULES if m in modules]
     rest = [m for m in modules if m not in prereqs]
 
