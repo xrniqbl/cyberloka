@@ -6,6 +6,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from cyberloka.core import Finding, Target
+from cyberloka.core.auth import perform_login
 from cyberloka.core.config import ScanConfig
 from cyberloka.core.logger import get_logger
 
@@ -20,6 +21,13 @@ MODULE_MAP: dict[str, str] = {
     "fingerprint": "cyberloka.recon.fingerprint",
     "api_discovery": "cyberloka.recon.api_discovery",
     "crawler": "cyberloka.recon.crawler",
+    "email_security": "cyberloka.recon.email_security",
+    "nextjs_specific": "cyberloka.recon.nextjs_specific",
+    "cf_origin": "cyberloka.recon.cf_origin",
+    "wayback": "cyberloka.recon.wayback",
+    "framework_default": "cyberloka.recon.framework_default",
+    "graphql_deep": "cyberloka.recon.graphql_deep",
+    "source_leak": "cyberloka.recon.source_leak",
     # passive
     "headers": "cyberloka.passive.headers",
     "tls": "cyberloka.passive.tls_check",
@@ -33,6 +41,7 @@ MODULE_MAP: dict[str, str] = {
     "jwt": "cyberloka.passive.jwt_check",
     "outdated_libs": "cyberloka.passive.outdated_libs",
     "mixed_content": "cyberloka.passive.mixed_content",
+    "csp_evaluator": "cyberloka.passive.csp_evaluator",
     # active
     "sqli": "cyberloka.active.sqli",
     "xss": "cyberloka.active.xss",
@@ -41,11 +50,25 @@ MODULE_MAP: dict[str, str] = {
     "cmdi": "cyberloka.active.cmdi",
     "dirlist": "cyberloka.active.dirlist",
     "ssrf": "cyberloka.active.ssrf",
+    "ssrf_metadata": "cyberloka.active.ssrf_metadata",
     "ssti": "cyberloka.active.ssti",
+    "xxe": "cyberloka.active.xxe",
     "forms": "cyberloka.active.forms",
     "session": "cyberloka.active.session",
     "voucher": "cyberloka.active.voucher",
     "payment": "cyberloka.active.payment",
+    "otp_check": "cyberloka.active.otp_check",
+    "password_reset": "cyberloka.active.password_reset",
+    "file_upload": "cyberloka.active.file_upload",
+    "idor_generic": "cyberloka.active.idor_generic",
+    "host_header": "cyberloka.active.host_header",
+    "cache_poison": "cyberloka.active.cache_poison",
+    "hpp": "cyberloka.active.hpp",
+    "rfd": "cyberloka.active.rfd",
+    "dom_xss": "cyberloka.active.dom_xss",
+    "oauth_check": "cyberloka.active.oauth_check",
+    "pii_leak": "cyberloka.active.pii_leak",
+    "race_condition": "cyberloka.active.race_condition",
     # simulate
     "rate_limit": "cyberloka.simulate.rate_limit",
     "burst": "cyberloka.simulate.burst",
@@ -86,6 +109,15 @@ def run_scan(
 
     progress_cb(name, done, total) is invoked after each module completes.
     """
+    log = get_logger()
+    # Authenticated scan: try login once before crawling.
+    if config.login_username or config.auth_bearer_token:
+        try:
+            ok = perform_login(config)
+            log.info("[auth] result=%s", ok)
+        except Exception as e:  # noqa: BLE001
+            log.warning("[auth] login error: %s", e)
+
     modules = list(config.resolve_modules())
     if config.simulate_attack:
         modules.append("burst")

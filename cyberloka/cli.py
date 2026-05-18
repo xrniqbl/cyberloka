@@ -64,10 +64,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--authorized", action="store_true", help="Konfirmasi izin men-scan target")
     p.add_argument("--simulate-attack", action="store_true", help="Aktifkan modul simulate (burst, rate-limit)")
-    p.add_argument("--login-url", help="URL endpoint login (untuk rate-limit test)")
+    p.add_argument("--login-url", help="URL endpoint login (untuk auth + rate-limit test)")
     p.add_argument("--login-user-field", default="username")
     p.add_argument("--login-pass-field", default="password")
     p.add_argument("--login-test-user", default="admin")
+    p.add_argument("--login-username", help="Username asli untuk authenticated scan")
+    p.add_argument("--login-password", help="Password untuk authenticated scan")
+    p.add_argument("--auth-bearer", help="Bearer token (Authorization: Bearer ...)")
     p.add_argument("--threads", type=int, default=10)
     p.add_argument("--timeout", type=float, default=10.0)
     p.add_argument("--rate", type=float, default=10.0, help="Maks request/detik per client")
@@ -115,6 +118,9 @@ def main(argv: list[str] | None = None) -> int:
         login_user_field=args.login_user_field,
         login_pass_field=args.login_pass_field,
         login_test_user=args.login_test_user,
+        login_username=args.login_username,
+        login_password=args.login_password,
+        auth_bearer_token=args.auth_bearer,
         quiet=args.quiet,
         json_out=args.json_out,
         html_out=args.html_out,
