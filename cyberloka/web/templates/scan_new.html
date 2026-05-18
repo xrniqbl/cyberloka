@@ -25,13 +25,13 @@
 
     <div class="grid grid-cols-3 gap-3">
       {% for m, label, desc in [
-        ('passive','Passive','Hanya observasi: header, TLS, cookie, fingerprint, JWT, lib outdated.'),
-        ('active','Active','Crawl + uji parameter: SQLi, XSS, SSRF, SSTI, CSRF, dll.'),
-        ('full','Full','Recon penuh + pasif + aktif.'),
+        ('passive','Passive','Recon penuh + observasi pasif: DNS/WHOIS/port/tech, header, TLS, cookie, JWT, lib outdated. Aman.'),
+        ('active','Active','Passive + uji aktif: crawler, SQLi, XSS, SSRF, SSTI, CSRF, login session, voucher, payment.'),
+        ('full','Full','Semua modul: recon + passive + active + simulasi (jika diaktifkan). Wajib authorized.'),
       ] %}
         <label class="cursor-pointer rounded-xl border border-ink-600 hover:border-brand-500 p-4 has-[:checked]:border-brand-500 has-[:checked]:bg-brand-600/10">
           <input type="radio" name="mode" value="{{ m }}" class="hidden peer"
-                 {% if m == 'passive' %}checked{% endif %}/>
+                 {% if m == 'full' %}checked{% endif %}/>
           <div class="font-semibold">{{ label }}</div>
           <div class="text-xs text-slate-400 mt-1">{{ desc }}</div>
         </label>

@@ -13,7 +13,7 @@ class ScanConfig:
     timeout: float = 10.0
     rate_limit: float = 10.0  # max req/s
     user_agent: str = (
-        "Mozilla/5.0 (compatible; Cyberloka/0.1; +https://github.com/xrniqbl/cyberloka)"
+        "Mozilla/5.0 (compatible; Cyberloka/0.2; +https://github.com/xrniqbl/cyberloka)"
     )
     cookies: dict[str, str] = field(default_factory=dict)
     headers: dict[str, str] = field(default_factory=dict)
@@ -32,7 +32,25 @@ class ScanConfig:
     html_out: str | None = None
     proxy: str | None = None
 
+    # ------------------------------------------------------------------
+    # Module sets per mode.
+    #
+    # Recon dimasukkan ke "passive" agar laporan default selalu memuat
+    # informasi DNS, WHOIS, port terbuka, fingerprint teknologi, dan API
+    # discovery — yang sebelumnya hanya muncul di mode "full".
+    # ------------------------------------------------------------------
+
+    RECON_MODULES = (
+        "dns",
+        "whois",
+        "ports",
+        "fingerprint",
+        "subdomains",
+        "subdomain_takeover",
+        "api_discovery",
+    )
     PASSIVE_MODULES = (
+        # Observasi non-intrusif (selalu aman dijalankan).
         "headers",
         "tls",
         "cookies",
@@ -40,15 +58,14 @@ class ScanConfig:
         "clickjacking",
         "methods",
         "sensitive_files",
-        "fingerprint",
         "robots",
-        "dns",
         "outdated_libs",
         "mixed_content",
         "jwt",
     )
+    # Modul aktif (mengirim payload uji). Crawler dijalankan dulu agar
+    # discovery state (URL, form, parameter) tersedia untuk modul lain.
     ACTIVE_MODULES = (
-        # crawler runs first to populate shared state
         "crawler",
         "csrf",
         "sqli",
@@ -60,30 +77,29 @@ class ScanConfig:
         "ssrf",
         "ssti",
         "forms",
-        "api_discovery",
-    )
-    RECON_MODULES = (
-        "dns",
-        "whois",
-        "ports",
-        "subdomains",
-        "subdomain_takeover",
-        "fingerprint",
-        "api_discovery",
+        "session",
+        "voucher",
+        "payment",
     )
 
     def resolve_modules(self) -> list[str]:
         if self.modules:
             return list(self.modules)
         if self.mode == "passive":
-            return list(self.PASSIVE_MODULES)
+            # Recon + passive observation. Tetap aman (tanpa payload aktif).
+            return list(dict.fromkeys(
+                list(self.RECON_MODULES) + list(self.PASSIVE_MODULES)
+            ))
         if self.mode == "active":
-            return list(self.PASSIVE_MODULES) + list(self.ACTIVE_MODULES)
-        if self.mode == "full":
-            mods = list(dict.fromkeys(
+            return list(dict.fromkeys(
                 list(self.RECON_MODULES)
                 + list(self.PASSIVE_MODULES)
                 + list(self.ACTIVE_MODULES)
             ))
-            return mods
+        if self.mode == "full":
+            return list(dict.fromkeys(
+                list(self.RECON_MODULES)
+                + list(self.PASSIVE_MODULES)
+                + list(self.ACTIVE_MODULES)
+            ))
         raise ValueError(f"Unknown mode: {self.mode}")
