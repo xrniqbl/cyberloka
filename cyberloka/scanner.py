@@ -185,4 +185,21 @@ def run_scan(target: Target, config: ScanConfig, progress_cb=None) -> list[Findi
                 done += 1
                 if progress_cb:
                     progress_cb(future_to_name[fut], done, total)
+    return _enrich_findings(findings, target)
+
+
+def _enrich_findings(findings: list[Finding], target: Target) -> list[Finding]:
+    """Auto-fill Finding.urls dari target bila modul tidak meng-set sendiri.
+
+    Ini membuat semua report (PDF/HTML) bisa menampilkan link bug clickable
+    tanpa modul perlu di-update satu per satu. Kalau target sudah berupa URL,
+    pakai langsung. Kalau hanya host/path, fall back ke base_url target.
+    """
+    for f in findings:
+        if not f.urls:
+            t = (f.target or "").strip()
+            if t.startswith(("http://", "https://")):
+                f.urls = [t]
+            elif t and target.base_url:
+                f.urls = [target.base_url]
     return findings
