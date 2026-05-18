@@ -73,6 +73,11 @@ MODULE_MAP: dict[str, str] = {
     "proto_pollution": "cyberloka.active.proto_pollution",
     "http_smuggling": "cyberloka.active.http_smuggling",
     "ws_check": "cyberloka.active.ws_check",
+    "auth_bypass": "cyberloka.active.auth_bypass",
+    "balance": "cyberloka.active.balance",
+    "env_leak": "cyberloka.active.env_leak",
+    "api_auth": "cyberloka.active.api_auth",
+    "mass_assignment": "cyberloka.active.mass_assignment",
     # simulate
     "rate_limit": "cyberloka.simulate.rate_limit",
     "burst": "cyberloka.simulate.burst",

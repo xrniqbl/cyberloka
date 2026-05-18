@@ -727,6 +727,80 @@ EXPLAIN: dict[str, dict[str, str]] = {
         ),
         "category": "data",
     },
+    "auth_bypass": {
+        "friendly_name": "Bypass Login & Halaman Admin Terbuka",
+        "what_it_means": (
+            "Kami coba kombinasi password default umum (admin/admin, root/root, dll) "
+            "pada form login, dan memeriksa apakah halaman admin/panel internal "
+            "dapat diakses publik tanpa autentikasi."
+        ),
+        "business_impact": (
+            "Bypass login = pengambilalihan akun admin total. Halaman admin yang "
+            "terbuka publik = setengah jalan menuju takeover. Risiko paling "
+            "kritikal untuk operasional bisnis."
+        ),
+        "category": "login",
+    },
+    "balance": {
+        "friendly_name": "Pengujian Manipulasi Saldo / E-wallet",
+        "what_it_means": (
+            "Kami coba kirim nilai abnormal (negatif, nol, integer overflow, "
+            "desimal sangat kecil) ke endpoint saldo / wallet / withdraw / "
+            "topup / cashback / poin."
+        ),
+        "business_impact": (
+            "Jika validasi server lemah, attacker bisa withdraw saldo negatif "
+            "(menambah saldo sendiri), bypass minimum withdraw, atau memicu "
+            "kesalahan akumulasi poin. Kerugian finansial langsung dan masif."
+        ),
+        "category": "uang",
+    },
+    "env_leak": {
+        "friendly_name": "Kebocoran Environment Variable & Stack Trace",
+        "what_it_means": (
+            "Kami memindai response untuk pola kunci API (AWS, Stripe, GitHub, "
+            "Slack, SendGrid), URI database (MongoDB, Postgres, Redis), JWT secret, "
+            "dan stack trace yang membongkar path file & versi framework. "
+            "Juga memeriksa endpoint debug seperti /actuator/env dan /__debug__."
+        ),
+        "business_impact": (
+            "Kunci API yang bocor = attacker langsung punya akses ke layanan "
+            "cloud / payment / email Anda dengan kredensial yang sah. URI database "
+            "= bisa membaca seluruh data pelanggan. Endpoint debug = peta lengkap "
+            "konfigurasi internal."
+        ),
+        "category": "data",
+    },
+    "api_auth": {
+        "friendly_name": "Keamanan API: Autentikasi, Mass Export, Rate-Limit",
+        "what_it_means": (
+            "Untuk setiap endpoint API yang ditemukan crawler, kami: "
+            "(1) cek apakah API tetap balas data tanpa autentikasi (broken auth); "
+            "(2) cek apakah listing API mengembalikan ratusan record tanpa pagination "
+            "(potensi mass scraping); (3) kirim 20 request berturut-turut untuk "
+            "menguji rate-limit."
+        ),
+        "business_impact": (
+            "API tanpa auth = pelanggaran besar — siapa saja bisa membaca data "
+            "pelanggan. Mass export = seluruh database bisa di-scrape dalam menit. "
+            "Tanpa rate-limit = bot mudah brute-force atau DoS."
+        ),
+        "category": "data",
+    },
+    "mass_assignment": {
+        "friendly_name": "Mass Assignment (Privilege Escalation lewat Form)",
+        "what_it_means": (
+            "Kami coba kirim field tambahan seperti `is_admin=true`, `role=admin`, "
+            "`balance=9999999`, `verified=true` saat register/profile update, "
+            "untuk melihat apakah server menerima dan menyimpannya."
+        ),
+        "business_impact": (
+            "Akun biasa bisa langsung jadi admin saat register, atau saldo "
+            "ditambah sendiri saat update profil. Bug klasik di framework yang "
+            "auto-bind body ke model database tanpa filter."
+        ),
+        "category": "login",
+    },
     "rate_limit": {
         "friendly_name": "Pengujian Rate-Limit Login",
         "what_it_means": (
