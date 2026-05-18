@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<title>Cyberloka Report - {{ target.host }}</title>
+<style>
+  :root {
+    --primary:#1F2A44; --accent:#C0392B;
+    --critical:#7B1F1F; --high:#C0392B; --medium:#D4A017; --low:#1F77B4; --info:#7F8C8D;
+  }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         color:#1F2A44; margin: 0; padding: 0; background:#F8F9FA; }
+  header { background: var(--primary); color: white; padding: 20px 28px; }
+  header h1 { margin:0; font-size: 22px; }
+  header .meta { opacity:.85; font-size: 13px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  section { background:white; border:1px solid #E5E7EB; border-radius:8px;
+            padding: 20px; margin-bottom: 18px; }
+  h2 { margin: 0 0 12px 0; color: var(--primary); }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: var(--primary); color: white; text-align:left; padding: 8px; font-size: 13px; }
+  td { padding: 8px; border-bottom: 1px solid #E5E7EB; font-size: 13px; vertical-align: top; }
+  .pill { display:inline-block; padding: 2px 10px; border-radius: 999px;
+          color: white; font-weight: 700; font-size: 11px; }
+  .pill.critical { background: var(--critical); }
+  .pill.high     { background: var(--high); }
+  .pill.medium   { background: var(--medium); }
+  .pill.low      { background: var(--low); }
+  .pill.info     { background: var(--info); }
+  details { border:1px solid #E5E7EB; border-radius:8px; padding: 10px 14px;
+            margin-bottom: 10px; background: #FBFCFD; }
+  details summary { cursor: pointer; font-weight: 600; }
+  pre { background: #F4F6F7; border:1px solid #D5D8DC; padding: 10px; overflow-x:auto;
+        font-size: 12px; border-radius: 4px; }
+  .kv { display:grid; grid-template-columns: 180px 1fr; gap: 4px 12px; margin: 8px 0; }
+  .kv .k { color: #6B7280; }
+  footer { text-align:center; color:#7F8C8D; font-size: 12px; padding: 12px 0 24px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Cyberloka Report</h1>
+  <div class="meta">
+    Target: {{ target.base_url }} &nbsp;|&nbsp;
+    Mode: {{ scan.mode | upper }} &nbsp;|&nbsp;
+    Modul: {{ scan.modules | length }} &nbsp;|&nbsp;
+    Generated: {{ generated_at }} &nbsp;|&nbsp;
+    Tool: Cyberloka v{{ tool_version }}
+  </div>
+</header>
+<main>
+  <section>
+    <h2>Ringkasan</h2>
+    <table>
+      <thead>
+        <tr><th>Severity</th><th>Jumlah</th></tr>
+      </thead>
+      <tbody>
+        {% for sev in ['critical','high','medium','low','info'] %}
+        <tr>
+          <td><span class="pill {{ sev }}">{{ sev | upper }}</span></td>
+          <td>{{ summary.by_severity[sev] }}</td>
+        </tr>
+        {% endfor %}
+        <tr><td><b>TOTAL</b></td><td><b>{{ summary.total }}</b></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Daftar Temuan</h2>
+    {% if findings | length == 0 %}
+      <p>Tidak ada temuan.</p>
+    {% else %}
+      {% for f in findings %}
+      <details>
+        <summary>
+          <span class="pill {{ f.severity }}">{{ f.severity | upper }}</span>
+          &nbsp;<span style="color:#6B7280;">[{{ f.module }}]</span>
+          &nbsp;{{ f.title }}
+        </summary>
+        <div class="kv">
+          <div class="k">Target</div><div>{{ f.target }}</div>
+          {% if f.cwe %}<div class="k">CWE</div><div>{{ f.cwe }}</div>{% endif %}
+          <div class="k">Confidence</div><div>{{ f.confidence }}</div>
+        </div>
+        {% if f.description %}<p><b>Deskripsi:</b><br/>{{ f.description }}</p>{% endif %}
+        {% if f.evidence %}<p><b>Evidence:</b></p><pre>{{ f.evidence }}</pre>{% endif %}
+        {% if f.remediation %}<p><b>Remediasi:</b><br/>{{ f.remediation }}</p>{% endif %}
+        {% if f.references %}
+          <p><b>Referensi:</b></p>
+          <ul>
+            {% for r in f.references %}<li><a href="{{ r }}">{{ r }}</a></li>{% endfor %}
+          </ul>
+        {% endif %}
+      </details>
+      {% endfor %}
+    {% endif %}
+  </section>
+</main>
+<footer>RAHASIA - hanya untuk pemilik target. Cyberloka v{{ tool_version }}.</footer>
+</body>
+</html>

@@ -61,6 +61,11 @@ penyebabnya, serta memberikan rekomendasi perbaikan.
 - Output CLI berwarna (severity-coded) menggunakan `rich`
 - Export JSON terstruktur
 - Export HTML report (rapi, lengkap dengan remediasi per finding)
+- **Export PDF report (Bahasa Indonesia, otomatis dinamai sesuai host target)** — berisi
+  cover page, ringkasan eksekutif, grafik distribusi severity, **flowchart alur serangan**,
+  bagian khusus *"Akses Yang Dapat / Berhasil Ditembus"*, detail per-finding (Apa Celahnya
+  / Bagaimana Hacker Membobolnya / Bukti / Cara Menanggulangi / Referensi), serta roadmap
+  hardening.
 
 ---
 
@@ -104,6 +109,39 @@ cyberloka -t https://example.com --mode full --authorized \
           --json report.json --html report.html
 ```
 
+### PDF report (default ON, otomatis dinamai sesuai host target)
+PDF dihasilkan otomatis tanpa flag tambahan. File disimpan dengan format
+`cyberloka-report-<host>-<YYYYMMDD-HHMMSS>.pdf`:
+
+```bash
+# Auto-naming, tersimpan di working directory:
+cyberloka -t https://example.com --mode full --authorized
+
+# Auto-naming ke folder tertentu:
+cyberloka -t https://example.com --mode full --authorized --report-dir ./reports
+
+# Override path PDF secara eksplisit:
+cyberloka -t https://example.com --mode full --authorized --pdf laporan.pdf
+
+# Matikan PDF:
+cyberloka -t https://example.com --no-pdf
+```
+
+Isi PDF (Bahasa Indonesia):
+- Cover page (target, mode, timestamp, total finding, severity tertinggi).
+- Bab 1: Ringkasan Eksekutif + grafik distribusi severity.
+- Bab 2: **Flowchart alur serangan** (Recon -> Probe -> Exploit -> Post-Exploit -> Impact).
+- Bab 3: **Akses Yang Dapat / Berhasil Ditembus** — daftar akses (mis. database via SQLi,
+  source code via `.git/`, account takeover via host header) lengkap dengan endpoint
+  yang ter-tested.
+- Bab 4: Detail per-finding dengan empat sub-bagian:
+  - **Apa Celahnya** (akar masalah teknis)
+  - **Bagaimana Hacker Membobolnya** (skenario eksploitasi)
+  - **Bukti / Evidence** dari hasil scan
+  - **Cara Menanggulangi** (langkah perbaikan konkret)
+- Bab 5: Roadmap hardening berdasar prioritas severity.
+- Lampiran A: Modul yang dijalankan.
+
 ### Attack simulation (butuh konfirmasi)
 ```bash
 cyberloka -t https://example.com --simulate-attack \
@@ -126,6 +164,9 @@ cyberloka -t https://example.com --simulate-attack \
 | `--cookies` | Cookies tambahan (`k=v;k2=v2`) |
 | `--json` | Path output JSON |
 | `--html` | Path output HTML |
+| `--pdf` | Path output PDF (kosong = auto-naming `cyberloka-report-<host>-<ts>.pdf`) |
+| `--no-pdf` | Matikan generate PDF (default: aktif) |
+| `--report-dir` | Folder output untuk auto-named PDF (default: working dir) |
 | `--quiet` | Tekan log non-finding |
 
 ---

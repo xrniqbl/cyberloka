@@ -9,11 +9,21 @@ title Cyberloka - Web Vulnerability Scanner
 REM Pindah ke folder script ini
 cd /d "%~dp0"
 
+REM Folder untuk menampung file laporan PDF/JSON/HTML
+set "REPORTDIR=%~dp0reports"
+if not exist "%REPORTDIR%" mkdir "%REPORTDIR%"
+
+REM Default args untuk semua scan: PDF auto-named di folder reports + JSON & HTML.
+set "COMMON_OUT=--report-dir "%REPORTDIR%" --json "%REPORTDIR%\report.json" --html "%REPORTDIR%\report.html""
+
 :menu
 cls
 echo =====================================================================
 echo                  CYBERLOKA - Web Vulnerability Scanner
 echo =====================================================================
+echo  Folder laporan: %REPORTDIR%
+echo  PDF dibuat otomatis: cyberloka-report-^<host^>-^<timestamp^>.pdf
+echo ---------------------------------------------------------------------
 echo  1. Scan PASSIVE  (paling aman, tanpa payload aktif)
 echo  2. Scan ACTIVE   (passive + active checks, butuh izin tertulis)
 echo  3. Scan FULL     (recon + passive + active, paling lengkap)
@@ -23,20 +33,22 @@ echo  6. Subdomain takeover check (DNS dangling)
 echo  7. Simulate attack (burst + rate-limit, butuh --login-url)
 echo  8. Update repo   (git pull)
 echo  9. Tampilkan daftar modul yang tersedia
+echo  A. Buka folder laporan
 echo  0. Keluar
 echo ---------------------------------------------------------------------
-set /p choice="Pilih [0-9]: "
+set /p choice="Pilih: "
 
-if "%choice%"=="1" goto passive
-if "%choice%"=="2" goto active
-if "%choice%"=="3" goto full
-if "%choice%"=="4" goto custom
-if "%choice%"=="5" goto recon
-if "%choice%"=="6" goto takeover
-if "%choice%"=="7" goto simulate
-if "%choice%"=="8" goto gitpull
-if "%choice%"=="9" goto listmod
-if "%choice%"=="0" goto end
+if /i "%choice%"=="1" goto passive
+if /i "%choice%"=="2" goto active
+if /i "%choice%"=="3" goto full
+if /i "%choice%"=="4" goto custom
+if /i "%choice%"=="5" goto recon
+if /i "%choice%"=="6" goto takeover
+if /i "%choice%"=="7" goto simulate
+if /i "%choice%"=="8" goto gitpull
+if /i "%choice%"=="9" goto listmod
+if /i "%choice%"=="A" goto openrep
+if /i "%choice%"=="0" goto end
 echo Pilihan tidak dikenal.
 pause
 goto menu
@@ -55,19 +67,25 @@ goto :eof
 REM ---------------------------------------------------------------------
 :passive
 call :askTarget
-python -m cyberloka -t "%TARGET%" --mode passive --html report.html --json report.json
+python -m cyberloka -t "%TARGET%" --mode passive %COMMON_OUT%
+echo.
+echo Laporan tersimpan di: %REPORTDIR%
 pause
 goto menu
 
 :active
 call :askTarget
-python -m cyberloka -t "%TARGET%" --mode active --authorized --html report.html --json report.json
+python -m cyberloka -t "%TARGET%" --mode active --authorized %COMMON_OUT%
+echo.
+echo Laporan tersimpan di: %REPORTDIR%
 pause
 goto menu
 
 :full
 call :askTarget
-python -m cyberloka -t "%TARGET%" --mode full --authorized --html report.html --json report.json
+python -m cyberloka -t "%TARGET%" --mode full --authorized %COMMON_OUT%
+echo.
+echo Laporan tersimpan di: %REPORTDIR%
 pause
 goto menu
 
@@ -80,19 +98,25 @@ if "%MODS%"=="" (
     pause
     goto menu
 )
-python -m cyberloka -t "%TARGET%" --modules %MODS% --authorized --html report.html --json report.json
+python -m cyberloka -t "%TARGET%" --modules %MODS% --authorized %COMMON_OUT%
+echo.
+echo Laporan tersimpan di: %REPORTDIR%
 pause
 goto menu
 
 :recon
 call :askTarget
-python -m cyberloka -t "%TARGET%" --modules dns,whois,ports,subdomains,fingerprint,waf_detect --html report.html --json report.json
+python -m cyberloka -t "%TARGET%" --modules dns,whois,ports,subdomains,fingerprint,waf_detect %COMMON_OUT%
+echo.
+echo Laporan tersimpan di: %REPORTDIR%
 pause
 goto menu
 
 :takeover
 call :askTarget
-python -m cyberloka -t "%TARGET%" --modules subdomain_takeover --html report.html --json report.json
+python -m cyberloka -t "%TARGET%" --modules subdomain_takeover %COMMON_OUT%
+echo.
+echo Laporan tersimpan di: %REPORTDIR%
 pause
 goto menu
 
@@ -105,7 +129,9 @@ if "%LOGIN%"=="" (
     pause
     goto menu
 )
-python -m cyberloka -t "%TARGET%" --simulate-attack --login-url "%LOGIN%" --authorized --html report.html --json report.json
+python -m cyberloka -t "%TARGET%" --simulate-attack --login-url "%LOGIN%" --authorized %COMMON_OUT%
+echo.
+echo Laporan tersimpan di: %REPORTDIR%
 pause
 goto menu
 
@@ -146,6 +172,10 @@ echo.
 echo === Daftar modul Cyberloka ===
 python -c "from cyberloka.scanner import MODULE_MAP; [print(' -', k) for k in sorted(MODULE_MAP)]"
 pause
+goto menu
+
+:openrep
+start "" "%REPORTDIR%"
 goto menu
 
 :end
