@@ -58,6 +58,7 @@ class ScanConfig:
         "file_upload", "idor_generic", "host_header", "cache_poison",
         "hpp", "rfd", "dom_xss", "oauth_check", "pii_leak", "race_condition",
         "proto_pollution", "http_smuggling", "ws_check", "auth_bypass",
+        "deep_login_audit", "root_access_check",
         "balance", "env_leak", "api_auth", "mass_assignment",
         "log_injection", "jwt_confusion", "crlf_injection", "nosqli",
         "deserialization", "webhook_signature", "csv_injection",

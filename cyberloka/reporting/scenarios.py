@@ -130,6 +130,8 @@ ACCESS_GAINED_MAP: dict[str, tuple[str, str]] = {
     "password_reset": ("Account takeover via password reset", "any"),
     "oauth_takeover": ("Account takeover via OAuth flow", "any"),
     "auth_bypass": ("Bypass autentikasi", "any"),
+    "deep_login_audit": ("Akun admin / user diambil alih (default credential tervalidasi)", "any"),
+    "root_access_check": ("Akses setara ROOT ke server/cluster via service terbuka", "any"),
     "jwt": ("Forgery token JWT (impersonation)", "high"),
     "jwt_confusion": ("JWT algorithm confusion attack", "any"),
     "session": ("Pengambilalihan session", "high"),
