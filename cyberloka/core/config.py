@@ -59,6 +59,12 @@ class ScanConfig:
         "hpp", "rfd", "dom_xss", "oauth_check", "pii_leak", "race_condition",
         "proto_pollution", "http_smuggling", "ws_check", "auth_bypass",
         "deep_login_audit", "root_access_check",
+        # 15 modul baru
+        "wp_user_enum", "wp_xmlrpc", "wp_admin_default",
+        "basic_auth_default", "swagger_walker", "prometheus_metrics_leak",
+        "git_repo_dump", "tomcat_manager_default", "phpmyadmin_default",
+        "adminer_exposed", "kibana_unauth", "grafana_default",
+        "ftp_anonymous", "idor_active_chain", "websocket_auth_check",
         "balance", "env_leak", "api_auth", "mass_assignment",
         "log_injection", "jwt_confusion", "crlf_injection", "nosqli",
         "deserialization", "webhook_signature", "csv_injection",
