@@ -108,8 +108,67 @@ def auto_pdf_path(target: Target, out_dir: str | None = None) -> str:
 
 
 def _para(text: str, style) -> Paragraph:
-    safe = (text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
-    return Paragraph(safe, style)
+    """Create a Paragraph; assumes ``text`` may contain trusted ReportLab
+    inline tags (b, i, font, link, br) that we explicitly emit ourselves.
+
+    Only ``&`` not part of an entity is escaped, plus stray ``<`` / ``>`` that
+    are clearly NOT a known ReportLab tag are escaped so they cannot break
+    the paraparser. This protects against scanner-generated text that
+    contains literal HTML markup like ``<link rel=stylesheet>`` or
+    ``<form action='/x'>``.
+    """
+    s = text if isinstance(text, str) else str(text)
+    return Paragraph(_sanitize_for_paraparser(s), style)
+
+
+# ReportLab paraparser only understands a small set of inline tags with
+# specific attributes. Any other tag-shaped substring from scanner output
+# (like <link rel=stylesheet>, <script>, <form>, <img src=...>) would raise
+# paraparser syntax errors when it encounters unknown attributes.
+#
+# Strategy: use a whitelist regex that only matches tags we *know* we emit
+# ourselves in the PDF builder (with safe attributes). Everything else gets
+# entity-escaped so it renders as literal text.
+_SAFE_TAG_RE = re.compile(
+    r"<(?:"
+    # Simple tags without attributes
+    r"/?(?:b|i|u|br|sub|sup|strong|em|strike|underline)(?:\s*/)?>"
+    r"|"
+    # <font ...> with color/size/name attributes only
+    r"/?font(?:\s+(?:color|size|name|face)\s*=\s*['\"][^'\"]*['\"])*\s*/?>"
+    r"|"
+    # <link href="..."> only (NOT <link rel=...>)
+    r"link\s+href\s*=\s*['\"][^'\"]*['\"]\s*>"
+    r"|"
+    r"/link\s*>"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _sanitize_for_paraparser(s: str) -> str:
+    """Escape stray HTML-like fragments while keeping our trusted inline tags.
+
+    Only tags that match `_SAFE_TAG_RE` pass through untouched. Everything
+    else (including `<link rel=stylesheet>`, `<script>`, `<form>`, etc.) is
+    escaped to entities so ReportLab renders them as literal text.
+    """
+    out: list[str] = []
+    pos = 0
+    for m in _SAFE_TAG_RE.finditer(s):
+        # Escape the text between the last safe tag and this one
+        out.append(_escape_chunk(s[pos:m.start()]))
+        out.append(m.group(0))  # keep the safe tag as-is
+        pos = m.end()
+    out.append(_escape_chunk(s[pos:]))
+    return "".join(out)
+
+
+def _escape_chunk(chunk: str) -> str:
+    """Escape &, <, > in a chunk, but don't double-escape existing entities."""
+    chunk = re.sub(r"&(?!(?:#\d+|#x[0-9A-Fa-f]+|[a-zA-Z]+);)", "&amp;", chunk)
+    chunk = chunk.replace("<", "&lt;").replace(">", "&gt;")
+    return chunk
 
 
 def _styles() -> dict:
