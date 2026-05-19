@@ -98,6 +98,18 @@ class Finding:
     # sehingga finding ini bukan deteksi pasif yang bisa false-positive.
     # Dipakai PDF/HTML untuk section "Validasi Aktif".
     validation_proof: list[str] = field(default_factory=list)
+    # Detail akses yang tertembus oleh exploit ini. Auto-fill dari
+    # exploitation.ACCESS_DETAIL_MAP[module] kalau modul tidak set sendiri.
+    # Schema dict (semua optional):
+    #   tipe        : "RCE", "Database", "File read", "Account takeover", ...
+    #   privilege   : "anonymous" | "user" | "admin" | "root"
+    #   auth_pre    : True/False (apakah butuh login dulu untuk eksploit)
+    #   scope       : list capability ("read", "write", "exec", "delete")
+    #   data        : string/list dampak data spesifik
+    #   lateral     : string penjelasan lateral movement potential
+    #   persistence : string apakah bisa ditanam backdoor
+    # Dipakai oleh PDF report di section "Detail Akses Yang Tertembus".
+    access_detail: dict[str, Any] = field(default_factory=dict)
     extra: dict[str, Any] = field(default_factory=dict)
 
     @property

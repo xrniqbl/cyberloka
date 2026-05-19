@@ -237,22 +237,32 @@ def run_scan(target: Target, config: ScanConfig, progress_cb=None) -> list[Findi
 
 
 def _enrich_findings(findings: list[Finding], target: Target) -> list[Finding]:
-    """Auto-fill Finding.urls + exploitation_steps + validation_proof.
+    """Auto-fill Finding.urls + exploitation_steps + validation_proof + access_detail.
 
-    Setiap finding diperkaya dengan tiga field yang dipakai semua reporter
+    Setiap finding diperkaya dengan field-field yang dipakai semua reporter
     (PDF/HTML/JSON) supaya tiap modul tidak perlu duplikasi konten:
 
       - urls               : link bug clickable untuk laporan
       - exploitation_steps : step-by-step skenario hacker mengsusupi celah
       - validation_proof   : signal yang sudah divalidasi otomatis (multi-signal)
+      - access_detail      : detail teknis akses yang tertembus oleh exploit
+                             (privilege, scope, data, lateral, persistence)
 
-    Ketiganya hanya diisi bila modul tidak meng-set sendiri (modul boleh
-    override dengan info spesifik). Mapping diambil dari
-    `cyberloka.reporting.exploitation`.
+    Setelah enrich, severity policy diterapkan: finding CRITICAL hanya
+    dipertahankan kalau memang sudah terbukti kuat (confidence=confirmed
+    ATAU validation_proof multi-signal ATAU termasuk modul tier-0 yang
+    selektif). Bila tidak, severity di-downgrade ke HIGH.
+
+    Tujuan: menjawab user requirement "hanya celah yang benar-benar bisa
+    masuk yang masuk ke critical".
+
+    Mapping diambil dari `cyberloka.reporting.exploitation`.
     """
     # Lazy import untuk hindari circular dependency (exploitation.py tidak
     # impor apapun dari core, tapi reporting bisa).
     from cyberloka.reporting.exploitation import (
+        enforce_severity_policy,
+        get_access_detail,
         get_exploitation_steps,
         get_validation_proof,
     )
@@ -271,4 +281,9 @@ def _enrich_findings(findings: list[Finding], target: Target) -> list[Finding]:
         # 3. Validation proof - default dari module mapping
         if not f.validation_proof:
             f.validation_proof = get_validation_proof(f.module)
-    return findings
+        # 4. Access detail - default dari module mapping (boleh kosong)
+        if not f.access_detail:
+            f.access_detail = get_access_detail(f.module)
+
+    # 5. Enforce severity policy: CRITICAL hanya kalau benar-benar terbukti.
+    return enforce_severity_policy(findings)

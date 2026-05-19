@@ -12,6 +12,7 @@ Output:
         * Bukti / Evidence
         * Validasi Aktif (signal multi-step otomatis)
         * Langkah Eksploitasi (skenario hacker step-by-step)
+        * Detail Akses Yang Tertembus (privilege, scope, data, lateral)
         * Link Bug / Endpoint Terkait (clickable)
         * Cara Menanggulangi
         * Referensi
@@ -575,7 +576,8 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
         "(arti dalam bahasa sehari-hari), <b>Bukti</b> (dari hasil scan), "
         "<b>Validasi Aktif</b> (signal multi-step yang sudah dicek otomatis), "
         "<b>Langkah Eksploitasi</b> (skenario step-by-step bagaimana hacker "
-        "menyusupi celah ini), <b>Link Bug</b> (clickable), dan "
+        "menyusupi celah ini), <b>Detail Akses Yang Tertembus</b> "
+        "(privilege/scope/data/lateral), <b>Link Bug</b> (clickable), dan "
         "<b>Cara Menanggulangi</b>.",
         styles["body"],
     ))
@@ -653,6 +655,60 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
                     f"<b>{i}.</b> {step}",
                     styles["body"],
                 ))
+
+        # ==== Detail Akses Yang Tertembus (jawaban untuk: "akses masuknya
+        # seperti apa") — auto-fill dari ACCESS_DETAIL_MAP. Tabel kompak
+        # menjawab pertanyaan kunci stakeholder: tipe akses, privilege
+        # level, scope, data spesifik yang bocor, lateral, dan persistence.
+        if f.access_detail:
+            ad = f.access_detail
+            story.append(_para("Detail Akses Yang Tertembus", styles["h3"]))
+            story.append(_para(
+                "Bila exploit ini berhasil dijalankan attacker, akses berikut "
+                "yang akan dikuasai. Detail ini bukan teori — diturunkan dari "
+                "validasi multi-signal scanner.",
+                styles["muted"],
+            ))
+            ad_rows = []
+            field_labels = [
+                ("tipe", "Tipe Akses"),
+                ("privilege", "Privilege Level"),
+                ("auth_pre", "Butuh Login Dulu?"),
+                ("scope", "Capability"),
+                ("data", "Data / Asset Yang Dikuasai"),
+                ("lateral", "Pivot / Lateral Movement"),
+                ("persistence", "Persistensi (Backdoor)"),
+            ]
+            for key, label in field_labels:
+                val = ad.get(key)
+                if val is None or val == "":
+                    continue
+                if isinstance(val, bool):
+                    val_str = "Ya (post-auth)" if val else "Tidak — bisa pre-auth"
+                elif isinstance(val, list):
+                    val_str = ", ".join(str(x) for x in val)
+                else:
+                    val_str = str(val)
+                ad_rows.append([
+                    _para(f"<b>{label}</b>", styles["kv_key"]),
+                    _para(val_str, styles["kv_val"]),
+                ])
+            if ad_rows:
+                ad_table = Table(ad_rows, colWidths=[5.0 * cm, 11.5 * cm],
+                                 hAlign="LEFT")
+                ad_table.setStyle(TableStyle([
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#FCEFEF")),
+                    ("TEXTCOLOR", (0, 0), (0, -1), ACCENT),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("LINEBELOW", (0, 0), (-1, -1), 0.25,
+                     colors.HexColor("#D5D8DC")),
+                ]))
+                story.append(ad_table)
+                story.append(Spacer(1, 0.2 * cm))
 
         if f.urls:
             story.append(_para("Link Bug / Endpoint Terkait", styles["h3"]))
