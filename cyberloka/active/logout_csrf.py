@@ -39,7 +39,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                         module="logout_csrf", target=url,
                         title=f"Endpoint logout diakses lewat GET: {url}",
                         severity=Severity.LOW,
-                        description=("Logout via GET dapat dipicu cross-site (mis. <img src=...>). "
+                        description=("Logout via GET dapat dipicu cross-site (mis. lewat tag image dengan src ke /logout). "
                                      "Bukan kerentanan kritikal tapi mengganggu UX dan bisa "
                                      "dipakai sebagai stage phishing."),
                         evidence=f"GET status={r.status_code}, cookie cleared",

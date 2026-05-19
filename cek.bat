@@ -87,6 +87,17 @@ if "%TARGET%"=="" (
     pause
     goto menu
 )
+REM Extract host from target for report naming
+REM Remove protocol prefix
+set "RHOST=%TARGET%"
+set "RHOST=!RHOST:https://=!"
+set "RHOST=!RHOST:http://=!"
+REM Remove path (everything after first /)
+for /f "tokens=1 delims=/" %%h in ("!RHOST!") do set "RHOST=%%h"
+REM Remove port (everything after first :)
+for /f "tokens=1 delims=:" %%h in ("!RHOST!") do set "RHOST=%%h"
+set "RJSON=%REPORTDIR%\report-%RHOST%.json"
+set "RHTML=%REPORTDIR%\report-%RHOST%.html"
 goto :eof
 
 REM =====================================================================
@@ -128,7 +139,7 @@ REM =====================================================================
 :quickscan
 :passive
 call :askTarget
-python -m cyberloka -t "%TARGET%" --mode passive --report-dir "%REPORTDIR%" --json "%REPORTDIR%\report.json" --html "%REPORTDIR%\report.html"
+python -m cyberloka -t "%TARGET%" --mode passive --report-dir "%REPORTDIR%" --json "%RJSON%" --html "%RHTML%"
 echo.
 echo Laporan tersimpan di: %REPORTDIR%
 pause
@@ -140,7 +151,7 @@ REM =====================================================================
 :fullscan
 :full
 call :askTarget
-python -m cyberloka -t "%TARGET%" --mode full --authorized --report-dir "%REPORTDIR%" --json "%REPORTDIR%\report.json" --html "%REPORTDIR%\report.html"
+python -m cyberloka -t "%TARGET%" --mode full --authorized --report-dir "%REPORTDIR%" --json "%RJSON%" --html "%RHTML%"
 echo.
 echo Laporan tersimpan di: %REPORTDIR%
 pause
@@ -148,7 +159,7 @@ goto menu
 
 :active
 call :askTarget
-python -m cyberloka -t "%TARGET%" --mode active --authorized --report-dir "%REPORTDIR%" --json "%REPORTDIR%\report.json" --html "%REPORTDIR%\report.html"
+python -m cyberloka -t "%TARGET%" --mode active --authorized --report-dir "%REPORTDIR%" --json "%RJSON%" --html "%RHTML%"
 echo.
 echo Laporan tersimpan di: %REPORTDIR%
 pause
@@ -159,7 +170,7 @@ call :askTarget
 set "MODS="
 set /p MODS="Modul (comma, contoh: headers,tls,api_discovery,jwt): "
 if "%MODS%"=="" ( echo Modul wajib diisi. & pause & goto menu )
-python -m cyberloka -t "%TARGET%" --modules %MODS% --authorized --report-dir "%REPORTDIR%" --json "%REPORTDIR%\report.json" --html "%REPORTDIR%\report.html"
+python -m cyberloka -t "%TARGET%" --modules %MODS% --authorized --report-dir "%REPORTDIR%" --json "%RJSON%" --html "%RHTML%"
 echo.
 echo Laporan tersimpan di: %REPORTDIR%
 pause
@@ -167,7 +178,7 @@ goto menu
 
 :recon
 call :askTarget
-python -m cyberloka -t "%TARGET%" --modules dns,whois,ports,subdomains,fingerprint,waf_detect --report-dir "%REPORTDIR%" --json "%REPORTDIR%\report.json" --html "%REPORTDIR%\report.html"
+python -m cyberloka -t "%TARGET%" --modules dns,whois,ports,subdomains,fingerprint,waf_detect --report-dir "%REPORTDIR%" --json "%RJSON%" --html "%RHTML%"
 echo.
 echo Laporan tersimpan di: %REPORTDIR%
 pause
@@ -175,7 +186,7 @@ goto menu
 
 :takeover
 call :askTarget
-python -m cyberloka -t "%TARGET%" --modules subdomain_takeover --report-dir "%REPORTDIR%" --json "%REPORTDIR%\report.json" --html "%REPORTDIR%\report.html"
+python -m cyberloka -t "%TARGET%" --modules subdomain_takeover --report-dir "%REPORTDIR%" --json "%RJSON%" --html "%RHTML%"
 echo.
 echo Laporan tersimpan di: %REPORTDIR%
 pause
@@ -186,7 +197,7 @@ call :askTarget
 set "LOGIN="
 set /p LOGIN="Login URL (mis. https://example.com/login): "
 if "%LOGIN%"=="" ( echo Login URL wajib untuk simulate. & pause & goto menu )
-python -m cyberloka -t "%TARGET%" --simulate-attack --login-url "%LOGIN%" --authorized --report-dir "%REPORTDIR%" --json "%REPORTDIR%\report.json" --html "%REPORTDIR%\report.html"
+python -m cyberloka -t "%TARGET%" --simulate-attack --login-url "%LOGIN%" --authorized --report-dir "%REPORTDIR%" --json "%RJSON%" --html "%RHTML%"
 echo.
 echo Laporan tersimpan di: %REPORTDIR%
 pause

@@ -15,8 +15,10 @@ set -euo pipefail
 if [ $# -ge 1 ] && [[ "$1" != "-h" && "$1" != "--help" ]]; then
     TARGET="$1"
     shift
+    # Extract host from URL for report naming
+    RHOST=$(echo "$TARGET" | sed -E 's|^https?://||;s|[:/].*||')
     cyberloka -t "${TARGET}" --mode full --authorized --yes \
-        --json report.json --html report.html \
+        --json "report-${RHOST}.json" --html "report-${RHOST}.html" \
         --threads 10 --rate 10 --timeout 12 "$@"
     exit $?
 fi
@@ -47,6 +49,7 @@ BANNER
 interactive_scan() {
     read -rp "Target URL (mis. https://example.com): " TARGET
     [ -z "$TARGET" ] && return
+    RHOST=$(echo "$TARGET" | sed -E 's|^https?://||;s|[:/].*||')
     echo
     echo "Pilih mode:"
     echo "  p = passive  (aman, observasi saja)"
@@ -78,31 +81,33 @@ interactive_scan() {
     echo "  Menjalankan Cyberloka..."
     echo "================================================================"
     cyberloka -t "$TARGET" --mode "$MODE_STR" --authorized --yes \
-        --json report.json --html report.html \
+        --json "report-${RHOST}.json" --html "report-${RHOST}.html" \
         --threads 10 --rate 10 --timeout 12 \
         "${AUTH_ARGS[@]}" || true
-    after_scan
+    after_scan "$RHOST"
 }
 
 quick_scan() {
     read -rp "Target URL: " TARGET
     [ -z "$TARGET" ] && return
+    RHOST=$(echo "$TARGET" | sed -E 's|^https?://||;s|[:/].*||')
     echo
     cyberloka -t "$TARGET" --mode passive --authorized --yes \
-        --json report.json --html report.html \
+        --json "report-${RHOST}.json" --html "report-${RHOST}.html" \
         --threads 10 --rate 10 --timeout 10 || true
-    after_scan
+    after_scan "$RHOST"
 }
 
 full_scan() {
     read -rp "Target URL: " TARGET
     [ -z "$TARGET" ] && return
+    RHOST=$(echo "$TARGET" | sed -E 's|^https?://||;s|[:/].*||')
     read -rp "Apakah Anda berwenang men-scan target ini? [y/N]: " AUTHED
     case "$AUTHED" in y|Y|yes|YES) ;; *) echo "Dibatalkan."; return ;; esac
     cyberloka -t "$TARGET" --mode full --authorized --yes \
-        --json report.json --html report.html \
+        --json "report-${RHOST}.json" --html "report-${RHOST}.html" \
         --threads 10 --rate 10 --timeout 12 || true
-    after_scan
+    after_scan "$RHOST"
 }
 
 dashboard() {
@@ -114,12 +119,14 @@ dashboard() {
 }
 
 open_report() {
-    if [ -f report.html ]; then
-        if command -v xdg-open >/dev/null; then xdg-open report.html
-        elif command -v open >/dev/null; then open report.html
-        else echo "Buka report.html secara manual."; fi
+    # Open the most recent report-*.html file
+    LATEST=$(ls -t report-*.html 2>/dev/null | head -1)
+    if [ -n "$LATEST" ]; then
+        if command -v xdg-open >/dev/null; then xdg-open "$LATEST"
+        elif command -v open >/dev/null; then open "$LATEST"
+        else echo "Buka $LATEST secara manual."; fi
     else
-        echo "report.html tidak ditemukan. Jalankan scan dulu."
+        echo "Tidak ada report-*.html ditemukan. Jalankan scan dulu."
     fi
     read -rp "[enter untuk lanjut]"
 }
@@ -188,6 +195,7 @@ update_cyberloka() {
 
 after_scan() {
     EXITCODE=$?
+    local RHOST="${1:-target}"
     echo
     echo "================================================================"
     if [ $EXITCODE -eq 0 ]; then
@@ -197,12 +205,12 @@ after_scan() {
     else
         echo "  [ERROR] Scan gagal exit code $EXITCODE."
     fi
-    echo "  Laporan: report.json + report.html"
+    echo "  Laporan: report-${RHOST}.json + report-${RHOST}.html"
     echo "================================================================"
-    read -rp "Buka report.html di browser sekarang? [Y/n]: " OPEN
-    if [[ "${OPEN:-y}" =~ ^[yY]$ ]] && [ -f report.html ]; then
-        if command -v xdg-open >/dev/null; then xdg-open report.html
-        elif command -v open >/dev/null; then open report.html; fi
+    read -rp "Buka report HTML di browser sekarang? [Y/n]: " OPEN
+    if [[ "${OPEN:-y}" =~ ^[yY]$ ]] && [ -f "report-${RHOST}.html" ]; then
+        if command -v xdg-open >/dev/null; then xdg-open "report-${RHOST}.html"
+        elif command -v open >/dev/null; then open "report-${RHOST}.html"; fi
     fi
 }
 
