@@ -13,7 +13,7 @@ class ScanConfig:
     timeout: float = 10.0
     rate_limit: float = 10.0
     user_agent: str = (
-        "Mozilla/5.0 (compatible; Cyberloka/0.10.4; +https://github.com/xrniqbl/cyberloka)"
+        "Mozilla/5.0 (compatible; Cyberloka/0.10.5; +https://github.com/xrniqbl/cyberloka)"
     )
     cookies: dict[str, str] = field(default_factory=dict)
     headers: dict[str, str] = field(default_factory=dict)

@@ -174,6 +174,101 @@ def _escape_chunk(chunk: str) -> str:
     return chunk
 
 
+# ---------------------------------------------------------------------------
+# Text wrapping helpers (mencegah teks terpotong di Preformatted / Paragraph)
+# ---------------------------------------------------------------------------
+#
+# ReportLab's ``Preformatted`` flowable preserves whitespace tetapi TIDAK
+# melakukan word-wrap. Baris yang lebih panjang dari content area A4 akan
+# overflow keluar margin halaman dan tampak "terpotong" di PDF.
+#
+# Lebar konten (A4 portrait) = 210mm - 2x margin (~18mm) ≈ 174mm ≈ 493pt.
+# Courier 8.5pt char width ≈ 5.1pt → ~96 char per baris.
+# Kita pakai 92 sebagai default agar aman + ada padding di style "evidence".
+
+_DEFAULT_WRAP_WIDTH = 92
+
+
+def _wrap_for_pre(text: str, width: int = _DEFAULT_WRAP_WIDTH) -> str:
+    """Soft-wrap each logical line agar muat di lebar konten Preformatted A4.
+
+    Aturan:
+    - Baris yang sudah <= width dilepas apa adanya (preserve indent + isi).
+    - Baris panjang dipecah; potongan continuation diberi indent +2 spasi
+      dari baris asalnya supaya structure visual tetap terlihat.
+    - Hindari memotong di tengah escape sequence (cek karakter sebelumnya).
+    - Coba potong di whitespace dulu; kalau tidak ada whitespace yg layak,
+      hard-break di width.
+    """
+    if not text:
+        return ""
+    out_lines: list[str] = []
+    for line in text.splitlines() or [""]:
+        if len(line) <= width:
+            out_lines.append(line)
+            continue
+        stripped = line.lstrip(" \t")
+        indent = line[: len(line) - len(stripped)]
+        cont_indent = indent + "  "
+        cur = stripped
+        is_first = True
+        while True:
+            avail = width - (len(indent) if is_first else len(cont_indent))
+            if avail < 20:
+                avail = 20
+            if len(cur) <= avail:
+                out_lines.append((indent if is_first else cont_indent) + cur)
+                break
+            window = cur[:avail]
+            # Cari titik potong "rapi": spasi setelah min 40 char, atau
+            # backslash-newline / pipe / & / ; pada window.
+            sp = window.rfind(" ")
+            if sp < 40:
+                # Coba karakter pemisah lain umum di curl/header.
+                for sep in (",", ";", "&", "|"):
+                    sp2 = window.rfind(sep)
+                    if sp2 > sp:
+                        sp = sp2 + 1  # potong setelah separator
+                        break
+            if sp < 20:
+                sp = avail  # hard break
+            piece = cur[:sp].rstrip()
+            out_lines.append((indent if is_first else cont_indent) + piece)
+            cur = cur[sp:].lstrip(" ")
+            is_first = False
+    return "\n".join(out_lines)
+
+
+def _wrap_url_for_para(url: str, width: int = 80) -> str:
+    """Bungkus URL panjang dengan ``<br/>`` di titik aman (slash, &, ?, =).
+
+    Dipakai untuk render URL di tabel/Paragraph supaya tidak overflow
+    horizontal. Berbeda dengan _wrap_for_pre, ini menghasilkan markup
+    yang valid untuk paraparser (bukan plain newline).
+
+    Tidak melakukan truncation — seluruh URL tetap ter-render lengkap.
+    """
+    if not url or len(url) <= width:
+        return url
+    parts: list[str] = []
+    cur = url
+    while len(cur) > width:
+        window = cur[:width]
+        # Coba potong di / setelah min 40 char (panjang scheme://host).
+        cut = -1
+        for sep in ("/", "&", "?", "=", "-", "_", "."):
+            pos = window.rfind(sep)
+            if pos > 40:
+                cut = pos + 1  # ikut sertakan separator
+                break
+        if cut <= 0:
+            cut = width  # hard split
+        parts.append(cur[:cut])
+        cur = cur[cut:]
+    parts.append(cur)
+    return "<br/>".join(parts)
+
+
 def _styles() -> dict:
     base = getSampleStyleSheet()
     return {
@@ -548,7 +643,7 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
                      _para("<b>Modul</b>", styles["body"]),
                      _para("<b>Endpoint / Bukti</b>", styles["body"])]]
             for f in items:
-                ev = (f.evidence or "-").splitlines()[0][:140] if f.evidence else "-"
+                ev = (f.evidence or "-").splitlines()[0][:220] if f.evidence else "-"
                 data.append([_severity_pill(f.severity, styles),
                              _para(f.module, styles["body"]),
                              _para(f"{f.target}<br/><font size='8' color='#7F8C8D'>{ev}</font>",
@@ -626,7 +721,7 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
 
         if f.evidence:
             story.append(_para("Bukti / Evidence", styles["h3"]))
-            story.append(Preformatted(f.evidence, styles["evidence"]))
+            story.append(Preformatted(_wrap_for_pre(f.evidence), styles["evidence"]))
 
         # ==== Validasi Aktif (signal yang sudah dicek otomatis) ====
         if f.validation_proof:
@@ -713,7 +808,9 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
         if f.urls:
             story.append(_para("Link Bug / Endpoint Terkait", styles["h3"]))
             for u in f.urls:
-                disp = u if len(u) <= 100 else u[:97] + "..."
+                # Wrap URL panjang dengan <br/> di titik aman, BUKAN truncate
+                # dgn ellipsis. URL lengkap tetap bisa dilihat di PDF.
+                disp = _wrap_url_for_para(u, width=80)
                 story.append(_para(
                     f'&#8226; <link href="{u}"><font color="#1F77B4">{disp}</font></link>',
                     styles["body"],
@@ -745,7 +842,8 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
             v_samples = validation.get("samples") or []
             if v_samples:
                 story.append(_para("Sample bukti:", styles["muted"]))
-                story.append(Preformatted("\n".join(v_samples), styles["evidence"]))
+                story.append(Preformatted(
+                    _wrap_for_pre("\n".join(v_samples)), styles["evidence"]))
             v_notes = validation.get("notes") or ""
             if v_notes:
                 story.append(_para(f"<i>{v_notes}</i>", styles["muted"]))
@@ -770,7 +868,7 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
             except (KeyError, IndexError, ValueError):
                 repro_text = repro_template
             story.append(_para("Cara Reproduksi (Manual)", styles["h3"]))
-            story.append(Preformatted(repro_text, styles["evidence"]))
+            story.append(Preformatted(_wrap_for_pre(repro_text), styles["evidence"]))
 
         # ==== Cara Akses Celah (Perintah Siap Pakai) ====
         # Auto-generated oleh curl_active_verify post-processor.
@@ -795,7 +893,7 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
                 "untuk membuktikan celah terbuka:",
                 styles["muted"],
             ))
-            story.append(Preformatted(curl_cmd, styles["evidence"]))
+            story.append(Preformatted(_wrap_for_pre(curl_cmd), styles["evidence"]))
             if verify_note:
                 story.append(_para(
                     f"<font color='#C0392B'>{verify_note}</font>",
@@ -878,7 +976,7 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
         bug_count += 1
         link_html = "<br/>".join(
             f'<link href="{u}"><font color="#1F77B4">'
-            f'{(u if len(u) <= 90 else u[:87] + "...")}</font></link>'
+            f'{_wrap_url_for_para(u, width=70)}</font></link>'
             for u in urls
         )
         bug_rows.append([_para(str(i), styles["body"]),

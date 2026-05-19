@@ -157,7 +157,13 @@ VERIFY_RECIPES: dict[str, dict] = {
 def _build_curl_cmd(method: str, url: str, headers: dict | None = None,
                     body: str | None = None, content_type: str | None = None,
                     comment: str = "") -> str:
-    """Build a curl command string ready for copy-paste."""
+    """Build a curl command string ready for copy-paste.
+
+    Body request TIDAK ditruncate — pembaca laporan harus bisa benar-benar
+    copy-paste dan menjalankan perintah persis untuk reproduksi celah.
+    PDF reporter (``_wrap_for_pre``) akan men-soft-wrap baris panjang
+    sehingga tidak terpotong di halaman.
+    """
     parts = ["curl"]
     if method != "GET":
         parts.append(f"-X {method}")
@@ -169,11 +175,10 @@ def _build_curl_cmd(method: str, url: str, headers: dict | None = None,
     if content_type:
         parts.append(f"-H 'Content-Type: {content_type}'")
     if body:
+        # Escape single-quotes utk shell single-quoted string.
+        # Body apa pun (termasuk JSON / XML / multi-line) tetap utuh.
         safe_body = body.replace("'", "'\\''")
-        if len(safe_body) > 200:
-            parts.append(f"-d '{safe_body[:200]}...'")
-        else:
-            parts.append(f"-d '{safe_body}'")
+        parts.append(f"-d '{safe_body}'")
     parts.append(f"'{url}'")
     cmd = " \\\n  ".join(parts)
     if comment:
