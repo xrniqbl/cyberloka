@@ -728,6 +728,39 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
         story.append(_para("Cara Menanggulangi", styles["h3"]))
         story.append(_para(f.remediation or "Lihat referensi di bawah.", styles["body"]))
 
+        # Validasi (audit-trail teknis) — diset oleh modul scanner v0.10.1
+        # untuk membuktikan finding sudah dicross-check sebelum dilaporkan.
+        validation = (f.extra or {}).get("validation") if isinstance(f.extra, dict) else None
+        if validation and isinstance(validation, dict):
+            story.append(_para("Validasi (Audit Trail)", styles["h3"]))
+            v_method = validation.get("method") or "n/a"
+            v_confirmed = validation.get("confirmed", False)
+            badge = ("Status: <b>CONFIRMED</b>" if v_confirmed
+                     else "Status: <b>VALIDATED</b> (perlu verifikasi manual)")
+            story.append(_para(f"Metode: <b>{v_method}</b> &mdash; {badge}", styles["body"]))
+            v_steps = validation.get("steps") or []
+            if v_steps:
+                for i, step in enumerate(v_steps, 1):
+                    story.append(_para(f"{i}. {step}", styles["body"]))
+            v_samples = validation.get("samples") or []
+            if v_samples:
+                story.append(_para("Sample bukti:", styles["muted"]))
+                story.append(Preformatted("\n".join(v_samples), styles["evidence"]))
+            v_notes = validation.get("notes") or ""
+            if v_notes:
+                story.append(_para(f"<i>{v_notes}</i>", styles["muted"]))
+
+        # Cara Akses (Bahasa Awam) — step-by-step ramah pembaca non-teknis.
+        awam_summary = (f.extra or {}).get("awam_summary") if isinstance(f.extra, dict) else ""
+        awam_steps_list = (f.extra or {}).get("awam_steps") if isinstance(f.extra, dict) else []
+        if awam_summary or awam_steps_list:
+            story.append(_para("Cara Akses ke Celah (Bahasa Awam)", styles["h3"]))
+            if awam_summary:
+                story.append(_para(awam_summary, styles["body"]))
+            if awam_steps_list:
+                for i, step in enumerate(awam_steps_list, 1):
+                    story.append(_para(f"{i}. {step}", styles["body"]))
+
         # Cara Reproduksi (manual) - perintah curl/dig/openssl siap copy-paste
         repro_template = REPRO_MAP.get(f.module.lower(), "")
         if repro_template:

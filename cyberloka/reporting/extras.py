@@ -147,6 +147,7 @@ OWASP_MAP: dict[str, str] = {
     "hpp": "A05:2021 Security Misconfiguration",
     "rfd": "A05:2021 Security Misconfiguration",
     "pii_leak": "A02:2021 Cryptographic Failures",
+    "db_pii_leak": "A02:2021 Cryptographic Failures",
     "proto_pollution": "A03:2021 Injection",
     "http_smuggling": "A05:2021 Security Misconfiguration",
     "ws_check": "A05:2021 Security Misconfiguration",
@@ -288,6 +289,7 @@ MITRE_MAP: dict[str, str] = {
     "hpp": "T1190 Exploit Public-Facing Application",
     "rfd": "T1204.002 Malicious File",
     "pii_leak": "T1213 Data from Information Repositories",
+    "db_pii_leak": "T1213 Data from Information Repositories",
     "proto_pollution": "T1059.007 JavaScript",
     "http_smuggling": "T1190 Exploit Public-Facing Application",
     "ws_check": "T1190 Exploit Public-Facing Application",
@@ -490,6 +492,14 @@ REPRO_MAP: dict[str, str] = {
     "hpp": "curl '{url}?id=1&id=2'",
     "rfd": "curl '{url}/api;/foo.bat?cb=evil()'",
     "pii_leak": "# Akses endpoint /api/users tanpa auth atau dengan low-priv",
+    "db_pii_leak": (
+        "# Coba akses endpoint kandidat dump database tanpa auth:\n"
+        "curl -s {url}/api/users | head -c 2000\n"
+        "curl -s {url}/api/customers?per_page=500 | jq '.data | length'\n"
+        "curl -s {url}/dump.json | head -c 2000\n"
+        "curl -s {url}/backup/users.csv | head -n 20\n"
+        "# Verifikasi manual: cek isi response — jumlah NIK/KK/HP/rekening unik."
+    ),
     "proto_pollution": "# Submit JSON dengan __proto__.<key> = value",
     "http_smuggling": "# Pakai smuggler.py atau smuggle.py untuk test TE.CL / CL.TE",
     "ws_check": "wscat -c wss://{host}/socket",

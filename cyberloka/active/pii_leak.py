@@ -1,10 +1,22 @@
-"""Detect Indonesia-specific PII leaked in HTTP responses."""
+"""Detect Indonesia-specific PII leaked in HTTP responses.
+
+Generic version (lihat ``db_pii_leak`` untuk varian DB-leak khusus).
+Strict-validation v0.10.1: emit ValidationProof + awam steps.
+"""
 from __future__ import annotations
 
 import re
 
-from cyberloka.core import Finding, HttpClient, Severity, Target
+from cyberloka.core import (
+    Finding,
+    HttpClient,
+    Severity,
+    Target,
+    ValidationProof,
+    build_extra,
+)
 from cyberloka.core.config import ScanConfig
+from cyberloka.reporting.awam import get_awam
 
 PATTERNS = [
     (re.compile(r"\b\d{16}\b"), "NIK / nomor kartu (16-digit)"),
@@ -18,12 +30,12 @@ PATTERNS = [
 def run(target: Target, config: ScanConfig) -> list[Finding]:
     findings: list[Finding] = []
     client = HttpClient(config)
+    awam_summary, awam_steps = get_awam("pii_leak")
     try:
         r = client.get(target.base_url)
         if r is None:
             return findings
         body = r.text or ""
-        # Skip noise: skor: minimum 2 PII jenis berbeda, atau 3 instance.
         per_label: dict[str, list[str]] = {}
         for rx, label in PATTERNS:
             matches = rx.findall(body)
@@ -33,12 +45,21 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                 ))[:5]
         if not per_label:
             return findings
-        # Email saja umumnya OK (footer kontak), jadi naikkan severity hanya kalau
-        # ada NIK/NPWP/HP/CC.
         sensitive = any(k in per_label for k in ("NIK / nomor kartu (16-digit)", "NPWP",
                                                   "Nomor HP Indonesia",
                                                   "Kartu kredit Visa-shape"))
         if sensitive:
+            proof = ValidationProof(
+                method="regex+sensitive-class",
+                confirmed=False,
+                steps=[
+                    f"GET {target.base_url} -> 200, body length={len(body)}.",
+                    "Pattern PII Indonesia (NIK/NPWP/HP/CC) ditemukan di body.",
+                    "CATATAN: deteksi generic - varian dump-database lebih ketat di "
+                    "modul `db_pii_leak`. Confidence 'tentative' - verifikasi manual.",
+                ],
+                samples=[f"{k}: {', '.join(v)}" for k, v in per_label.items()],
+            )
             findings.append(Finding(
                 module="pii_leak",
                 title="Potensi kebocoran PII di response publik",
@@ -48,10 +69,16 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                              "seharusnya di-public."),
                 target=target.base_url,
                 evidence="\n".join(f"{k}: {', '.join(v)}" for k, v in per_label.items()),
-                cwe="CWE-359", confidence="tentative",
+                cwe="CWE-359",
+                confidence="tentative",
                 remediation=("Mask PII di sisi server sebelum render (cth. "
-                             "`****-****-1234`). Sesuaikan dengan UU PDP — minimisasi "
+                             "`****-****-1234`). Sesuaikan dengan UU PDP - minimisasi "
                              "data, hak akses berbasis peran."),
+                extra=build_extra(
+                    proof=proof,
+                    awam_steps=awam_steps,
+                    awam_summary=awam_summary,
+                ),
             ))
     finally:
         client.close()

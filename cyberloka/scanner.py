@@ -82,6 +82,7 @@ MODULE_MAP: dict[str, str] = {
     "dom_xss": "cyberloka.active.dom_xss",
     "oauth_check": "cyberloka.active.oauth_check",
     "pii_leak": "cyberloka.active.pii_leak",
+    "db_pii_leak": "cyberloka.active.db_pii_leak",
     "race_condition": "cyberloka.active.race_condition",
     "proto_pollution": "cyberloka.active.proto_pollution",
     "http_smuggling": "cyberloka.active.http_smuggling",

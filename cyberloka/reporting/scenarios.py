@@ -165,6 +165,7 @@ ACCESS_GAINED_MAP: dict[str, tuple[str, str]] = {
     "private_profile_bypass": ("Bypass private profile", "any"),
     "media_persistence": ("Akses media setelah dihapus", "any"),
     "pii_leak": ("Kebocoran data pribadi", "any"),
+    "db_pii_leak": ("Kebocoran PII massal dari database (NIK/KK/rekening/HP)", "any"),
     "dm_privacy": ("Kebocoran direct message", "any"),
     # Money / fraud
     "voucher": ("Penyalahgunaan voucher", "any"),

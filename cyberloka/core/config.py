@@ -13,7 +13,7 @@ class ScanConfig:
     timeout: float = 10.0
     rate_limit: float = 10.0
     user_agent: str = (
-        "Mozilla/5.0 (compatible; Cyberloka/0.8; +https://github.com/xrniqbl/cyberloka)"
+        "Mozilla/5.0 (compatible; Cyberloka/0.10; +https://github.com/xrniqbl/cyberloka)"
     )
     cookies: dict[str, str] = field(default_factory=dict)
     headers: dict[str, str] = field(default_factory=dict)
@@ -56,7 +56,8 @@ class ScanConfig:
         "dirlist", "ssrf", "ssrf_metadata", "ssti", "xxe", "forms",
         "session", "voucher", "payment", "otp_check", "password_reset",
         "file_upload", "idor_generic", "host_header", "cache_poison",
-        "hpp", "rfd", "dom_xss", "oauth_check", "pii_leak", "race_condition",
+        "hpp", "rfd", "dom_xss", "oauth_check", "pii_leak", "db_pii_leak",
+        "race_condition",
         "proto_pollution", "http_smuggling", "ws_check", "auth_bypass",
         "deep_login_audit", "root_access_check",
         # 15 modul baru (web-dashboard, multi-signal validation)

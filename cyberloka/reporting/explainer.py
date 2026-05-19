@@ -680,6 +680,30 @@ EXPLAIN: dict[str, dict[str, str]] = {
         ),
         "category": "data",
     },
+    "db_pii_leak": {
+        "friendly_name": "Kebocoran PII Massal dari Database (NIK/KK/Rekening/HP)",
+        "what_it_means": (
+            "Khusus untuk konteks 'data dari database bocor lewat URL/API "
+            "publik'. Kami probe endpoint kandidat dump (mis. /api/users, "
+            "/api/customers, /dump.json, /backup/users.csv) plus URL hasil "
+            "crawl, lalu deteksi pola PII Indonesia: NIK (16 digit dengan "
+            "kode provinsi BPS), nomor KK (16 digit dengan konteks "
+            "'kartu keluarga'), nomor rekening bank (10-15 digit dengan "
+            "konteks BCA/BNI/BRI/Mandiri/dll.), nomor HP +62/08, email, "
+            "NPWP, dan kartu kredit (Luhn-validated). Threshold ketat "
+            "(≥5 unik per jenis atau ≥3 jenis bersamaan) + negative-control "
+            "fetch path random untuk hindari false-positive."
+        ),
+        "business_impact": (
+            "Pelanggaran berat UU PDP No. 27/2022 — denda hingga 2% omzet "
+            "tahunan + sanksi pidana. Untuk fintech tambah POJK 12/2018 / "
+            "POJK 6/2022. Data NIK/KK + rekening yang bocor langsung dipakai "
+            "untuk pinjol ilegal, penipuan TF, BI checking palsu, dan "
+            "pemerasan. Reputasi brand hancur (kasus Tokopedia 2020, "
+            "BPJS 2021, BSI 2023 jadi rujukan)."
+        ),
+        "category": "data",
+    },
     "race_condition": {
         "friendly_name": "Race Condition (Voucher / Withdraw Ganda)",
         "what_it_means": (
