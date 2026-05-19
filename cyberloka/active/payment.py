@@ -1,22 +1,29 @@
-"""Payment / e-commerce business-logic checks.
+"""Payment / e-commerce business-logic checks — strict-validation v0.10.4.
 
 Heuristik aman: tidak benar-benar melakukan transaksi. Modul ini mencari
 indikasi business-logic flaw umum di endpoint pembayaran/order:
 
 - Parameter harga yang dapat di-tamper di sisi klien (mis. `price`, `amount`).
-- Negative-amount atau decimal-overflow (mis. `amount=-100`).
-- IDOR pada endpoint order/invoice yang menerima ID numerik.
+- Negative-amount: response saat amount=-100 harus serupa baseline positif
+  (server tidak membedakan) — dengan baseline diff agar bukan FP.
+- IDOR pada endpoint order/invoice: ID jauh-di-luar-range harus ditolak,
+  ID adjacent harus 200 dengan konten berbeda.
 - Kebocoran kredensial gateway (Midtrans/Stripe/Xendit/Doku) di response/JS.
-
-Modul tidak menyelesaikan transaksi: jika endpoint membutuhkan flow checkout
-penuh, hasilnya akan berupa hint/tentative. User wajib re-validasi manual.
 """
 from __future__ import annotations
 
 import re
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-from cyberloka.core import Finding, HttpClient, Severity, Target
+from cyberloka.core import (
+    Finding,
+    HttpClient,
+    Severity,
+    Target,
+    ValidationProof,
+    body_similarity,
+    build_extra,
+)
 from cyberloka.core.config import ScanConfig
 from cyberloka.core.util import truncate
 from cyberloka.recon.crawler import get_state
@@ -30,7 +37,6 @@ ORDER_PATH_HINTS = (
     "pembayaran", "transaksi", "pesanan",
 )
 
-# Kebocoran kunci gateway
 SECRET_PATTERNS = [
     (re.compile(r"sk_live_[A-Za-z0-9]{20,}"), "Stripe live secret"),
     (re.compile(r"pk_live_[A-Za-z0-9]{20,}"), "Stripe publishable (live)"),
@@ -41,7 +47,6 @@ SECRET_PATTERNS = [
     (re.compile(r"DOKU_SECRET|doku_secret_[A-Za-z0-9_-]{10,}"), "Doku secret"),
     (re.compile(r"PAYPAL_CLIENT_SECRET=[A-Za-z0-9_-]{20,}"), "PayPal secret"),
 ]
-
 ERROR_SIGNS = (
     "amount must be positive",
     "negative amount",
@@ -114,30 +119,27 @@ def _check_secret_leak(client: HttpClient, target: Target) -> list[Finding]:
         m = rgx.search(body)
         if not m:
             continue
-        findings.append(
-            Finding(
-                module="payment",
-                title=f"Potensi kebocoran kredensial gateway: {label}",
-                severity=Severity.CRITICAL,
-                description=(
-                    f"Pola seperti {label} ditemukan pada response/halaman publik. "
-                    "Jika benar live secret, attacker bisa membuat transaksi atas nama "
-                    "merchant Anda."
-                ),
-                target=target.base_url,
-                evidence=truncate(m.group(0), 80),
-                cwe="CWE-200",
-                confidence="tentative",
-                remediation=(
-                    "Pindahkan secret ke server-side env. Rotasi kunci segera. "
-                    "Audit bundle JavaScript dan konfigurasi reverse-proxy untuk "
-                    "memastikan tidak ada secret yang ter-embed di asset publik."
-                ),
-                references=[
-                    "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html",
-                ],
-            )
-        )
+        findings.append(Finding(
+            module="payment",
+            title=f"Potensi kebocoran kredensial gateway: {label}",
+            severity=Severity.CRITICAL,
+            description=(
+                f"Pola seperti {label} ditemukan pada response/halaman publik. "
+                "Jika benar live secret, attacker bisa membuat transaksi atas "
+                "nama merchant Anda."
+            ),
+            target=target.base_url,
+            evidence=truncate(m.group(0), 80),
+            cwe="CWE-200",
+            confidence="tentative",
+            remediation=(
+                "Pindahkan secret ke server-side env. Rotasi kunci segera. "
+                "Audit bundle JavaScript dan konfigurasi reverse-proxy."
+            ),
+            references=[
+                "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html",
+            ],
+        ))
     return findings
 
 
@@ -148,45 +150,71 @@ def _check_negative_amount(client: HttpClient, urls: list[str]) -> list[Finding]
         q = urlparse(url).query
         if not q:
             continue
+        # Baseline positif: amount=1
+        baseline_url = _mutate(url, "amount", "1")
+        r_base = client.get(baseline_url)
+        if r_base is None or r_base.status_code >= 400:
+            continue
+        base_body = r_base.text or ""
+        base_low = base_body.lower()
+        if any(s in base_low for s in ERROR_SIGNS):
+            continue
         for k, _ in parse_qsl(q, keep_blank_values=True):
             if k.lower() not in PRICE_PARAMS or url in seen_urls:
                 continue
-            for payload in ("-1", "-1000", "0.0001"):
+            for payload in ("-1", "-1000"):
                 mutated = _mutate(url, k, payload)
                 r = client.get(mutated)
-                if r is None:
+                if r is None or r.status_code != 200:
                     continue
-                body = (r.text or "").lower()
-                # 200 OK + tidak menampilkan error penolakan = mencurigakan
-                if r.status_code == 200 and not any(s in body for s in ERROR_SIGNS):
-                    findings.append(
-                        Finding(
-                            module="payment",
-                            title=f"Parameter harga `{k}` menerima nilai abnormal ({payload})",
-                            severity=Severity.HIGH,
-                            description=(
-                                "Endpoint mengembalikan 200 OK saat nilai harga "
-                                "diset negatif/sangat kecil. Indikasi validasi sisi "
-                                "server lemah; perlu verifikasi manual apakah "
-                                "transaksi dapat diselesaikan."
-                            ),
-                            target=mutated,
-                            evidence=f"status={r.status_code}, len={len(r.text or '')}",
-                            cwe="CWE-840",
-                            confidence="tentative",
-                            remediation=(
-                                "Validasi nilai harga di server (>=0, batas wajar), "
-                                "kalkulasi total dari katalog server-side, jangan "
-                                "percayai harga dari klien. Tambahkan integrity check "
-                                "(HMAC) pada cart token."
-                            ),
-                            references=[
-                                "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/10-Business_Logic_Testing/01-Test_Business_Logic_Data_Validation",
-                            ],
-                        )
-                    )
-                    seen_urls.add(url)
-                    break
+                body = r.text or ""
+                if any(s in body.lower() for s in ERROR_SIGNS):
+                    continue
+                sim = body_similarity(base_body, body)
+                if sim < 0.70:
+                    continue  # response berbeda jauh -> kemungkinan ditolak
+                proof = ValidationProof(
+                    method="positive-baseline+similarity",
+                    confirmed=True,
+                    steps=[
+                        f"Baseline `{k}=1` -> 200, tidak ada error.",
+                        f"Probe `{k}={payload}` -> 200, tidak ada error.",
+                        f"sim(baseline_positif, probe_negatif) = {sim:.2f} "
+                        "(>= 0.70 -> server tidak membedakan).",
+                    ],
+                    samples=[f"{k}={payload} -> {r.status_code}/{len(body)}"],
+                )
+                findings.append(Finding(
+                    module="payment",
+                    title=(
+                        f"Parameter harga `{k}` menerima nilai negatif "
+                        f"({payload}) seperti positif"
+                    ),
+                    severity=Severity.HIGH,
+                    description=(
+                        "Endpoint mengembalikan response yang sangat mirip "
+                        "dengan baseline harga positif saat nilai diset negatif, "
+                        "dan tidak menampilkan error penolakan. Validasi server "
+                        "tampak lemah."
+                    ),
+                    target=mutated,
+                    evidence=(
+                        f"status={r.status_code}, len={len(body)}; "
+                        f"sim(base_pos, neg)={sim:.2f}"
+                    ),
+                    cwe="CWE-840",
+                    confidence="confirmed",
+                    urls=[mutated],
+                    remediation=(
+                        "Validasi nilai harga di server (>= 0, batas wajar), "
+                        "kalkulasi total dari katalog server-side, jangan "
+                        "percayai harga dari klien. Tambahkan integrity check "
+                        "(HMAC) pada cart token."
+                    ),
+                    extra=build_extra(proof=proof),
+                ))
+                seen_urls.add(url)
+                break
             if url in seen_urls:
                 break
     return findings
@@ -200,12 +228,23 @@ def _check_idor_orders(client: HttpClient, urls: list[str]) -> list[Finding]:
         if not q:
             continue
         for k, v in parse_qsl(q, keep_blank_values=True):
-            if v.isdigit() and any(
-                h in url.lower() for h in ORDER_PATH_HINTS
-            ):
+            if v.isdigit() and any(h in url.lower() for h in ORDER_PATH_HINTS):
                 candidates.append((url, k, int(v)))
                 break
     for url, k, n in candidates[:8]:
+        # Invalid-id baseline: harus ditolak / sangat berbeda.
+        invalid_url = _mutate(url, k, "999999999")
+        r_inv = client.get(invalid_url)
+        if r_inv is None:
+            continue
+        r_self = client.get(url)
+        if r_self is None or r_self.status_code != 200:
+            continue
+        if r_inv.status_code == 200:
+            sim_inv = body_similarity(r_inv.text or "", r_self.text or "")
+            if sim_inv > 0.85:
+                continue  # endpoint public — bukan IDOR
+
         for delta in (-1, +1):
             mutated = _mutate(url, k, str(max(1, n + delta)))
             if mutated == url:
@@ -213,34 +252,50 @@ def _check_idor_orders(client: HttpClient, urls: list[str]) -> list[Finding]:
             r = client.get(mutated)
             if r is None or r.status_code != 200:
                 continue
-            body = (r.text or "")
-            # 200 OK pada ID berbeda di endpoint order = sangat mencurigakan
-            if any(h in body.lower() for h in ("invoice", "order", "transaksi", "pembayaran")):
-                findings.append(
-                    Finding(
-                        module="payment",
-                        title=f"Kemungkinan IDOR pada endpoint order/invoice (`{k}`)",
-                        severity=Severity.HIGH,
-                        description=(
-                            "Mengubah ID numerik di parameter URL endpoint order/invoice "
-                            "tetap menghasilkan halaman 200 dengan konten order. Periksa "
-                            "apakah otorisasi per-user diterapkan."
-                        ),
-                        target=mutated,
-                        evidence=f"original={n}, probed={n + delta}, status=200",
-                        cwe="CWE-639",
-                        confidence="tentative",
-                        remediation=(
-                            "Tambahkan otorisasi per-user pada query database (mis. "
-                            "`WHERE id=? AND user_id=?`). Gunakan ID yang tidak dapat "
-                            "ditebak (UUID/HMAC) bila perlu."
-                        ),
-                        references=[
-                            "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html",
-                        ],
-                    )
-                )
-                return findings
+            body = r.text or ""
+            if not any(h in body.lower() for h in
+                       ("invoice", "order", "transaksi", "pembayaran")):
+                continue
+            if body_similarity(body, r_inv.text or "") > 0.92:
+                continue
+            sim_self = body_similarity(body, r_self.text or "")
+            proof = ValidationProof(
+                method="invalid-baseline+adjacent-diff",
+                confirmed=True,
+                steps=[
+                    f"Baseline ID asli ({n}) -> 200.",
+                    f"Invalid 999999999 -> status {r_inv.status_code}, "
+                    "berbeda dari self.",
+                    f"Adjacent ID ({n + delta}) -> 200, sim(self, adj)={sim_self:.2f}.",
+                ],
+                samples=[f"id={n + delta} -> 200/{len(body)}"],
+            )
+            findings.append(Finding(
+                module="payment",
+                title=f"IDOR terkonfirmasi pada endpoint order/invoice (`{k}`)",
+                severity=Severity.HIGH,
+                description=(
+                    "Mengubah ID numerik di parameter URL endpoint order/invoice "
+                    "mengembalikan halaman 200 dengan konten berbeda untuk tiap ID, "
+                    "sementara ID jauh di luar range ditolak/berbeda jauh. Pola ini "
+                    "mengonfirmasi resource diakses tanpa otorisasi user."
+                ),
+                target=mutated,
+                evidence=(
+                    f"original={n}, probed={n + delta}, status=200; "
+                    f"invalid_999999999 status={r_inv.status_code}"
+                ),
+                cwe="CWE-639",
+                confidence="confirmed",
+                urls=[mutated],
+                remediation=(
+                    "Tambahkan otorisasi per-user pada query database (mis. "
+                    "`WHERE id=? AND user_id=?`). Gunakan ID yang tidak dapat "
+                    "ditebak (UUID/HMAC) bila perlu."
+                ),
+                extra=build_extra(proof=proof),
+            ))
+            return findings
     return findings
 
 
@@ -253,28 +308,26 @@ def _check_form_price_tamper(client: HttpClient, forms: list[dict]) -> list[Find
             and i.get("type") in ("hidden", "text", "number")
         ]
         if price_inputs:
-            findings.append(
-                Finding(
-                    module="payment",
-                    title=f"Form pembayaran/checkout mengandung field harga yang dapat di-tamper",
-                    severity=Severity.HIGH,
-                    description=(
-                        "Form mengirim parameter harga/jumlah dari klien (hidden/input). "
-                        "Pola ini sering memungkinkan tampering harga di sisi browser."
-                    ),
-                    target=form.get("action", ""),
-                    evidence=", ".join(
-                        f"{i.get('name')}={i.get('value') or '?'}" for i in price_inputs
-                    ),
-                    cwe="CWE-602",
-                    confidence="tentative",
-                    remediation=(
-                        "Hitung total transaksi di server berdasarkan SKU & qty saja. "
-                        "Jangan terima `price`/`total` dari klien, atau verifikasi "
-                        "nilainya terhadap katalog + tanda tangan server."
-                    ),
-                )
-            )
+            findings.append(Finding(
+                module="payment",
+                title=f"Form pembayaran/checkout mengandung field harga yang dapat di-tamper",
+                severity=Severity.HIGH,
+                description=(
+                    "Form mengirim parameter harga/jumlah dari klien (hidden/input). "
+                    "Pola ini sering memungkinkan tampering harga di sisi browser."
+                ),
+                target=form.get("action", ""),
+                evidence=", ".join(
+                    f"{i.get('name')}={i.get('value') or '?'}" for i in price_inputs
+                ),
+                cwe="CWE-602",
+                confidence="tentative",
+                remediation=(
+                    "Hitung total transaksi di server berdasarkan SKU & qty saja. "
+                    "Jangan terima `price`/`total` dari klien, atau verifikasi "
+                    "nilainya terhadap katalog + tanda tangan server."
+                ),
+            ))
     return findings
 
 

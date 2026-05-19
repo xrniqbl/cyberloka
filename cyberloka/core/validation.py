@@ -20,10 +20,23 @@ Design:
 - :func:`double_confirm` menjalankan ulang probe yang sukses dan menyatakan
   finding hanya bila hasil konsisten dua kali berturut-turut.
 
+- :func:`body_similarity` menghitung kemiripan dua body (0..1) berbasis
+  token Jaccard + length ratio. Dipakai untuk differential test (boolean
+  SQLi, IDOR, business-logic).
+
+- :func:`random_marker` & :func:`random_arith_pair` menghasilkan oracle
+  acak agar SSTI/CMDi/XSS hanya laporkan kalau marker yang muncul di
+  response benar-benar HASIL eksekusi (bukan kebetulan).
+
 Bahasa Indonesia karena report end-user adalah engineer Indonesia.
 """
 from __future__ import annotations
 
+import random
+import re
+import secrets
+import statistics
+import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -209,3 +222,152 @@ def build_extra(
     if awam_summary:
         out["awam_summary"] = awam_summary
     return out
+
+
+# ---------------------------------------------------------------------------
+# Body similarity (differential probing)
+# ---------------------------------------------------------------------------
+
+
+def body_similarity(a: str, b: str) -> float:
+    """Approx similarity 0..1 antara dua body. Sederhana tapi cepat.
+
+    Bobot:
+    - Token overlap (Jaccard) sangat dominan; jika overlap = 0, similarity
+      paling tinggi 0.33 walau panjang persis sama.
+    - Length ratio sebagai tie-breaker.
+
+    Dipakai untuk differential probing (boolean SQLi, IDOR, voucher,
+    payment business-logic) di mana kita ingin membedakan respons "sama
+    seperti baseline" vs "berbeda secara substansi".
+    """
+    if not a and not b:
+        return 1.0
+    if not a or not b:
+        return 0.0
+    la, lb = len(a), len(b)
+    sa = set(a.split())
+    sb = set(b.split())
+    if not sa or not sb:
+        return 1.0 if a == b else 0.0
+    inter = len(sa & sb)
+    union = len(sa | sb)
+    overlap = inter / union if union else 0.0
+    len_ratio = 1 - abs(la - lb) / max(la, lb) if max(la, lb) else 1.0
+    # Overlap bobot 2/3, length ratio 1/3.
+    return (2 * overlap + len_ratio) / 3
+
+
+# ---------------------------------------------------------------------------
+# Random oracles (XSS / SSTI / CMDi / SSRF)
+# ---------------------------------------------------------------------------
+
+
+def random_marker(prefix: str = "cyberloka", n_bytes: int = 5) -> str:
+    """Marker acak unik untuk membedakan reflection asli vs konten incidental.
+
+    Dipakai untuk XSS / cache-poison / host-header / log-injection /
+    cmdi marker test agar response yang sudah memuat string scanner
+    tidak menyebabkan false positive.
+    """
+    return f"{prefix}{secrets.token_hex(n_bytes)}"
+
+
+def random_arith_pair(
+    *, min_factor: int = 113, max_factor: int = 9973
+) -> tuple[int, int, int]:
+    """Pasang dua bilangan kecil + hasil perkaliannya.
+
+    Hasilnya 4-7 digit dan TIDAK trivial (mis. ``49`` dari ``7*7`` yang
+    sering muncul sebagai item count / page number), sehingga jika
+    muncul di response server hampir pasti karena dievaluasi.
+
+    Dipakai oleh :mod:`cyberloka.active.ssti` sebagai oracle.
+    """
+    a = random.randint(min_factor, max_factor)
+    b = random.randint(min_factor, max_factor)
+    return a, b, a * b
+
+
+def confirm_unique_arithmetic(
+    *, body: str, expected: int, payload: str
+) -> bool:
+    """Konfirmasi SSTI: hasil perkalian muncul, payload mentah tidak.
+
+    Plus syarat tambahan: ``expected`` harus muncul sebagai token utuh
+    (digit-boundary) bukan substring dari angka lain.
+    """
+    if payload in body:
+        return False  # template tidak dievaluasi, hanya dipantulkan
+    pat = re.compile(rf"(?<!\d){expected}(?!\d)")
+    return bool(pat.search(body))
+
+
+# ---------------------------------------------------------------------------
+# Time-based oracle (multi-sample timing)
+# ---------------------------------------------------------------------------
+
+
+def confirm_time_delay(
+    client: HttpClient,
+    *,
+    method: str,
+    fast_url: str,
+    slow_url: str,
+    expected_delay: float,
+    samples: int = 3,
+    fast_kwargs: dict | None = None,
+    slow_kwargs: dict | None = None,
+) -> tuple[bool, list[float], list[float]]:
+    """Konfirmasi time-based injection dengan multi-sample.
+
+    Mengukur baseline (fast) dan injeksi (slow) ``samples`` kali tiap-nya.
+    Mengembalikan ``(confirmed, fast_times, slow_times)``. Konfirmasi
+    bila:
+    - ``median(slow) >= median(fast) + expected_delay * 0.85``
+    - DAN ``min(slow) >= max(fast)`` (semua sampel slow lebih lambat dari
+      semua sampel fast — menyingkirkan jitter network).
+    """
+    fast_kwargs = fast_kwargs or {}
+    slow_kwargs = slow_kwargs or {}
+    fast_times: list[float] = []
+    slow_times: list[float] = []
+    for _ in range(samples):
+        t0 = time.monotonic()
+        r = client.request(method, fast_url, **fast_kwargs)
+        if r is not None:
+            fast_times.append(time.monotonic() - t0)
+    for _ in range(samples):
+        t0 = time.monotonic()
+        r = client.request(method, slow_url, **slow_kwargs)
+        if r is not None:
+            slow_times.append(time.monotonic() - t0)
+    if len(fast_times) < 2 or len(slow_times) < 2:
+        return False, fast_times, slow_times
+    med_fast = statistics.median(fast_times)
+    med_slow = statistics.median(slow_times)
+    if med_slow < med_fast + expected_delay * 0.85:
+        return False, fast_times, slow_times
+    return min(slow_times) >= max(fast_times), fast_times, slow_times
+
+
+def detect_timing_oracle(
+    samples_a: list[float], samples_b: list[float],
+    *, min_delta_ms: float = 200.0, min_samples: int = 8,
+) -> tuple[bool, float, float]:
+    """Statistical timing-side-channel detector.
+
+    Dipakai oleh ``timing_attack`` untuk membedakan akun valid vs invalid.
+    Mengembalikan ``(confirmed, delta_ms, t_score)``. Konfirmasi:
+    - cukup banyak sampel (``>= min_samples`` per grup)
+    - perbedaan median ``>= min_delta_ms``
+    - ``|delta| > 3 * stdev_pooled`` (z-score signifikan)
+    """
+    if len(samples_a) < min_samples or len(samples_b) < min_samples:
+        return False, 0.0, 0.0
+    med_a = statistics.median(samples_a)
+    med_b = statistics.median(samples_b)
+    delta_ms = (med_b - med_a) * 1000
+    sd = statistics.pstdev(samples_a + samples_b) or 1e-9
+    t = abs(med_a - med_b) / sd
+    return abs(delta_ms) >= min_delta_ms and t >= 3.0, delta_ms, t

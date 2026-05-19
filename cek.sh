@@ -27,7 +27,7 @@ show_menu() {
     clear || true
     cat <<'BANNER'
 ================================================================
-  CYBERLOKA v0.10.0 - Web Vulnerability Scanner
+  CYBERLOKA v0.10.4 - Web Vulnerability Scanner (strict validation)
 ================================================================
 
  APA YANG MAU DICOBA?  (pilih nomor)
