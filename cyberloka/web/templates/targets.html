@@ -1,0 +1,77 @@
+{% extends "_base.html" %}
+{% block title %}Cyberloka — Targets{% endblock %}
+{% block heading %}Targets{% endblock %}
+
+{% block body %}
+<section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-2 bg-ink-800 border border-ink-600 rounded-2xl overflow-hidden">
+    <div class="px-6 py-4 border-b border-ink-700 flex items-center justify-between">
+      <h2 class="font-semibold">Daftar target</h2>
+      <span class="text-xs text-slate-400">{{ targets|length }} terdaftar</span>
+    </div>
+    {% if not targets %}
+      <div class="px-6 py-10 text-center text-slate-400 text-sm">
+        Belum ada target. Tambahkan di sebelah kanan.
+      </div>
+    {% else %}
+      <table class="w-full text-sm">
+        <thead class="text-xs uppercase tracking-wider text-slate-400 border-b border-ink-700">
+          <tr>
+            <th class="text-left px-6 py-3">URL</th>
+            <th class="text-left px-3 py-3">Label</th>
+            <th class="text-right px-3 py-3">Scans</th>
+            <th class="text-right px-3 py-3">Last risk</th>
+            <th class="text-right px-6 py-3">Aksi</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-ink-700">
+          {% for t in targets %}
+            <tr class="hover:bg-ink-700/50">
+              <td class="px-6 py-3 font-medium truncate max-w-xs">{{ t.url }}</td>
+              <td class="px-3 py-3 text-slate-400">{{ t.label or '—' }}</td>
+              <td class="px-3 py-3 text-right">{{ t.scan_count }}</td>
+              <td class="px-3 py-3 text-right">
+                {% if t.last_risk_score is not none %}
+                  <span class="font-semibold">{{ t.last_risk_score }}</span>
+                {% else %}—{% endif %}
+              </td>
+              <td class="px-6 py-3 text-right whitespace-nowrap">
+                <a href="/scans/new?target={{ t.id }}" class="text-brand-500 hover:underline">Scan</a>
+                <form action="/targets/{{ t.id }}/delete" method="post" class="inline ml-3"
+                      onsubmit="return confirm('Hapus target ini beserta semua scan-nya?');">
+                  <button type="submit" class="text-red-400 hover:underline">Hapus</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </div>
+
+  <div class="bg-ink-800 border border-ink-600 rounded-2xl p-6">
+    <h2 class="font-semibold mb-4">Tambah target</h2>
+    <form action="/targets" method="post" class="space-y-3 text-sm">
+      <div>
+        <label class="block text-xs uppercase tracking-wider text-slate-400 mb-1">URL / IP</label>
+        <input name="url" required placeholder="https://contoh.com"
+               class="w-full bg-ink-700 border border-ink-600 rounded-lg px-3 py-2 outline-none focus:border-brand-500"/>
+      </div>
+      <div>
+        <label class="block text-xs uppercase tracking-wider text-slate-400 mb-1">Label (opsional)</label>
+        <input name="label" placeholder="Production · Acme Corp"
+               class="w-full bg-ink-700 border border-ink-600 rounded-lg px-3 py-2 outline-none focus:border-brand-500"/>
+      </div>
+      <div>
+        <label class="block text-xs uppercase tracking-wider text-slate-400 mb-1">Catatan</label>
+        <textarea name="notes" rows="3"
+                  class="w-full bg-ink-700 border border-ink-600 rounded-lg px-3 py-2 outline-none focus:border-brand-500"></textarea>
+      </div>
+      <button class="w-full bg-brand-600 hover:bg-brand-500 rounded-lg py-2 font-medium">Simpan</button>
+    </form>
+    <p class="text-xs text-slate-400 mt-4 leading-relaxed">
+      Pastikan Anda berwenang men-scan target ini. Tindakan tanpa izin dapat melanggar hukum.
+    </p>
+  </div>
+</section>
+{% endblock %}
