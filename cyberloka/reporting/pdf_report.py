@@ -10,6 +10,8 @@ Output:
         * Apa Celahnya
         * Dampak Bisnis
         * Bukti / Evidence
+        * Validasi Aktif (signal multi-step otomatis)
+        * Langkah Eksploitasi (skenario hacker step-by-step)
         * Link Bug / Endpoint Terkait (clickable)
         * Cara Menanggulangi
         * Referensi
@@ -571,7 +573,10 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
         "Setiap temuan dijelaskan dengan: <b>Apa Celahnya</b> "
         "(akar masalah teknis, dari modul scanner), <b>Dampak Bisnis</b> "
         "(arti dalam bahasa sehari-hari), <b>Bukti</b> (dari hasil scan), "
-        "<b>Link Bug</b> (clickable), dan <b>Cara Menanggulangi</b>.",
+        "<b>Validasi Aktif</b> (signal multi-step yang sudah dicek otomatis), "
+        "<b>Langkah Eksploitasi</b> (skenario step-by-step bagaimana hacker "
+        "menyusupi celah ini), <b>Link Bug</b> (clickable), dan "
+        "<b>Cara Menanggulangi</b>.",
         styles["body"],
     ))
     story.append(Spacer(1, 0.3 * cm))
@@ -587,7 +592,7 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
             ("Severity", SEV_LABEL_ID[f.severity]),
             ("Modul", f.module),
             ("Target", f.target),
-            ("Confidence", f.confidence),
+            ("Confidence", f.confidence + (" - TERVALIDASI AKTIF" if f.confidence == "confirmed" else "")),
         ]
         if f.cwe:
             meta_rows.append(("CWE", f.cwe))
@@ -620,6 +625,34 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
         if f.evidence:
             story.append(_para("Bukti / Evidence", styles["h3"]))
             story.append(Preformatted(f.evidence, styles["evidence"]))
+
+        # ==== Validasi Aktif (signal yang sudah dicek otomatis) ====
+        if f.validation_proof:
+            story.append(_para("Validasi Aktif (Bukan Pasif)", styles["h3"]))
+            story.append(_para(
+                "Signal yang sudah divalidasi otomatis oleh scanner sehingga "
+                "finding ini benar-benar aktif dan dapat dieksploitasi - bukan "
+                "deteksi pasif yang berisiko false-positive:",
+                styles["muted"],
+            ))
+            for proof in f.validation_proof:
+                story.append(_para(
+                    f"&#10004; {proof}",
+                    styles["body"],
+                ))
+
+        # ==== Langkah Eksploitasi (skenario hacker step-by-step) ====
+        if f.exploitation_steps:
+            story.append(_para("Langkah Eksploitasi (Skenario Hacker)", styles["h3"]))
+            story.append(_para(
+                "Cara hacker mengsusupi celah ini, langkah demi langkah:",
+                styles["muted"],
+            ))
+            for i, step in enumerate(f.exploitation_steps, 1):
+                story.append(_para(
+                    f"<b>{i}.</b> {step}",
+                    styles["body"],
+                ))
 
         if f.urls:
             story.append(_para("Link Bug / Endpoint Terkait", styles["h3"]))

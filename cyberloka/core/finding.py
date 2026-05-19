@@ -90,6 +90,14 @@ class Finding:
     urls: list[str] = field(default_factory=list)
     # ID bug-tracker eksternal opsional (mis. JIRA SEC-1234, GitHub issue URL).
     bug_id: str | None = None
+    # Step-by-step bagaimana attacker mengeksploitasi celah ini (plain Indonesia).
+    # Dipakai PDF/HTML untuk section "Langkah Eksploitasi (Skenario Hacker)".
+    # Auto-diisi oleh scanner._enrich_findings() bila modul tidak meng-set sendiri.
+    exploitation_steps: list[str] = field(default_factory=list)
+    # Daftar signal yang sudah divalidasi otomatis oleh scanner (multi-signal),
+    # sehingga finding ini bukan deteksi pasif yang bisa false-positive.
+    # Dipakai PDF/HTML untuk section "Validasi Aktif".
+    validation_proof: list[str] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
     @property
