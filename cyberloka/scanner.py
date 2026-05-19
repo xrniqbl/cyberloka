@@ -9,6 +9,7 @@ from cyberloka.core import Finding, Target
 from cyberloka.core.auth import perform_login
 from cyberloka.core.config import ScanConfig
 from cyberloka.core.logger import get_logger
+from cyberloka.core.validator import validate as validate_findings
 
 # Module name -> dotted import path
 MODULE_MAP: dict[str, str] = {
@@ -18,6 +19,7 @@ MODULE_MAP: dict[str, str] = {
     "ports": "cyberloka.recon.ports",
     "subdomains": "cyberloka.recon.subdomains",
     "subdomain_takeover": "cyberloka.recon.subdomain_takeover",
+    "subdomain_access": "cyberloka.recon.subdomain_access",
     "fingerprint": "cyberloka.recon.fingerprint",
     "api_discovery": "cyberloka.recon.api_discovery",
     "crawler": "cyberloka.recon.crawler",
@@ -88,7 +90,11 @@ MODULE_MAP: dict[str, str] = {
     "ws_check": "cyberloka.active.ws_check",
     "auth_bypass": "cyberloka.active.auth_bypass",
     "balance": "cyberloka.active.balance",
+    "saldo_deep": "cyberloka.active.saldo_deep",
     "env_leak": "cyberloka.active.env_leak",
+    "db_exposure": "cyberloka.active.db_exposure",
+    "file_inject": "cyberloka.active.file_inject",
+    "webhook_deep": "cyberloka.active.webhook_deep",
     "api_auth": "cyberloka.active.api_auth",
     "mass_assignment": "cyberloka.active.mass_assignment",
     "log_injection": "cyberloka.active.log_injection",
@@ -185,6 +191,9 @@ def run_scan(target: Target, config: ScanConfig, progress_cb=None) -> list[Findi
                 done += 1
                 if progress_cb:
                     progress_cb(future_to_name[fut], done, total)
+    # Validation gate: dedupe + sanity drop + reverify HIGH/CRITICAL
+    # sebelum hasil dipakai report.
+    findings = validate_findings(findings, config)
     return _enrich_findings(findings, target)
 
 
