@@ -184,6 +184,30 @@ ACCESS_GAINED_MAP: dict[str, tuple[str, str]] = {
     # Info
     "exif_leak": ("Geo-location bocor di EXIF", "any"),
     "homoglyph_check": ("Risiko homograph phishing", "any"),
+
+    # ============ DEEP SCANNERS (PR #9 + PR #10) ============
+    # PR #9 - akses data / saldo / file / webhook / subdomain
+    "db_exposure": ("Akses langsung ke database / data store", "any"),
+    "saldo_deep": ("Manipulasi saldo & transaksi (mendalam)", "any"),
+    "file_inject": ("Webshell / RCE via file upload (mendalam)", "any"),
+    "webhook_deep": ("Forge transaksi pembayaran via webhook", "any"),
+    "subdomain_access": ("Panel internal / subdomain dev terbuka", "high"),
+    # PR #10 - active
+    "shellshock": ("Remote Code Execution (Shellshock CVE-2014-6271)", "any"),
+    "mfa_bypass": ("Bypass 2FA / MFA — pengambilalihan akun", "any"),
+    # PR #10 - recon source-leak
+    "git_disclosure": ("Source code lengkap via .git/ disclosure", "any"),
+    "svn_disclosure": ("Source code lengkap via .svn/ disclosure", "any"),
+    "iis_shortname": ("Penemuan file tersembunyi (IIS 8.3)", "any"),
+    # PR #10 - CMS
+    "wp_scan": ("Username & xmlrpc WordPress untuk brute-force", "high"),
+    "joomla_scan": ("Re-install Joomla via /installation/", "high"),
+    "drupal_scan": ("Versi Drupal exact + advisory yang berlaku", "high"),
+    # PR #10 - infra
+    "vhost_brute": ("Akses vhost internal via Host header", "any"),
+    # PR #10 - data leak
+    "hash_disclosure": ("Hash password / token bocor di response", "any"),
+    "ds_store_leak": ("Listing file via .DS_Store leak", "any"),
 }
 
 

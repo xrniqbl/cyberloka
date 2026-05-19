@@ -9,6 +9,7 @@ from cyberloka.core import Finding, Target
 from cyberloka.core.auth import perform_login
 from cyberloka.core.config import ScanConfig
 from cyberloka.core.logger import get_logger
+from cyberloka.core.validator import validate as validate_findings
 
 # Module name -> dotted import path
 MODULE_MAP: dict[str, str] = {
@@ -18,6 +19,16 @@ MODULE_MAP: dict[str, str] = {
     "ports": "cyberloka.recon.ports",
     "subdomains": "cyberloka.recon.subdomains",
     "subdomain_takeover": "cyberloka.recon.subdomain_takeover",
+    "subdomain_access": "cyberloka.recon.subdomain_access",
+    "vhost_brute": "cyberloka.recon.vhost_brute",
+    "waf_detect": "cyberloka.recon.waf_detect",
+    "git_disclosure": "cyberloka.recon.git_disclosure",
+    "svn_disclosure": "cyberloka.recon.svn_disclosure",
+    "ds_store_leak": "cyberloka.recon.ds_store_leak",
+    "iis_shortname": "cyberloka.recon.iis_shortname",
+    "wp_scan": "cyberloka.recon.wp_scan",
+    "joomla_scan": "cyberloka.recon.joomla_scan",
+    "drupal_scan": "cyberloka.recon.drupal_scan",
     "fingerprint": "cyberloka.recon.fingerprint",
     "api_discovery": "cyberloka.recon.api_discovery",
     "crawler": "cyberloka.recon.crawler",
@@ -56,6 +67,10 @@ MODULE_MAP: dict[str, str] = {
     "server_timing_header": "cyberloka.passive.server_timing_header",
     "api_key_in_url": "cyberloka.passive.api_key_in_url",
     "autocomplete_audit": "cyberloka.passive.autocomplete_audit",
+    "referrer_policy": "cyberloka.passive.referrer_policy",
+    "permission_policy": "cyberloka.passive.permission_policy",
+    "coop_coep": "cyberloka.passive.coop_coep",
+    "hash_disclosure": "cyberloka.passive.hash_disclosure",
     # ===== ACTIVE =====
     "sqli": "cyberloka.active.sqli",
     "xss": "cyberloka.active.xss",
@@ -87,8 +102,15 @@ MODULE_MAP: dict[str, str] = {
     "http_smuggling": "cyberloka.active.http_smuggling",
     "ws_check": "cyberloka.active.ws_check",
     "auth_bypass": "cyberloka.active.auth_bypass",
+    "shellshock": "cyberloka.active.shellshock",
+    "mfa_bypass": "cyberloka.active.mfa_bypass",
+    "password_policy": "cyberloka.active.password_policy",
     "balance": "cyberloka.active.balance",
+    "saldo_deep": "cyberloka.active.saldo_deep",
     "env_leak": "cyberloka.active.env_leak",
+    "db_exposure": "cyberloka.active.db_exposure",
+    "file_inject": "cyberloka.active.file_inject",
+    "webhook_deep": "cyberloka.active.webhook_deep",
     "api_auth": "cyberloka.active.api_auth",
     "mass_assignment": "cyberloka.active.mass_assignment",
     "log_injection": "cyberloka.active.log_injection",
@@ -185,6 +207,9 @@ def run_scan(target: Target, config: ScanConfig, progress_cb=None) -> list[Findi
                 done += 1
                 if progress_cb:
                     progress_cb(future_to_name[fut], done, total)
+    # Validation gate: dedupe + sanity drop + reverify HIGH/CRITICAL
+    # sebelum hasil dipakai report.
+    findings = validate_findings(findings, config)
     return _enrich_findings(findings, target)
 
 

@@ -1314,6 +1314,332 @@ EXPLAIN: dict[str, dict[str, str]] = {
         ),
         "category": "data",
     },
+    # ============ DEEP SCANNERS (PR #9) ============
+    "db_exposure": {
+        "friendly_name": "Akses / Kebocoran Database",
+        "what_it_means": (
+            "Kami memeriksa apakah ada cara attacker mengakses database "
+            "Anda langsung — port DB terbuka, panel admin DB (phpMyAdmin/"
+            "Adminer/RockMongo), endpoint REST data store, dump SQL/SQLite, "
+            "schema GraphQL ter-introspeksi, dan connection-string database "
+            "yang muncul di response publik."
+        ),
+        "business_impact": (
+            "Akses database = bocornya seluruh data pelanggan. Termasuk "
+            "yang paling kritikal: dump backup yang ter-download, schema "
+            "GraphQL yang membongkar nama field sensitif (password, token, "
+            "saldo), atau panel admin DB tanpa auth."
+        ),
+        "category": "data",
+    },
+    "saldo_deep": {
+        "friendly_name": "Pengujian Saldo / Wallet Mendalam",
+        "what_it_means": (
+            "Pengujian business logic mendalam untuk endpoint saldo / "
+            "wallet / withdraw / topup / transfer / voucher: nilai abnormal "
+            "(scientific notation, hex/octal, integer overflow, NaN, array, "
+            "object), tampering account ID tujuan, currency swap, voucher "
+            "stacking, race condition (5 paralel), idempotency key violation, "
+            "dan pembulatan ke bawah."
+        ),
+        "business_impact": (
+            "Bug ini umumnya berakhir kerugian finansial langsung — saldo "
+            "negatif dapat di-withdraw, voucher dipakai berulang, transfer "
+            "ke akun arbitrer, atau race condition double-spend. Kategori "
+            "kerugian tertinggi untuk fintech / e-wallet / e-commerce."
+        ),
+        "category": "uang",
+    },
+    "file_inject": {
+        "friendly_name": "Pengujian Mendalam Form Upload (File Infiltration)",
+        "what_it_means": (
+            "Pelengkap `file_upload`: 22 variasi nama file nakal (php/"
+            "phtml/phar/PhP/double-extension/null-byte/RTL-override/aspx/"
+            "jsp/htaccess/path-traversal), payload SVG XSS & XXE, polyglot "
+            "GIF+HTML, ZIP-slip, plus probe LFI di parameter file. Bila "
+            "file ter-upload, kami otomatis kunjungi URL hasil upload "
+            "untuk konfirmasi marker tetap terbaca."
+        ),
+        "business_impact": (
+            "Webshell sukses upload = server diambil alih. SVG dengan XSS "
+            "= mencuri sesi user. Zip-slip = penulisan file di luar folder "
+            "upload. LFI = baca file konfigurasi/secret. Setiap kategori "
+            "berujung kompromi total."
+        ),
+        "category": "infra",
+    },
+    "webhook_deep": {
+        "friendly_name": "Pengujian Mendalam Webhook Pembayaran & Notifikasi",
+        "what_it_means": (
+            "Pelengkap `webhook_signature`: 19 path gateway pembayaran "
+            "(Midtrans, Xendit, DOKU, iPaymu, Tripay, Duitku, Faspay, "
+            "Stripe, Paystack, PayPal IPN, ShopeePay, GoPay, OVO, LinkAja, "
+            "DANA, dll.) + endpoint config webhook generik. Test 6 kelas "
+            "serangan: signature bypass (5 varian), replay attack, status "
+            "forgery cross-gateway, mass-assignment via webhook, SSRF via "
+            "callback_url, dan verbose error leak signing-key."
+        ),
+        "business_impact": (
+            "Forge transaksi = saldo bertambah tanpa pembayaran nyata. "
+            "Replay = top-up duplikat. SSRF via webhook config = baca "
+            "kredensial cloud metadata. Risiko keuangan tertinggi untuk "
+            "merchant yang menerima pembayaran online."
+        ),
+        "category": "uang",
+    },
+    "subdomain_access": {
+        "friendly_name": "Subdomain Yang Dapat Diakses Dari Internet",
+        "what_it_means": (
+            "Probe HTTP+HTTPS setiap subdomain hidup, klasifikasi konten "
+            "(panel internal Jenkins/GitLab/SonarQube/Grafana/Kibana/"
+            "Kubernetes-Dashboard/ArgoCD/Vault/Prometheus/Airflow, env "
+            "staging/dev/admin, directory listing, debug page), serta "
+            "audit CORS wide-open + creds dan TLS hostname mismatch."
+        ),
+        "business_impact": (
+            "Subdomain admin/dev/staging biasanya pengamanannya jauh lebih "
+            "lemah dari production. Sering jadi pintu masuk peretasan. "
+            "Panel internal terbuka ke internet = kompromi infra."
+        ),
+        "category": "infra",
+    },
+    # ============ DEEP SCANNERS (PR #10) ============
+    "shellshock": {
+        "friendly_name": "Shellshock / Bash CGI RCE (CVE-2014-6271)",
+        "what_it_means": (
+            "Kami inject payload Bash di header HTTP (User-Agent, Referer, "
+            "Cookie, dll.) lalu cek apakah marker echo muncul atau ada "
+            "delay 5-detik konsisten. Bila iya, server menjalankan perintah "
+            "shell yang kami kirim — RCE."
+        ),
+        "business_impact": (
+            "Remote Code Execution sangat kritikal — attacker dapat "
+            "menjalankan perintah arbitrer di server (read kredensial, "
+            "install backdoor, pivot ke jaringan internal). Bug 2014 "
+            "tapi server CGI legacy + IoT masih banyak rentan."
+        ),
+        "category": "infra",
+    },
+    "mfa_bypass": {
+        "friendly_name": "Bypass 2FA / MFA",
+        "what_it_means": (
+            "Kami test 4 cara bypass 2FA: kirim field `verified=true` di "
+            "body request (status forgery), GET ke endpoint POST 2FA, "
+            "kirim OTP kosong/null/`0`, dan akses langsung halaman "
+            "post-2FA tanpa autentikasi."
+        ),
+        "business_impact": (
+            "Bypass 2FA = pencurian akun dengan hanya password (yang "
+            "sering bocor di breach lain). Akun pelanggan + saldo bisa "
+            "diambil alih meski user sudah aktifkan 2FA."
+        ),
+        "category": "login",
+    },
+    "password_policy": {
+        "friendly_name": "Audit Kebijakan Password",
+        "what_it_means": (
+            "Kami coba register dengan password lemah (kosong, `1`, "
+            "`12345`, `password`, `qwerty`, dst.) plus kontrol password "
+            "kuat. Bila password lemah diterima sementara password kuat "
+            "juga, server tidak ter-enforce policy."
+        ),
+        "business_impact": (
+            "Akun pelanggan dengan password `12345` = sasaran credential "
+            "stuffing massal. Satu breach besar bisa mengakibatkan "
+            "ratusan akun pelanggan ter-takeover."
+        ),
+        "category": "login",
+    },
+    "referrer_policy": {
+        "friendly_name": "Header Referrer-Policy",
+        "what_it_means": (
+            "Header ini menentukan seberapa banyak URL halaman asal "
+            "(termasuk query string dengan token reset password / session "
+            "id) yang dikirim ke domain lain saat user klik link."
+        ),
+        "business_impact": (
+            "Tanpa header atau dengan nilai longgar, link reset password "
+            "yang user klik dari email bisa membocorkan token ke server "
+            "iklan/analytics pihak ketiga — attacker yang punya akses ke "
+            "log tsb dapat hijack akun."
+        ),
+        "category": "info",
+    },
+    "permission_policy": {
+        "friendly_name": "Header Permissions-Policy",
+        "what_it_means": (
+            "Header ini mengontrol fitur browser sensitif (kamera, "
+            "mikrofon, lokasi, payment-request) yang boleh dipakai halaman "
+            "+ iframe-nya. Default browser = SEMUA fitur diaktifkan."
+        ),
+        "business_impact": (
+            "Bila ada XSS atau iframe pihak ketiga kompromi, attacker "
+            "bisa minta izin kamera/mic ke korban yang sudah di-trust "
+            "domain Anda — phishing/recording lebih mudah berhasil."
+        ),
+        "category": "infra",
+    },
+    "coop_coep": {
+        "friendly_name": "Header Isolasi Cross-Origin (COOP/COEP/CORP)",
+        "what_it_means": (
+            "Trio header yang men-isolate halaman dari resource cross-"
+            "origin: Cross-Origin-Opener-Policy, Cross-Origin-Embedder-"
+            "Policy, dan Cross-Origin-Resource-Policy."
+        ),
+        "business_impact": (
+            "Tanpa COOP, popup attacker dapat mengakses property window "
+            "halaman Anda (tabnabbing). Tanpa COEP, halaman rentan "
+            "Spectre cross-origin attack. Standar baru, severity rendah "
+            "tapi penting untuk hardening."
+        ),
+        "category": "infra",
+    },
+    "hash_disclosure": {
+        "friendly_name": "Kebocoran Hash Password / Token",
+        "what_it_means": (
+            "Kami scan response body untuk pola hash bcrypt/argon2/scrypt/"
+            "crypt(3)/Django-pbkdf2/MySQL-old/JWT, plus hash umum dalam "
+            "konteks JSON dengan key bermarker (password_hash, token, "
+            "api_key, secret, refresh_token)."
+        ),
+        "business_impact": (
+            "Hash password yang bocor = offline cracking. Token JWT yang "
+            "bocor = impersonate user langsung. API key yang bocor = "
+            "pengambilalihan integrasi pihak ketiga (gateway, cloud)."
+        ),
+        "category": "data",
+    },
+    "git_disclosure": {
+        "friendly_name": "Kebocoran Repositori Git (.git/)",
+        "what_it_means": (
+            "Probe artefak `.git/HEAD`, `.git/config`, `.git/index`, "
+            "`.git/logs/HEAD`, `.git/packed-refs`, `.git/objects/info/"
+            "packs`, dengan validasi magic-byte agar tidak salah lapor "
+            "(SPA generic 200 dibedakan dari konten Git asli)."
+        ),
+        "business_impact": (
+            "Bila satu artefak ter-ekspos, attacker biasanya bisa "
+            "rekonstruksi seluruh repo (git-dumper) — termasuk history "
+            "yang berisi password, kunci API, dan kredensial yang pernah "
+            "di-commit. Source code lengkap bocor."
+        ),
+        "category": "data",
+    },
+    "svn_disclosure": {
+        "friendly_name": "Kebocoran Repositori Subversion (.svn/)",
+        "what_it_means": (
+            "Probe `.svn/entries`, `.svn/wc.db`, `.svn/format`, dengan "
+            "validasi format-spesifik (XML/SQLite magic/numeric)."
+        ),
+        "business_impact": (
+            "Sama dengan git_disclosure: source code lengkap dapat "
+            "direkonstruksi. SVN sering masih dipakai legacy app."
+        ),
+        "category": "data",
+    },
+    "ds_store_leak": {
+        "friendly_name": "Kebocoran .DS_Store (macOS Finder Metadata)",
+        "what_it_means": (
+            "File `.DS_Store` yang dibuat Finder macOS terbawa ke server. "
+            "Bocoran nama-nama file di folder yang berisi (tools/files/"
+            "backup) — content discovery emas untuk attacker."
+        ),
+        "business_impact": (
+            "Membantu attacker menemukan file rahasia yang tidak "
+            "ter-link (mis. backup.sql, .env.bak, secrets.json) tanpa "
+            "perlu directory listing aktif."
+        ),
+        "category": "info",
+    },
+    "iis_shortname": {
+        "friendly_name": "IIS Short-filename Disclosure (CVE-2010-4475)",
+        "what_it_means": (
+            "Bug IIS klasik: URL berisi tilde `*~1.aspx` membuat server "
+            "membalas berbeda untuk file yang ada vs tidak ada. "
+            "Attacker dapat menebak nama file 8.3 karakter per karakter."
+        ),
+        "business_impact": (
+            "Membuka content discovery untuk web.config, backup.zip, "
+            "dst. yang seharusnya disembunyikan. Tahap recon klasik untuk "
+            "site IIS legacy."
+        ),
+        "category": "info",
+    },
+    "wp_scan": {
+        "friendly_name": "Pemindaian WordPress",
+        "what_it_means": (
+            "Fingerprint WordPress + 4 sub-check: wp-login.php publik, "
+            "xmlrpc.php aktif (rentan brute-force massal & DDoS), "
+            "user enumeration via `?author=N`, REST API users endpoint "
+            "tanpa auth."
+        ),
+        "business_impact": (
+            "WordPress paling banyak di-target karena 40% web dunia. "
+            "Username yang ke-enumerasi + xmlrpc aktif = brute-force "
+            "massal otomatis. Plugin out-of-date sering jadi pintu RCE."
+        ),
+        "category": "infra",
+    },
+    "joomla_scan": {
+        "friendly_name": "Pemindaian Joomla!",
+        "what_it_means": (
+            "Fingerprint Joomla + probe path admin, `/installation/` "
+            "yang lupa dihapus (CRITICAL → re-install attack), "
+            "`htaccess.txt`, configuration template, dan API REST."
+        ),
+        "business_impact": (
+            "Direktori `/installation/` yang masih aktif memungkinkan "
+            "attacker re-install Joomla dan mengambil alih site total. "
+            "Panel admin terbuka tanpa 2FA = brute-force."
+        ),
+        "category": "infra",
+    },
+    "drupal_scan": {
+        "friendly_name": "Pemindaian Drupal",
+        "what_it_means": (
+            "Fingerprint Drupal via meta/X-Generator/CHANGELOG, "
+            "mendeteksi versi exact dari CHANGELOG.txt, user enum lewat "
+            "`/user/N`, dan JSON:API users endpoint."
+        ),
+        "business_impact": (
+            "Versi Drupal exact + advisory publik = exploit kit jadi. "
+            "Drupalgeddon (CVE-2018-7600) dan Drupalgeddon2 melibatkan "
+            "RCE pre-auth pada Drupal lama."
+        ),
+        "category": "infra",
+    },
+    "vhost_brute": {
+        "friendly_name": "Bruteforce Virtual Host",
+        "what_it_means": (
+            "Kirim header `Host: <name>.target` dengan banyak nama "
+            "kandidat (admin, dev, staging, internal, jenkins, gitlab, "
+            "vault, dll.) dan bandingkan response signature dengan "
+            "baseline. Vhost yang ada di server tapi tidak di DNS = "
+            "ditemukan."
+        ),
+        "business_impact": (
+            "Site internal yang tidak di-link DNS publik tetap bisa "
+            "ditemukan via Host header trick. Sering pintu masuk ke "
+            "panel admin atau staging environment."
+        ),
+        "category": "infra",
+    },
+    "waf_detect": {
+        "friendly_name": "Deteksi WAF / CDN",
+        "what_it_means": (
+            "Kami fingerprint 13 vendor WAF/CDN umum (Cloudflare, "
+            "Akamai, Sucuri, Imperva, AWS WAF, F5, Fastly, Wordfence, "
+            "ModSecurity, dll.) via header, cookie, dan body marker. "
+            "Multi-vendor stacking dilaporkan terpisah."
+        ),
+        "business_impact": (
+            "Bukan kerentanan langsung — informasi penting untuk "
+            "tim defender (memastikan WAF benar terpasang) dan attacker "
+            "(memilih vector bypass yang khas vendor). Tanpa WAF sama "
+            "sekali = attack surface terbuka penuh."
+        ),
+        "category": "infra",
+    },
 }
 
 # Action-plan time bucket per severity (untuk action plan di laporan).

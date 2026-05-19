@@ -37,11 +37,13 @@ class ScanConfig:
 
     RECON_MODULES = (
         "dns", "whois", "ports", "fingerprint", "subdomains",
-        "subdomain_takeover", "api_discovery", "email_security",
-        "email_security_extended", "nextjs_specific", "cf_origin",
-        "wayback", "framework_default", "graphql_deep", "source_leak",
-        "cms_scan", "cloud_buckets", "k8s_exposure", "dependency_confusion",
-        "favicon_hash",
+        "subdomain_takeover", "subdomain_access", "vhost_brute",
+        "waf_detect", "git_disclosure", "svn_disclosure", "ds_store_leak",
+        "iis_shortname", "wp_scan", "joomla_scan", "drupal_scan",
+        "api_discovery", "email_security", "email_security_extended",
+        "nextjs_specific", "cf_origin", "wayback", "framework_default",
+        "graphql_deep", "source_leak", "cms_scan", "cloud_buckets",
+        "k8s_exposure", "dependency_confusion", "favicon_hash",
     )
     PASSIVE_MODULES = (
         "headers", "tls", "cookies", "cors", "clickjacking", "methods",
@@ -49,7 +51,8 @@ class ScanConfig:
         "csp_evaluator", "captcha_check", "cache_control_audit",
         "cors_advanced", "cookie_scope", "sentry_dsn_leak",
         "server_timing_header", "api_key_in_url", "autocomplete_audit",
-        "exif_leak", "homoglyph_check",
+        "referrer_policy", "permission_policy", "coop_coep",
+        "hash_disclosure", "exif_leak", "homoglyph_check",
     )
     ACTIVE_MODULES = (
         "crawler", "csrf", "sqli", "xss", "redirect", "lfi", "cmdi",
@@ -58,7 +61,9 @@ class ScanConfig:
         "file_upload", "idor_generic", "host_header", "cache_poison",
         "hpp", "rfd", "dom_xss", "oauth_check", "pii_leak", "race_condition",
         "proto_pollution", "http_smuggling", "ws_check", "auth_bypass",
-        "balance", "env_leak", "api_auth", "mass_assignment",
+        "shellshock", "mfa_bypass", "password_policy",
+        "balance", "saldo_deep", "env_leak", "db_exposure", "file_inject",
+        "webhook_deep", "api_auth", "mass_assignment",
         "log_injection", "jwt_confusion", "crlf_injection", "nosqli",
         "deserialization", "webhook_signature", "csv_injection",
         "graphql_dos", "xpath_injection", "logout_csrf", "zip_slip",
