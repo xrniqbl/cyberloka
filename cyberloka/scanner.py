@@ -207,17 +207,38 @@ def run_scan(target: Target, config: ScanConfig, progress_cb=None) -> list[Findi
 
 
 def _enrich_findings(findings: list[Finding], target: Target) -> list[Finding]:
-    """Auto-fill Finding.urls dari target bila modul tidak meng-set sendiri.
+    """Auto-fill Finding.urls + exploitation_steps + validation_proof.
 
-    Ini membuat semua report (PDF/HTML) bisa menampilkan link bug clickable
-    tanpa modul perlu di-update satu per satu. Kalau target sudah berupa URL,
-    pakai langsung. Kalau hanya host/path, fall back ke base_url target.
+    Setiap finding diperkaya dengan tiga field yang dipakai semua reporter
+    (PDF/HTML/JSON) supaya tiap modul tidak perlu duplikasi konten:
+
+      - urls               : link bug clickable untuk laporan
+      - exploitation_steps : step-by-step skenario hacker mengsusupi celah
+      - validation_proof   : signal yang sudah divalidasi otomatis (multi-signal)
+
+    Ketiganya hanya diisi bila modul tidak meng-set sendiri (modul boleh
+    override dengan info spesifik). Mapping diambil dari
+    `cyberloka.reporting.exploitation`.
     """
+    # Lazy import untuk hindari circular dependency (exploitation.py tidak
+    # impor apapun dari core, tapi reporting bisa).
+    from cyberloka.reporting.exploitation import (
+        get_exploitation_steps,
+        get_validation_proof,
+    )
+
     for f in findings:
+        # 1. URLs fallback ke target / base_url
         if not f.urls:
             t = (f.target or "").strip()
             if t.startswith(("http://", "https://")):
                 f.urls = [t]
             elif t and target.base_url:
                 f.urls = [target.base_url]
+        # 2. Exploitation steps - default dari module mapping
+        if not f.exploitation_steps:
+            f.exploitation_steps = get_exploitation_steps(f.module)
+        # 3. Validation proof - default dari module mapping
+        if not f.validation_proof:
+            f.validation_proof = get_validation_proof(f.module)
     return findings

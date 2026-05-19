@@ -29,6 +29,10 @@ from __future__ import annotations
 from typing import Any
 
 from cyberloka.core import Finding, Severity
+from cyberloka.reporting.exploitation import (
+    get_exploitation_steps,
+    get_validation_proof,
+)
 from cyberloka.reporting.explainer import EXPLAIN
 from cyberloka.reporting.extras import MITRE_MAP, OWASP_MAP, REPRO_MAP
 
@@ -87,6 +91,8 @@ def get_scenario(
         "owasp": OWASP_MAP.get(module, ""),
         "mitre": MITRE_MAP.get(module, ""),
         "repro": repro,
+        "exploitation_steps": get_exploitation_steps(module),
+        "validation_proof": get_validation_proof(module),
     }
 
 
