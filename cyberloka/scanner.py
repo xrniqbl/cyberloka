@@ -87,6 +87,24 @@ MODULE_MAP: dict[str, str] = {
     "http_smuggling": "cyberloka.active.http_smuggling",
     "ws_check": "cyberloka.active.ws_check",
     "auth_bypass": "cyberloka.active.auth_bypass",
+    "deep_login_audit": "cyberloka.active.deep_login_audit",
+    "root_access_check": "cyberloka.active.root_access_check",
+    # ===== 15 modul baru (multi-signal active validation) =====
+    "wp_user_enum": "cyberloka.active.wp_user_enum",
+    "wp_xmlrpc": "cyberloka.active.wp_xmlrpc",
+    "wp_admin_default": "cyberloka.active.wp_admin_default",
+    "basic_auth_default": "cyberloka.active.basic_auth_default",
+    "swagger_walker": "cyberloka.active.swagger_walker",
+    "prometheus_metrics_leak": "cyberloka.active.prometheus_metrics_leak",
+    "git_repo_dump": "cyberloka.active.git_repo_dump",
+    "tomcat_manager_default": "cyberloka.active.tomcat_manager_default",
+    "phpmyadmin_default": "cyberloka.active.phpmyadmin_default",
+    "adminer_exposed": "cyberloka.active.adminer_exposed",
+    "kibana_unauth": "cyberloka.active.kibana_unauth",
+    "grafana_default": "cyberloka.active.grafana_default",
+    "ftp_anonymous": "cyberloka.active.ftp_anonymous",
+    "idor_active_chain": "cyberloka.active.idor_active_chain",
+    "websocket_auth_check": "cyberloka.active.websocket_auth_check",
     "balance": "cyberloka.active.balance",
     "env_leak": "cyberloka.active.env_leak",
     "api_auth": "cyberloka.active.api_auth",
@@ -119,7 +137,8 @@ MODULE_MAP: dict[str, str] = {
     "social_csrf": "cyberloka.active.social_csrf",
     "oauth_takeover": "cyberloka.active.oauth_takeover",
     "unicode_bypass": "cyberloka.active.unicode_bypass",
-    # ===== ACTIVE v0.10.0 - 30 modul critical/high baru =====
+    # ===== ACTIVE v0.10.0 - 30 modul critical/high baru (auto-validation) =====
+    # NOTE: adminer_exposed & kibana_unauth sudah ada di blok 15 modul atas.
     "apache_path_confusion": "cyberloka.active.apache_path_confusion",
     "phpunit_rce":           "cyberloka.active.phpunit_rce",
     "log4shell_probe":       "cyberloka.active.log4shell_probe",
@@ -133,9 +152,7 @@ MODULE_MAP: dict[str, str] = {
     "elasticsearch_unauth":  "cyberloka.active.elasticsearch_unauth",
     "prometheus_unauth":     "cyberloka.active.prometheus_unauth",
     "grafana_default_login": "cyberloka.active.grafana_default_login",
-    "kibana_unauth":         "cyberloka.active.kibana_unauth",
     "solr_admin_unauth":     "cyberloka.active.solr_admin_unauth",
-    "adminer_exposed":       "cyberloka.active.adminer_exposed",
     "phpmyadmin_exposed":    "cyberloka.active.phpmyadmin_exposed",
     "iis_shortname":         "cyberloka.active.iis_shortname",
     "cache_deception":       "cyberloka.active.cache_deception",
@@ -220,17 +237,38 @@ def run_scan(target: Target, config: ScanConfig, progress_cb=None) -> list[Findi
 
 
 def _enrich_findings(findings: list[Finding], target: Target) -> list[Finding]:
-    """Auto-fill Finding.urls dari target bila modul tidak meng-set sendiri.
+    """Auto-fill Finding.urls + exploitation_steps + validation_proof.
 
-    Ini membuat semua report (PDF/HTML) bisa menampilkan link bug clickable
-    tanpa modul perlu di-update satu per satu. Kalau target sudah berupa URL,
-    pakai langsung. Kalau hanya host/path, fall back ke base_url target.
+    Setiap finding diperkaya dengan tiga field yang dipakai semua reporter
+    (PDF/HTML/JSON) supaya tiap modul tidak perlu duplikasi konten:
+
+      - urls               : link bug clickable untuk laporan
+      - exploitation_steps : step-by-step skenario hacker mengsusupi celah
+      - validation_proof   : signal yang sudah divalidasi otomatis (multi-signal)
+
+    Ketiganya hanya diisi bila modul tidak meng-set sendiri (modul boleh
+    override dengan info spesifik). Mapping diambil dari
+    `cyberloka.reporting.exploitation`.
     """
+    # Lazy import untuk hindari circular dependency (exploitation.py tidak
+    # impor apapun dari core, tapi reporting bisa).
+    from cyberloka.reporting.exploitation import (
+        get_exploitation_steps,
+        get_validation_proof,
+    )
+
     for f in findings:
+        # 1. URLs fallback ke target / base_url
         if not f.urls:
             t = (f.target or "").strip()
             if t.startswith(("http://", "https://")):
                 f.urls = [t]
             elif t and target.base_url:
                 f.urls = [target.base_url]
+        # 2. Exploitation steps - default dari module mapping
+        if not f.exploitation_steps:
+            f.exploitation_steps = get_exploitation_steps(f.module)
+        # 3. Validation proof - default dari module mapping
+        if not f.validation_proof:
+            f.validation_proof = get_validation_proof(f.module)
     return findings

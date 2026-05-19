@@ -58,6 +58,13 @@ class ScanConfig:
         "file_upload", "idor_generic", "host_header", "cache_poison",
         "hpp", "rfd", "dom_xss", "oauth_check", "pii_leak", "race_condition",
         "proto_pollution", "http_smuggling", "ws_check", "auth_bypass",
+        "deep_login_audit", "root_access_check",
+        # 15 modul baru (web-dashboard, multi-signal validation)
+        "wp_user_enum", "wp_xmlrpc", "wp_admin_default",
+        "basic_auth_default", "swagger_walker", "prometheus_metrics_leak",
+        "git_repo_dump", "tomcat_manager_default", "phpmyadmin_default",
+        "adminer_exposed", "kibana_unauth", "grafana_default",
+        "ftp_anonymous", "idor_active_chain", "websocket_auth_check",
         "balance", "env_leak", "api_auth", "mass_assignment",
         "log_injection", "jwt_confusion", "crlf_injection", "nosqli",
         "deserialization", "webhook_signature", "csv_injection",
@@ -67,13 +74,14 @@ class ScanConfig:
         "stored_xss", "url_preview_ssrf", "private_profile_bypass",
         "media_persistence", "dm_privacy", "social_csrf", "oauth_takeover",
         "unicode_bypass",
-        # v0.10.0 — 30 modul critical/high baru (auto-validation)
+        # v0.10.0 — 30 modul critical/high baru (auto-validation).
+        # adminer_exposed & kibana_unauth sudah ada di blok 15 modul atas.
         "apache_path_confusion", "phpunit_rce", "log4shell_probe",
         "spring_actuator_rce", "gitlab_unauth_api", "jenkins_unauth_console",
         "wp_xmlrpc_amplify", "drupalgeddon2", "bypass_403",
         "docker_remote_api", "elasticsearch_unauth", "prometheus_unauth",
-        "grafana_default_login", "kibana_unauth", "solr_admin_unauth",
-        "adminer_exposed", "phpmyadmin_exposed", "iis_shortname",
+        "grafana_default_login", "solr_admin_unauth",
+        "phpmyadmin_exposed", "iis_shortname",
         "cache_deception", "cors_null_origin", "smtp_header_injection",
         "oauth_redirect_bypass", "s3_world_writable", "firebase_open_db",
         "csti_template", "api_version_downgrade", "grpc_reflection",

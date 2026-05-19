@@ -29,6 +29,10 @@ from __future__ import annotations
 from typing import Any
 
 from cyberloka.core import Finding, Severity
+from cyberloka.reporting.exploitation import (
+    get_exploitation_steps,
+    get_validation_proof,
+)
 from cyberloka.reporting.explainer import EXPLAIN
 from cyberloka.reporting.extras import MITRE_MAP, OWASP_MAP, REPRO_MAP
 
@@ -87,6 +91,8 @@ def get_scenario(
         "owasp": OWASP_MAP.get(module, ""),
         "mitre": MITRE_MAP.get(module, ""),
         "repro": repro,
+        "exploitation_steps": get_exploitation_steps(module),
+        "validation_proof": get_validation_proof(module),
     }
 
 
@@ -130,6 +136,23 @@ ACCESS_GAINED_MAP: dict[str, tuple[str, str]] = {
     "password_reset": ("Account takeover via password reset", "any"),
     "oauth_takeover": ("Account takeover via OAuth flow", "any"),
     "auth_bypass": ("Bypass autentikasi", "any"),
+    "deep_login_audit": ("Akun admin / user diambil alih (default credential tervalidasi)", "any"),
+    "root_access_check": ("Akses setara ROOT ke server/cluster via service terbuka", "any"),
+    "wp_user_enum": ("Daftar username admin WordPress terbongkar", "any"),
+    "wp_xmlrpc": ("XML-RPC dapat dipakai amplifier brute-force/DDoS", "high"),
+    "wp_admin_default": ("Akun admin WordPress diambil alih (default credentials)", "any"),
+    "basic_auth_default": ("Halaman ter-protect Basic-Auth jebol dengan default credentials", "any"),
+    "swagger_walker": ("Endpoint API yang seharusnya butuh auth dapat diakses publik", "any"),
+    "prometheus_metrics_leak": ("Secret terbongkar via metrics/heapdump", "any"),
+    "git_repo_dump": ("Source code & history git dapat di-download publik", "any"),
+    "tomcat_manager_default": ("Tomcat Manager jebol = upload .war = RCE root", "any"),
+    "phpmyadmin_default": ("Database production diambil alih via phpMyAdmin default", "any"),
+    "adminer_exposed": ("Database production diambil alih via Adminer default", "any"),
+    "kibana_unauth": ("Seluruh log/index Elasticsearch terbaca publik", "any"),
+    "grafana_default": ("Grafana admin tertembus = akses datasource internal", "any"),
+    "ftp_anonymous": ("FTP anonymous login = baca/tulis file di server", "any"),
+    "idor_active_chain": ("Data user lain dapat dibaca via IDOR aktif", "any"),
+    "websocket_auth_check": ("WebSocket internal channel terbuka cross-origin (CSWSH)", "any"),
     "jwt": ("Forgery token JWT (impersonation)", "high"),
     "jwt_confusion": ("JWT algorithm confusion attack", "any"),
     "session": ("Pengambilalihan session", "high"),

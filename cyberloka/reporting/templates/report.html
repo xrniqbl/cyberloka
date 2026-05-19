@@ -245,6 +245,64 @@
     padding: 12px 14px; border-radius: 0 8px 8px 0;
   }
 
+  /* ---- Exploitation playbook + validation proof ---- */
+  .exploitation-box {
+    background: rgba(220, 38, 38, 0.06);
+    border: 1px solid rgba(220, 38, 38, 0.25);
+    border-left: 4px solid var(--critical);
+    padding: 14px 16px; border-radius: 0 10px 10px 0;
+  }
+  .exploitation-box h4 { color: var(--critical) !important; }
+  .exploitation-box ol {
+    counter-reset: step;
+    padding-left: 0; list-style: none; margin: 8px 0 0;
+  }
+  .exploitation-box ol li {
+    counter-increment: step;
+    padding: 8px 8px 8px 38px;
+    position: relative;
+    margin-bottom: 6px;
+    background: var(--paper);
+    border-radius: 8px;
+    line-height: 1.55;
+  }
+  .exploitation-box ol li::before {
+    content: counter(step);
+    position: absolute; left: 8px; top: 8px;
+    width: 22px; height: 22px;
+    background: var(--critical); color: white;
+    border-radius: 50%; text-align: center;
+    font-size: 11px; font-weight: 800; line-height: 22px;
+  }
+  .validation-box {
+    background: rgba(5, 150, 105, 0.06);
+    border: 1px solid rgba(5, 150, 105, 0.25);
+    border-left: 4px solid var(--emerald);
+    padding: 14px 16px; border-radius: 0 10px 10px 0;
+  }
+  .validation-box h4 { color: var(--emerald) !important; }
+  .validation-box ul {
+    margin: 8px 0 0; padding-left: 0; list-style: none;
+  }
+  .validation-box ul li {
+    padding: 4px 0 4px 24px;
+    position: relative;
+    line-height: 1.55;
+  }
+  .validation-box ul li::before {
+    content: "✓";
+    position: absolute; left: 0; top: 4px;
+    color: var(--emerald); font-weight: 800;
+  }
+  .badge-validated {
+    display: inline-block;
+    background: var(--emerald); color: white;
+    font-size: 10px; font-weight: 700;
+    padding: 2px 8px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    margin-left: 6px; vertical-align: middle;
+  }
+
   /* ---- Category ---- */
   .cat-section { margin-bottom: 22px; }
   .cat-section h3 {
@@ -711,6 +769,7 @@
                 {% if f.cwe %} · <span>{{ f.cwe }}</span>{% endif %}
                 {% if f.owasp_category %} · <span>{{ f.owasp_category }}</span>{% endif %}
                 · <span>tingkat keyakinan: {{ f.confidence }}</span>
+                {% if f.confidence == 'confirmed' %}<span class="badge-validated">Tervalidasi Aktif</span>{% endif %}
               </div>
             </div>
             <div class="score">{{ f.risk_score }}</div>
@@ -727,6 +786,34 @@
             <div class="business-impact">
               <h4>Dampak terhadap Bisnis</h4>
               <div>{{ f.business_impact }}</div>
+            </div>
+            {% endif %}
+
+            {% if f.exploitation_steps %}
+            <div class="exploitation-box">
+              <h4>Langkah Eksploitasi (Skenario Hacker)</h4>
+              <div style="font-size: 12px; color: var(--muted); margin-bottom: 4px;">
+                Cara hacker mengsusupi celah ini, step by step.
+              </div>
+              <ol>
+                {% for step in f.exploitation_steps %}
+                  <li>{{ step }}</li>
+                {% endfor %}
+              </ol>
+            </div>
+            {% endif %}
+
+            {% if f.validation_proof %}
+            <div class="validation-box">
+              <h4>Validasi Aktif (Bukan Pasif)</h4>
+              <div style="font-size: 12px; color: var(--muted); margin-bottom: 4px;">
+                Signal yang sudah dicek otomatis oleh scanner — finding ini benar-benar aktif, bukan deteksi pasif.
+              </div>
+              <ul>
+                {% for proof in f.validation_proof %}
+                  <li>{{ proof }}</li>
+                {% endfor %}
+              </ul>
             </div>
             {% endif %}
 

@@ -741,6 +741,270 @@ EXPLAIN: dict[str, dict[str, str]] = {
         ),
         "category": "login",
     },
+    "deep_login_audit": {
+        "friendly_name": "Audit Login Mendalam (Default Credentials Tervalidasi)",
+        "what_it_means": (
+            "Modul ini memetakan semua form login (admin maupun user), mencoba "
+            "kredensial paling umum dari daftar kebocoran publik, lalu memvalidasi "
+            "OTOMATIS apakah login berhasil. Validasi memakai kombinasi banyak "
+            "signal: redirect ke halaman privileged, Set-Cookie sesi, JSON token, "
+            "perbedaan body vs baseline, dan probe ke endpoint privileged setelah "
+            "login. Karena multi-signal, hasilnya tidak perlu cek manual."
+        ),
+        "business_impact": (
+            "Kalau ada finding di sini, akun admin / user Anda dapat diambil alih "
+            "oleh siapapun di internet hanya bermodal daftar password umum. "
+            "Setelah login admin = kontrol penuh aplikasi. Setelah login user = "
+            "akses data pribadi korban + dapat dipakai social engineering."
+        ),
+        "category": "login",
+    },
+    "root_access_check": {
+        "friendly_name": "Akses Setara Root via Service Terbuka",
+        "what_it_means": (
+            "Kami memvalidasi otomatis apakah ada port publik yang menjalankan "
+            "service kontrol-bidang (Docker daemon, Kubernetes API/kubelet, etcd, "
+            "Redis, MongoDB, Elasticsearch, CouchDB, Jenkins script console, dll.) "
+            "tanpa autentikasi. Validasi pakai signature respons API, bukan "
+            "sekadar 'port terbuka', sehingga false-positive minimal."
+        ),
+        "business_impact": (
+            "Service-service ini, kalau terbuka tanpa auth, = setara akses ROOT "
+            "ke server / cluster. Attacker dapat membuat container privileged, "
+            "exec ke pod, mengambil seluruh database, atau menjalankan kode "
+            "Groovy via Jenkins. Ini biasanya jadi pintu masuk insiden ransomware "
+            "/ data leak skala besar."
+        ),
+        "category": "infra",
+    },
+    # ============ 15 modul baru (multi-signal active validation) ============
+    "wp_user_enum": {
+        "friendly_name": "WordPress: Daftar Admin Terbongkar",
+        "what_it_means": (
+            "Kami memvalidasi apakah daftar username WordPress dapat di-enumerate "
+            "publik via REST API (/wp-json/wp/v2/users), parameter ?author=N "
+            "(redirect ke /author/<slug>/), dan login-oracle (pesan error berbeda "
+            "untuk user valid vs invalid). Konfirmasi multi-jalur memastikan ini "
+            "bukan false positive."
+        ),
+        "business_impact": (
+            "Daftar username yang terbongkar mempersempit serangan brute-force - "
+            "attacker hanya perlu cari password untuk username yang sudah dia "
+            "tahu pasti ada. Klasik prelude untuk takeover wp-admin."
+        ),
+        "category": "login",
+    },
+    "wp_xmlrpc": {
+        "friendly_name": "WordPress XML-RPC Aktif (DDoS / Brute-Force Amplifier)",
+        "what_it_means": (
+            "Kami memvalidasi /xmlrpc.php aktif + method berbahaya (pingback.ping, "
+            "wp.getUsersBlogs, system.multicall) tersedia. Konfirmasi tambahan: "
+            "probe pingback.ping dengan URL invalid - kalau dapat 'invalid URL' "
+            "fault, berarti method benar-benar dieksekusi (aktif)."
+        ),
+        "business_impact": (
+            "pingback.ping aktif = server Anda jadi alat DDoS reflection ke "
+            "korban lain. wp.getUsersBlogs = 1 request HTTP berisi 1000 percobaan "
+            "password (bypass rate-limit wp-login.php). IP server bisa ter-blacklist "
+            "skala internasional kalau dipakai DDoS."
+        ),
+        "category": "infra",
+    },
+    "wp_admin_default": {
+        "friendly_name": "WordPress wp-admin Tertembus dengan Default Credentials",
+        "what_it_means": (
+            "Kami coba kombinasi default umum (admin/admin, admin/password) ke "
+            "wp-login.php dengan validasi 3 signal: cookie wordpress_logged_in_*, "
+            "redirect ke /wp-admin/, dan halaman /wp-admin/profile.php memuat "
+            "menu Logout. Tidak akan emit finding tanpa ketiga signal."
+        ),
+        "business_impact": (
+            "Akses wp-admin = full content control + kemampuan upload theme/plugin "
+            "yang biasanya berujung RCE (eksekusi kode di server). Setara ambil "
+            "alih total website + kemungkinan server."
+        ),
+        "category": "login",
+    },
+    "basic_auth_default": {
+        "friendly_name": "HTTP Basic Auth dengan Kredensial Default",
+        "what_it_means": (
+            "Kami probe path admin umum yang biasa di-protect dengan htpasswd "
+            "(/admin, /server-status, /manager, /jenkins, dll.). Untuk yang "
+            "respond 401 + WWW-Authenticate: Basic, coba kombinasi default "
+            "dan validasi via response 200 + body bukan halaman login error."
+        ),
+        "business_impact": (
+            "Basic Auth biasanya melindungi dashboard internal / management "
+            "panel yang sangat sensitif. Default credentials = setara kunci master."
+        ),
+        "category": "login",
+    },
+    "swagger_walker": {
+        "friendly_name": "Walker Swagger/OpenAPI: Uji Tiap Endpoint Tanpa Auth",
+        "what_it_means": (
+            "Kami parse spec OpenAPI/Swagger publik, lalu UJI tiap endpoint GET "
+            "tanpa header Authorization. Kalau spec menyatakan endpoint butuh "
+            "auth (security: bearer/apiKey) tapi tetap mengembalikan data nyata "
+            "(JSON valid dengan key/value berisi), itu broken authentication "
+            "yang tervalidasi - bukan teori dari 'swagger publik'."
+        ),
+        "business_impact": (
+            "Broken auth pada endpoint API = attacker bisa baca data pelanggan, "
+            "ubah konfigurasi, atau kirim transaksi atas nama orang lain. "
+            "Pelanggaran besar UU PDP."
+        ),
+        "category": "data",
+    },
+    "prometheus_metrics_leak": {
+        "friendly_name": "Metrics/Actuator Endpoint dengan Validasi Secret-Pattern",
+        "what_it_means": (
+            "Kami cek 16+ jalur metrics/debug (/metrics, /actuator/env, "
+            "/actuator/heapdump, /debug/pprof, dll.). Validasi format response "
+            "(Prometheus exposition, JSON Spring, binary heapdump). Kemudian "
+            "scan body untuk pola kredensial REAL: AWS key, JDBC URL, MongoDB URI, "
+            "private key, Bearer token. Finding kritikal hanya muncul kalau "
+            "secret nyata terdeteksi."
+        ),
+        "business_impact": (
+            "Heapdump berisi snapshot memory aplikasi - termasuk SEMUA password "
+            "dan token yang sedang dipakai. Setara dengan kunci master. /actuator/env "
+            "sering membocorkan database password dalam plaintext."
+        ),
+        "category": "data",
+    },
+    "git_repo_dump": {
+        "friendly_name": ".git Repository Publik (Source Code Bocor)",
+        "what_it_means": (
+            "Kami validasi /.git/ exposure dengan PARSING konten: HEAD "
+            "(regex 'ref: refs/heads/...'), config (section [core]/[remote]), "
+            "index (DIRC binary signature), info/refs (smart HTTP). Kalau ada "
+            "kredensial inline di URL remote (https://user:pass@host), "
+            "dinaikkan ke CRITICAL. Bukan false-positive 200-page-fallback."
+        ),
+        "business_impact": (
+            "Attacker bisa `git clone` repo Anda → seluruh source code + history "
+            "commit (sering ada secret yang sempat di-commit lalu dihapus). "
+            "Setara dengan code leak permanent."
+        ),
+        "category": "kode",
+    },
+    "tomcat_manager_default": {
+        "friendly_name": "Tomcat / JBoss Manager Default Auth",
+        "what_it_means": (
+            "Kami validasi Tomcat /manager/html, /host-manager/html, JBoss "
+            "/admin-console/, WildFly /console/ dengan kredensial default. "
+            "Konfirmasi via marker body ('Tomcat Web Application Manager') + "
+            "verifikasi tambahan via /manager/text/list yang return daftar app."
+        ),
+        "business_impact": (
+            "Tomcat manager = bisa upload .war (web application archive) yang "
+            "berisi webshell, lalu eksekusi sebagai user Tomcat (sering = root). "
+            "Setara ROOT-equivalent access."
+        ),
+        "category": "infra",
+    },
+    "phpmyadmin_default": {
+        "friendly_name": "phpMyAdmin Tertembus dengan Default DB Credentials",
+        "what_it_means": (
+            "Kami detect phpMyAdmin via title + form khas, lalu submit POST "
+            "login dengan kombinasi root/root, root/(empty), admin/admin. "
+            "Konfirmasi via cookie phpmyadmin_* + redirect ke index.php tanpa "
+            "header auth + body tidak memuat 'cannot log in'."
+        ),
+        "business_impact": (
+            "Akses phpMyAdmin = read/write/drop seluruh database production, "
+            "termasuk tabel user/password aplikasi. Setara total breach data pelanggan."
+        ),
+        "category": "data",
+    },
+    "adminer_exposed": {
+        "friendly_name": "Adminer Terbuka + Versi Rentan + Default DB Login",
+        "what_it_means": (
+            "Adminer single-file PHP DB tool yang sering disimpan di webroot. "
+            "Modul detect via regex 'Adminer\\s+<version>', extract versi, "
+            "compare dengan versi yang punya CVE. Lalu coba MySQL default login. "
+            "Multi-finding: exposed (informasi), versi vulnerable, default login."
+        ),
+        "business_impact": (
+            "Adminer versi lama punya SSRF/RCE CVE. Default DB login = akses "
+            "penuh database. Klasik backdoor yang lupa dihapus setelah debug."
+        ),
+        "category": "data",
+    },
+    "kibana_unauth": {
+        "friendly_name": "Kibana / Elasticsearch Tanpa Autentikasi",
+        "what_it_means": (
+            "Kami validasi Kibana via /api/status (JSON dengan version + status) "
+            "dan Elasticsearch via /_cat/indices?format=json (array dengan key "
+            "'index'). Detect indeks sensitif (logstash-*, auth*, user*) - "
+            "menentukan severity finding."
+        ),
+        "business_impact": (
+            "Kibana publik = web UI ke seluruh Elasticsearch, baca semua log/index. "
+            "Insiden besar (miliaran record bocor) sering datang dari sini."
+        ),
+        "category": "data",
+    },
+    "grafana_default": {
+        "friendly_name": "Grafana Default admin/admin + CVE-2021-43798",
+        "what_it_means": (
+            "Cek Grafana via /api/health (JSON version+database). Coba login "
+            "default admin/admin dengan validasi cookie grafana_session + "
+            "/api/user mengembalikan user yang sama. Cek juga versi vs "
+            "CVE-2021-43798 (path traversal /etc/passwd)."
+        ),
+        "business_impact": (
+            "Grafana admin = konfigur datasource (akses DB internal), buat "
+            "alert webhook ke domain attacker (data exfiltrasi), atau jalankan "
+            "query SQL ke datasource yang tersambung."
+        ),
+        "category": "infra",
+    },
+    "ftp_anonymous": {
+        "friendly_name": "FTP Anonymous Login Aktif",
+        "what_it_means": (
+            "Validasi via raw socket: TCP connect port 21, kirim USER anonymous "
+            "+ PASS, konfirmasi response 230. Lalu eksekusi PWD/SYST untuk "
+            "memastikan akses nyata (bukan banner-only)."
+        ),
+        "business_impact": (
+            "Attacker bisa download seluruh konten anonymous root dengan "
+            "`wget -r ftp://anonymous:x@host/`. FTP juga plaintext - kalau ada "
+            "user real, password mereka mengalir tanpa enkripsi."
+        ),
+        "category": "infra",
+    },
+    "idor_active_chain": {
+        "friendly_name": "IDOR Aktif: Akses Data User Lain Tervalidasi",
+        "what_it_means": (
+            "Kami ambil URL dengan parameter ID numerik (?id=, /users/123) dari "
+            "crawler, lalu kirim varian dengan ID berbeda (-1, +1, +2). Validasi "
+            "multi-signal: response 200, struktur JSON sama tapi value berbeda, "
+            "body length signifikan berbeda (>50 byte), tidak memuat 'not found'. "
+            "Minimal 2 varian harus sukses untuk emit finding (bukan flukes)."
+        ),
+        "business_impact": (
+            "IDOR berarti user A dapat membaca data user B. Pelanggaran besar "
+            "UU PDP, dapat memunculkan gugatan + denda regulasi."
+        ),
+        "category": "data",
+    },
+    "websocket_auth_check": {
+        "friendly_name": "WebSocket Cross-Origin Hijack (CSWSH)",
+        "what_it_means": (
+            "Kami buka koneksi WebSocket ke endpoint umum (/ws, /socket.io, "
+            "/graphql, dll.) dengan dua Origin: domain sah dan attacker.invalid. "
+            "Kalau keduanya sama-sama dapat 101 Switching Protocols (server tidak "
+            "validasi Origin), itu CSWSH. Tambahan: kirim 1 frame ping - kalau "
+            "server merespons, channel command terbuka."
+        ),
+        "business_impact": (
+            "Halaman jahat di domain attacker bisa membuka WS ke server target "
+            "DARI BROWSER korban yang sedang login - dan membaca/mengirim pesan "
+            "sebagai korban. Setara hijack sesi real-time."
+        ),
+        "category": "data",
+    },
     "balance": {
         "friendly_name": "Pengujian Manipulasi Saldo / E-wallet",
         "what_it_means": (

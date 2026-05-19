@@ -10,6 +10,8 @@ Output:
         * Apa Celahnya
         * Dampak Bisnis
         * Bukti / Evidence
+        * Validasi Aktif (signal multi-step otomatis)
+        * Langkah Eksploitasi (skenario hacker step-by-step)
         * Link Bug / Endpoint Terkait (clickable)
         * Cara Menanggulangi
         * Referensi
@@ -60,7 +62,7 @@ from cyberloka import __version__
 from cyberloka.core import Finding, Severity, Target
 from cyberloka.core.config import ScanConfig
 from cyberloka.reporting.explainer import EXPLAIN, GLOSSARY
-from cyberloka.reporting.extras import MITRE_MAP, OWASP_MAP, REPRO_MAP, STEPS_MAP
+from cyberloka.reporting.extras import MITRE_MAP, OWASP_MAP, REPRO_MAP
 from cyberloka.reporting.scenarios import ACCESS_GAINED_MAP, is_access_gained
 
 # ----------------------------- color palette -----------------------------
@@ -571,7 +573,10 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
         "Setiap temuan dijelaskan dengan: <b>Apa Celahnya</b> "
         "(akar masalah teknis, dari modul scanner), <b>Dampak Bisnis</b> "
         "(arti dalam bahasa sehari-hari), <b>Bukti</b> (dari hasil scan), "
-        "<b>Link Bug</b> (clickable), dan <b>Cara Menanggulangi</b>.",
+        "<b>Validasi Aktif</b> (signal multi-step yang sudah dicek otomatis), "
+        "<b>Langkah Eksploitasi</b> (skenario step-by-step bagaimana hacker "
+        "menyusupi celah ini), <b>Link Bug</b> (clickable), dan "
+        "<b>Cara Menanggulangi</b>.",
         styles["body"],
     ))
     story.append(Spacer(1, 0.3 * cm))
@@ -587,7 +592,7 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
             ("Severity", SEV_LABEL_ID[f.severity]),
             ("Modul", f.module),
             ("Target", f.target),
-            ("Confidence", f.confidence),
+            ("Confidence", f.confidence + (" - TERVALIDASI AKTIF" if f.confidence == "confirmed" else "")),
         ]
         if f.cwe:
             meta_rows.append(("CWE", f.cwe))
@@ -621,6 +626,34 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
             story.append(_para("Bukti / Evidence", styles["h3"]))
             story.append(Preformatted(f.evidence, styles["evidence"]))
 
+        # ==== Validasi Aktif (signal yang sudah dicek otomatis) ====
+        if f.validation_proof:
+            story.append(_para("Validasi Aktif (Bukan Pasif)", styles["h3"]))
+            story.append(_para(
+                "Signal yang sudah divalidasi otomatis oleh scanner sehingga "
+                "finding ini benar-benar aktif dan dapat dieksploitasi - bukan "
+                "deteksi pasif yang berisiko false-positive:",
+                styles["muted"],
+            ))
+            for proof in f.validation_proof:
+                story.append(_para(
+                    f"&#10004; {proof}",
+                    styles["body"],
+                ))
+
+        # ==== Langkah Eksploitasi (skenario hacker step-by-step) ====
+        if f.exploitation_steps:
+            story.append(_para("Langkah Eksploitasi (Skenario Hacker)", styles["h3"]))
+            story.append(_para(
+                "Cara hacker mengsusupi celah ini, langkah demi langkah:",
+                styles["muted"],
+            ))
+            for i, step in enumerate(f.exploitation_steps, 1):
+                story.append(_para(
+                    f"<b>{i}.</b> {step}",
+                    styles["body"],
+                ))
+
         if f.urls:
             story.append(_para("Link Bug / Endpoint Terkait", styles["h3"]))
             for u in f.urls:
@@ -638,51 +671,6 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
 
         story.append(_para("Cara Menanggulangi", styles["h3"]))
         story.append(_para(f.remediation or "Lihat referensi di bawah.", styles["body"]))
-
-        # Cara Hacker Masuk (Step-by-Step) - skenario eksploitasi tingkat tinggi.
-        # Diambil dari finding.exploit_steps (di-set scanner) atau fallback
-        # extras.STEPS_MAP[module]. Bila keduanya kosong, bagian ini di-skip.
-        steps = list(f.exploit_steps or [])
-        if not steps:
-            tpl_steps = STEPS_MAP.get(f.module.lower())
-            if tpl_steps:
-                url_for_steps = (f.urls[0] if f.urls else target.base_url)
-                for s in tpl_steps:
-                    try:
-                        steps.append(s.format(url=url_for_steps, host=target.host))
-                    except (KeyError, IndexError, ValueError):
-                        steps.append(s)
-        if steps:
-            story.append(_para("Cara Hacker Masuk (Step-by-Step)", styles["h3"]))
-            story.append(_para(
-                "Skenario di bawah adalah rangkaian aksi tipikal yang digunakan "
-                "penyerang untuk mengeksploitasi celah ini. Disajikan berurutan "
-                "dari pengintaian sampai dampak akhir, agar tim development bisa "
-                "membayangkan jalur masuknya dan menutupnya secara presisi.",
-                styles["muted"],
-            ))
-            step_rows = []
-            for idx, s in enumerate(steps, 1):
-                step_rows.append([
-                    _para(f"<b>{idx}</b>", styles["body"]),
-                    _para(s, styles["body"]),
-                ])
-            step_table = Table(
-                step_rows, colWidths=[1.0 * cm, 15.5 * cm], hAlign="LEFT"
-            )
-            step_table.setStyle(TableStyle([
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#FCEFEF")),
-                ("TEXTCOLOR", (0, 0), (0, -1), ACCENT),
-                ("LEFTPADDING", (0, 0), (-1, -1), 5),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ("LINEBELOW", (0, 0), (-1, -1), 0.25,
-                 colors.HexColor("#D5D8DC")),
-            ]))
-            story.append(step_table)
-            story.append(Spacer(1, 0.2 * cm))
 
         # Cara Reproduksi (manual) - perintah curl/dig/openssl siap copy-paste
         repro_template = REPRO_MAP.get(f.module.lower(), "")
