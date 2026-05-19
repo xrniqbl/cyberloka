@@ -184,6 +184,40 @@ ACCESS_GAINED_MAP: dict[str, tuple[str, str]] = {
     # Info
     "exif_leak": ("Geo-location bocor di EXIF", "any"),
     "homoglyph_check": ("Risiko homograph phishing", "any"),
+
+    # =====================================================================
+    # 30 modul scanner active baru (Cyberloka v0.10.0 - CRITICAL/HIGH)
+    # =====================================================================
+    "apache_path_confusion": ("Pembacaan file server (CVE-2021-41773/42013)", "any"),
+    "phpunit_rce":           ("Remote Code Execution (PHPUnit CVE-2017-9841)", "any"),
+    "log4shell_probe":       ("Remote Code Execution (Log4Shell CVE-2021-44228)", "any"),
+    "spring_actuator_rce":   ("Kebocoran kredensial via Spring Actuator", "any"),
+    "gitlab_unauth_api":     ("Akses GitLab API tanpa autentikasi", "any"),
+    "jenkins_unauth_console":("Remote Code Execution via Jenkins Script Console", "any"),
+    "wp_xmlrpc_amplify":     ("Brute-force / DDoS amplification via xmlrpc.php", "any"),
+    "drupalgeddon2":         ("Remote Code Execution (Drupalgeddon2 CVE-2018-7600)", "any"),
+    "bypass_403":            ("Bypass kontrol akses 403", "any"),
+    "docker_remote_api":     ("Takeover host via Docker Remote API", "any"),
+    "elasticsearch_unauth":  ("Akses index Elasticsearch (data + log)", "any"),
+    "prometheus_unauth":     ("Bocor blueprint arsitektur via Prometheus", "any"),
+    "grafana_default_login": ("Takeover Grafana via kredensial default", "any"),
+    "kibana_unauth":         ("Akses log produksi via Kibana", "any"),
+    "solr_admin_unauth":     ("Remote Code Execution via Solr (Velocity)", "any"),
+    "adminer_exposed":       ("Akses database publik via Adminer", "any"),
+    "phpmyadmin_exposed":    ("Akses database publik via phpMyAdmin", "any"),
+    "iis_shortname":         ("Kebocoran nama file IIS (8.3)", "any"),
+    "cache_deception":       ("Akses data privat via Web Cache Deception", "any"),
+    "cors_null_origin":      ("Pembacaan API privat via CORS Null Origin", "any"),
+    "smtp_header_injection": ("Phishing dari domain target via SMTP injection", "any"),
+    "oauth_redirect_bypass": ("Account takeover via OAuth redirect_uri", "any"),
+    "s3_world_writable":     ("Defacement / supply-chain via S3 writable", "any"),
+    "firebase_open_db":      ("Database realtime publik (Firebase)", "any"),
+    "csti_template":         ("Client-side template injection (XSS bypass CSP)", "any"),
+    "api_version_downgrade": ("Bypass auth via API versi lama", "any"),
+    "grpc_reflection":       ("Backdoor admin via gRPC reflection", "any"),
+    "saml_metadata_exposed": ("Persiapan SAML response forging", "any"),
+    "webdav_writable":       ("Webshell upload via WebDAV", "any"),
+    "nginx_off_by_slash":    ("File disclosure via Nginx alias traversal", "any"),
 }
 
 

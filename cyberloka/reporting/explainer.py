@@ -1316,6 +1316,401 @@ EXPLAIN: dict[str, dict[str, str]] = {
     },
 }
 
+# =====================================================================
+# Cyberloka v0.10.0 — entri EXPLAIN untuk 30 modul scanner active baru
+# (CRITICAL/HIGH dengan validasi otomatis). Dideklarasikan via .update()
+# agar tidak mengganggu format dict utama di atas.
+# =====================================================================
+EXPLAIN.update({
+    "apache_path_confusion": {
+        "friendly_name": "Apache Path Confusion (CVE-2021-41773 / 42013)",
+        "what_it_means": (
+            "Kami uji apakah server Apache versi 2.4.49 / 2.4.50 dapat dipaksa "
+            "membaca file di luar webroot lewat encoding `..%2e/` — file "
+            "/etc/passwd di-validasi muncul di response."
+        ),
+        "business_impact": (
+            "Sangat kritikal. Bila lolos, attacker dapat membaca seluruh file "
+            "server (config, kunci SSH, source code) dan — bila mod_cgi aktif — "
+            "langsung naik ke Remote Code Execution. Server sepenuhnya jatuh."
+        ),
+        "category": "infra",
+    },
+    "phpunit_rce": {
+        "friendly_name": "PHPUnit eval-stdin RCE (CVE-2017-9841)",
+        "what_it_means": (
+            "Kami POST kode PHP ke endpoint `eval-stdin.php` di vendor/phpunit "
+            "dan validasi marker md5(1) muncul di response — server "
+            "mengeksekusi PHP arbitrer."
+        ),
+        "business_impact": (
+            "Sangat kritikal. Vendor bocor di webroot = RCE instan tanpa "
+            "auth. Attacker tinggal upload webshell -> takeover total dalam menit."
+        ),
+        "category": "infra",
+    },
+    "log4shell_probe": {
+        "friendly_name": "Log4Shell JNDI Injection (CVE-2021-44228)",
+        "what_it_means": (
+            "Kami suntik payload `${jndi:ldap://...}` ke header umum (User-Agent, "
+            "Referer, X-Forwarded-For) dan parameter — bila aplikasi Java pakai "
+            "Log4j vulnerable, server akan kontak server LDAP attacker."
+        ),
+        "business_impact": (
+            "Salah satu CVE paling berbahaya dalam sejarah. RCE root tanpa "
+            "auth pada hampir semua aplikasi Java sebelum Desember 2021. "
+            "Wajib patch ke 2.17+ atau set `log4j2.formatMsgNoLookups=true`."
+        ),
+        "category": "infra",
+    },
+    "spring_actuator_rce": {
+        "friendly_name": "Spring Boot Actuator Terbuka",
+        "what_it_means": (
+            "Endpoint debug Spring Boot (/actuator/env, /actuator/heapdump, "
+            "/actuator/jolokia) terbuka publik — kami validasi dengan parsing "
+            "JSON khas Spring."
+        ),
+        "business_impact": (
+            "Heapdump = dump memori berisi password DB, JWT secret, kunci API. "
+            "Jolokia + chain Logback = RCE. Aktuator wajib di-protect basic-auth "
+            "atau di-bind ke localhost."
+        ),
+        "category": "infra",
+    },
+    "gitlab_unauth_api": {
+        "friendly_name": "GitLab API Tanpa Autentikasi",
+        "what_it_means": (
+            "Endpoint /api/v4/users dan /api/v4/projects mengembalikan data "
+            "user/project tanpa token — biasanya karena setting "
+            "`gitlab.signup_enabled` longgar atau internal projects tetap "
+            "terlihat publik."
+        ),
+        "business_impact": (
+            "Bocor email staf untuk phishing terarah. Source code internal "
+            "(repo `internal`) bocor lengkap → kebocoran logika bisnis dan "
+            "secret di history commit."
+        ),
+        "category": "data",
+    },
+    "jenkins_unauth_console": {
+        "friendly_name": "Jenkins Script Console Tanpa Auth",
+        "what_it_means": (
+            "Endpoint /script atau /scriptText terbuka tanpa autentikasi → "
+            "kami validasi keberadaan halaman 'Groovy script'."
+        ),
+        "business_impact": (
+            "Akses Script Console = RCE pada master Jenkins, akses ke "
+            "credential CI/CD (AWS, registry, deploy key) = supply-chain "
+            "compromise. Pelanggan menerima rilis teracun."
+        ),
+        "category": "infra",
+    },
+    "wp_xmlrpc_amplify": {
+        "friendly_name": "WordPress xmlrpc.php Brute & Amplification",
+        "what_it_means": (
+            "xmlrpc.php memuat method `system.multicall` (1000 percobaan/req) "
+            "dan `pingback.ping` (DDoS amplifier). Kami validasi via "
+            "`system.listMethods`."
+        ),
+        "business_impact": (
+            "Brute-force ke wp-login akan terblok rate-limit, tapi via xmlrpc "
+            "1 request = 1000 password. Pingback dipakai DDoS situs lain → "
+            "masalah hukum + blacklist IP datacenter."
+        ),
+        "category": "login",
+    },
+    "drupalgeddon2": {
+        "friendly_name": "Drupalgeddon2 (CVE-2018-7600)",
+        "what_it_means": (
+            "Kami probe form-render Drupal yang menerima `#post_render` array "
+            "dan validasi marker eksekusi. Bila lolos = RCE pre-auth."
+        ),
+        "business_impact": (
+            "RCE root pada Drupal 7/8 unpatched. Attacker pasang miner / "
+            "webshell dalam menit. Wajib upgrade core."
+        ),
+        "category": "infra",
+    },
+    "bypass_403": {
+        "friendly_name": "Bypass Halaman 403 / Forbidden",
+        "what_it_means": (
+            "Kami coba header `X-Original-URL`, `X-Rewrite-URL`, "
+            "`X-Forwarded-For: 127.0.0.1` dan path tricks (`/admin/.`, "
+            "`/admin/..;/`, `/admin%20`) untuk halaman yang awalnya 403."
+        ),
+        "business_impact": (
+            "Reverse-proxy dan backend punya logika authorisasi yang berbeda "
+            "→ attacker masuk ke /admin tanpa login. Pelanggaran kontrol "
+            "akses parah."
+        ),
+        "category": "login",
+    },
+    "docker_remote_api": {
+        "friendly_name": "Docker Remote API Terbuka",
+        "what_it_means": (
+            "Daemon Docker di-bind ke 0.0.0.0:2375 tanpa TLS/auth. Kami "
+            "validasi via GET /version (JSON Docker)."
+        ),
+        "business_impact": (
+            "Setara root SSH ke host. Attacker mount `/` ke container baru → "
+            "tulis ssh key ke /root/.ssh → SSH root. Total takeover server "
+            "fisik."
+        ),
+        "category": "infra",
+    },
+    "elasticsearch_unauth": {
+        "friendly_name": "Elasticsearch Tanpa Autentikasi",
+        "what_it_means": (
+            "Endpoint /_cluster/health dan /_cat/indices terbuka publik. "
+            "Biasanya berisi log produksi + PII."
+        ),
+        "business_impact": (
+            "Kebocoran log eksekutif, email pelanggan, audit trail. Risiko "
+            "denda UU PDP signifikan + hilangnya bukti forensik."
+        ),
+        "category": "data",
+    },
+    "prometheus_unauth": {
+        "friendly_name": "Prometheus Metrics Terbuka",
+        "what_it_means": (
+            "/metrics dan /api/v1/targets terbuka. Memberi attacker peta "
+            "service internal, hostname, versi software."
+        ),
+        "business_impact": (
+            "Bukan kerentanan langsung, tapi blueprint sempurna untuk "
+            "serangan presisi (SSRF / lateral movement)."
+        ),
+        "category": "info",
+    },
+    "grafana_default_login": {
+        "friendly_name": "Grafana dengan Kredensial Default (admin/admin)",
+        "what_it_means": (
+            "Kami coba login admin/admin di /login Grafana. Validasi via "
+            "cookie session yang muncul + akses /api/datasources."
+        ),
+        "business_impact": (
+            "Datasource Grafana sering memuat connection string production "
+            "(PostgreSQL, MySQL). Attacker baca DB credential langsung."
+        ),
+        "category": "infra",
+    },
+    "kibana_unauth": {
+        "friendly_name": "Kibana Terbuka Publik",
+        "what_it_means": (
+            "/app/home Kibana atau /api/status balas tanpa auth → akses "
+            "Discover UI ke Elasticsearch backend."
+        ),
+        "business_impact": (
+            "Pakai Discover untuk query log + PII. Pakai Dev Tools untuk "
+            "kueri raw ke Elasticsearch."
+        ),
+        "category": "data",
+    },
+    "solr_admin_unauth": {
+        "friendly_name": "Apache Solr Admin Terbuka",
+        "what_it_means": (
+            "/solr/admin/cores tanpa auth → pintu ke RCE klasik via "
+            "VelocityResponseWriter."
+        ),
+        "business_impact": (
+            "Aktivasi Velocity + query velocity = arbitrary template = RCE. "
+            "Index Solr juga sering berisi data pencarian sensitif."
+        ),
+        "category": "infra",
+    },
+    "adminer_exposed": {
+        "friendly_name": "Adminer.php Tertinggal di Webroot",
+        "what_it_means": (
+            "Kami cek path umum (/adminer.php, /db/adminer.php) untuk tool DB "
+            "single-file."
+        ),
+        "business_impact": (
+            "Attacker brute-force ke DB lokal atau pakai Adminer SSRF untuk "
+            "konek ke DB internal mana saja → akses langsung database."
+        ),
+        "category": "infra",
+    },
+    "phpmyadmin_exposed": {
+        "friendly_name": "phpMyAdmin Terbuka Publik",
+        "what_it_means": (
+            "Path /phpmyadmin/, /pma/, /myadmin/ → pintu admin DB."
+        ),
+        "business_impact": (
+            "Kombinasi credential lemah + CVE phpMyAdmin (CVE-2018-12613 "
+            "LFI, dll.) = RCE klasik via SQL `INTO OUTFILE`."
+        ),
+        "category": "infra",
+    },
+    "iis_shortname": {
+        "friendly_name": "IIS Short-Name Disclosure (8.3 Tilde)",
+        "what_it_means": (
+            "IIS lama menjawab beda untuk path 8.3 tilde valid vs invalid. "
+            "Kami validasi via beda 404/400."
+        ),
+        "business_impact": (
+            "Kebocoran nama file backup dan konfigurasi internal. Chain ke "
+            "download file sensitif yang nama lengkapnya tidak diketahui "
+            "publik."
+        ),
+        "category": "info",
+    },
+    "cache_deception": {
+        "friendly_name": "Web Cache Deception",
+        "what_it_means": (
+            "Kami cek apakah path privat ditambah `.css` tetap mengembalikan "
+            "data privat user TAPI ditandai `cf-cache-status: HIT`."
+        ),
+        "business_impact": (
+            "Attacker pancing korban buka URL `/profile/x.css`. CDN menyimpan "
+            "halaman privat sebagai static. Attacker akses URL yang sama → "
+            "dapat data PII korban dari cache."
+        ),
+        "category": "data",
+    },
+    "cors_null_origin": {
+        "friendly_name": "CORS Refleksi Origin: null",
+        "what_it_means": (
+            "Kami kirim `Origin: null` dengan credentials. Server balas "
+            "`Access-Control-Allow-Origin: null` + `Allow-Credentials: true`."
+        ),
+        "business_impact": (
+            "Halaman sandboxed iframe attacker bisa kirim XHR cross-origin "
+            "dengan cookie korban → eksfiltrasi data API privat."
+        ),
+        "category": "data",
+    },
+    "smtp_header_injection": {
+        "friendly_name": "SMTP Header Injection di Form Email",
+        "what_it_means": (
+            "Form kontak/share menerima newline (`%0d%0a`) di field email → "
+            "attacker tambahkan `Bcc:` / `From:` / body sendiri."
+        ),
+        "business_impact": (
+            "Phishing dari domain resmi perusahaan. SPF/DKIM lulus karena "
+            "email memang dikirim server target. Korban tertipu massal."
+        ),
+        "category": "email",
+    },
+    "oauth_redirect_bypass": {
+        "friendly_name": "OAuth redirect_uri Whitelist Lemah",
+        "what_it_means": (
+            "Kami coba variasi `redirect_uri` (sub-domain attacker, scheme "
+            "trick, double-slash). Validasi via header Location."
+        ),
+        "business_impact": (
+            "Code OAuth dialihkan ke attacker → exchange jadi access token → "
+            "takeover akun korban."
+        ),
+        "category": "login",
+    },
+    "s3_world_writable": {
+        "friendly_name": "S3 Bucket Tertulis Publik (World Writable)",
+        "what_it_means": (
+            "Kami coba PUT objek anonim ke bucket. Bila berhasil di-GET "
+            "kembali = WRITE publik."
+        ),
+        "business_impact": (
+            "Attacker ganti index.html, asset JS/CSS, atau file APK → "
+            "supply-chain XSS / malware di seluruh pelanggan. Reputasi "
+            "perusahaan bisa hancur dalam jam."
+        ),
+        "category": "infra",
+    },
+    "firebase_open_db": {
+        "friendly_name": "Firebase Realtime Database Tanpa Aturan",
+        "what_it_means": (
+            "Kami probe `<project>.firebaseio.com/.json`. 200 + JSON "
+            "lengkap = `\".read\":true` (rules default test)."
+        ),
+        "business_impact": (
+            "Database realtime sepenuhnya terbuka untuk dibaca/ditulis "
+            "anonim. Klasik di app mobile yang lupa set rules production."
+        ),
+        "category": "data",
+    },
+    "csti_template": {
+        "friendly_name": "Client-Side Template Injection (CSTI)",
+        "what_it_means": (
+            "Kami suntik `{{7*7}}` ke parameter reflektif di aplikasi "
+            "AngularJS/Vue dan validasi `49` muncul di body."
+        ),
+        "business_impact": (
+            "XSS yang lolos CSP standar (eval di sandbox AngularJS). "
+            "Sangat berbahaya karena CSP biasanya jadi pertahanan terakhir."
+        ),
+        "category": "kode",
+    },
+    "api_version_downgrade": {
+        "friendly_name": "API Versi Lama Tanpa Otorisasi",
+        "what_it_means": (
+            "Endpoint /api/v1/, /api/old/, /api/legacy/ kadang masih hidup "
+            "tapi dengan kontrol akses lebih lemah dibanding versi terbaru."
+        ),
+        "business_impact": (
+            "Bypass auth menyeluruh hanya dengan ganti prefix versi. Pelanggan "
+            "yang seharusnya dilindungi versi v3 dengan auth kuat masih "
+            "diakses via v1 anonim."
+        ),
+        "category": "login",
+    },
+    "grpc_reflection": {
+        "friendly_name": "gRPC Reflection Aktif di Production",
+        "what_it_means": (
+            "`grpcurl list` dijawab dengan daftar service → reflection "
+            "diaktifkan di production."
+        ),
+        "business_impact": (
+            "Attacker dapat full schema gRPC tanpa proto file. Method admin "
+            "(DeleteUser, GrantRole) terlihat dan sering tidak di-protect "
+            "karena 'kan internal'."
+        ),
+        "category": "info",
+    },
+    "saml_metadata_exposed": {
+        "friendly_name": "SAML Metadata Terbuka Publik",
+        "what_it_means": (
+            "/saml/metadata, /Shibboleth.sso/Metadata mengembalikan XML "
+            "berisi entityID + signing certificate."
+        ),
+        "business_impact": (
+            "Bahan baku untuk serangan SAML signature wrapping (XSW) → forge "
+            "SAML response sebagai user mana pun → takeover SSO."
+        ),
+        "category": "login",
+    },
+    "webdav_writable": {
+        "friendly_name": "WebDAV Method PUT Aktif",
+        "what_it_means": (
+            "Kami probe PROPFIND + PUT + GET roundtrip. Bila sukses = "
+            "WebDAV bisa upload file arbitrer."
+        ),
+        "business_impact": (
+            "PUT shell.aspx (IIS) / shell.jsp (Tomcat) langsung jadi RCE. "
+            "Ekstensi script harus di-deny eksplisit di config WebDAV."
+        ),
+        "category": "infra",
+    },
+    "nginx_off_by_slash": {
+        "friendly_name": "Nginx Alias Off-by-Slash Path Traversal",
+        "what_it_means": (
+            "Konfigurasi `alias /var/www/static;` (tanpa trailing slash) "
+            "ditambah `location /static/` memungkinkan `/static../` keluar "
+            "dari directory."
+        ),
+        "business_impact": (
+            "File disclosure sampai /etc/passwd, .env, kunci SSH user web. "
+            "Chain ke takeover lebih lanjut."
+        ),
+        "category": "infra",
+    },
+})
+
+
+# =====================================================================
+# (Akhir blok update v0.10.0)
+# =====================================================================
+
+
 # Action-plan time bucket per severity (untuk action plan di laporan).
 SEVERITY_ACTION = {
     "critical": {

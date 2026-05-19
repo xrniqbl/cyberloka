@@ -60,7 +60,7 @@ from cyberloka import __version__
 from cyberloka.core import Finding, Severity, Target
 from cyberloka.core.config import ScanConfig
 from cyberloka.reporting.explainer import EXPLAIN, GLOSSARY
-from cyberloka.reporting.extras import MITRE_MAP, OWASP_MAP, REPRO_MAP
+from cyberloka.reporting.extras import MITRE_MAP, OWASP_MAP, REPRO_MAP, STEPS_MAP
 from cyberloka.reporting.scenarios import ACCESS_GAINED_MAP, is_access_gained
 
 # ----------------------------- color palette -----------------------------
@@ -638,6 +638,51 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
 
         story.append(_para("Cara Menanggulangi", styles["h3"]))
         story.append(_para(f.remediation or "Lihat referensi di bawah.", styles["body"]))
+
+        # Cara Hacker Masuk (Step-by-Step) - skenario eksploitasi tingkat tinggi.
+        # Diambil dari finding.exploit_steps (di-set scanner) atau fallback
+        # extras.STEPS_MAP[module]. Bila keduanya kosong, bagian ini di-skip.
+        steps = list(f.exploit_steps or [])
+        if not steps:
+            tpl_steps = STEPS_MAP.get(f.module.lower())
+            if tpl_steps:
+                url_for_steps = (f.urls[0] if f.urls else target.base_url)
+                for s in tpl_steps:
+                    try:
+                        steps.append(s.format(url=url_for_steps, host=target.host))
+                    except (KeyError, IndexError, ValueError):
+                        steps.append(s)
+        if steps:
+            story.append(_para("Cara Hacker Masuk (Step-by-Step)", styles["h3"]))
+            story.append(_para(
+                "Skenario di bawah adalah rangkaian aksi tipikal yang digunakan "
+                "penyerang untuk mengeksploitasi celah ini. Disajikan berurutan "
+                "dari pengintaian sampai dampak akhir, agar tim development bisa "
+                "membayangkan jalur masuknya dan menutupnya secara presisi.",
+                styles["muted"],
+            ))
+            step_rows = []
+            for idx, s in enumerate(steps, 1):
+                step_rows.append([
+                    _para(f"<b>{idx}</b>", styles["body"]),
+                    _para(s, styles["body"]),
+                ])
+            step_table = Table(
+                step_rows, colWidths=[1.0 * cm, 15.5 * cm], hAlign="LEFT"
+            )
+            step_table.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#FCEFEF")),
+                ("TEXTCOLOR", (0, 0), (0, -1), ACCENT),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("LINEBELOW", (0, 0), (-1, -1), 0.25,
+                 colors.HexColor("#D5D8DC")),
+            ]))
+            story.append(step_table)
+            story.append(Spacer(1, 0.2 * cm))
 
         # Cara Reproduksi (manual) - perintah curl/dig/openssl siap copy-paste
         repro_template = REPRO_MAP.get(f.module.lower(), "")

@@ -90,6 +90,11 @@ class Finding:
     urls: list[str] = field(default_factory=list)
     # ID bug-tracker eksternal opsional (mis. JIRA SEC-1234, GitHub issue URL).
     bug_id: str | None = None
+    # Langkah-per-langkah cara penyerang masuk ke celah ini.
+    # Setiap entry adalah satu langkah, sudah berurutan. Dipakai oleh PDF report
+    # untuk menampilkan bagian "Cara Hacker Masuk (Step-by-Step)".
+    # Bila kosong, PDF reporter akan fallback ke `extras.STEPS_MAP[module]`.
+    exploit_steps: list[str] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
     @property

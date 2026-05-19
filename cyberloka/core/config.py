@@ -67,6 +67,17 @@ class ScanConfig:
         "stored_xss", "url_preview_ssrf", "private_profile_bypass",
         "media_persistence", "dm_privacy", "social_csrf", "oauth_takeover",
         "unicode_bypass",
+        # v0.10.0 — 30 modul critical/high baru (auto-validation)
+        "apache_path_confusion", "phpunit_rce", "log4shell_probe",
+        "spring_actuator_rce", "gitlab_unauth_api", "jenkins_unauth_console",
+        "wp_xmlrpc_amplify", "drupalgeddon2", "bypass_403",
+        "docker_remote_api", "elasticsearch_unauth", "prometheus_unauth",
+        "grafana_default_login", "kibana_unauth", "solr_admin_unauth",
+        "adminer_exposed", "phpmyadmin_exposed", "iis_shortname",
+        "cache_deception", "cors_null_origin", "smtp_header_injection",
+        "oauth_redirect_bypass", "s3_world_writable", "firebase_open_db",
+        "csti_template", "api_version_downgrade", "grpc_reflection",
+        "saml_metadata_exposed", "webdav_writable", "nginx_off_by_slash",
     )
 
     def resolve_modules(self) -> list[str]:

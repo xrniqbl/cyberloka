@@ -27,7 +27,7 @@ show_menu() {
     clear || true
     cat <<'BANNER'
 ================================================================
-  CYBERLOKA v0.9.0 - Web Vulnerability Scanner
+  CYBERLOKA v0.10.0 - Web Vulnerability Scanner
 ================================================================
 
  APA YANG MAU DICOBA?  (pilih nomor)
@@ -39,7 +39,7 @@ show_menu() {
   4. Buka Dashboard di browser
   5. Lihat laporan HTML terakhir
   6. Tampilkan --help
-  7. Daftar semua module deteksi
+  7. Daftar semua module deteksi  (135+ modul, termasuk 30 baru v0.10)
   8. Update Cyberloka (git pull + pip install)
   0. Keluar
 
@@ -139,7 +139,7 @@ show_help() {
 list_modules() {
     cat <<'MOD'
 ================================================================
-  Daftar Modul Cyberloka v0.9.0 (105 modul, 103 jalan di full)
+  Daftar Modul Cyberloka v0.10.0 (135 modul, mode active = full)
 ================================================================
 
 [RECON - 21]
@@ -171,6 +171,19 @@ list_modules() {
   stored_xss, url_preview_ssrf, private_profile_bypass,
   media_persistence, dm_privacy, social_csrf, oauth_takeover,
   unicode_bypass
+
+[ACTIVE v0.10.0 - 30 BARU - CRITICAL/HIGH dengan auto-validation]
+  apache_path_confusion (CVE-2021-41773), phpunit_rce (CVE-2017-9841),
+  log4shell_probe (CVE-2021-44228), spring_actuator_rce,
+  gitlab_unauth_api, jenkins_unauth_console, wp_xmlrpc_amplify,
+  drupalgeddon2 (CVE-2018-7600), bypass_403, docker_remote_api,
+  elasticsearch_unauth, prometheus_unauth, grafana_default_login,
+  kibana_unauth, solr_admin_unauth, adminer_exposed,
+  phpmyadmin_exposed, iis_shortname, cache_deception,
+  cors_null_origin, smtp_header_injection, oauth_redirect_bypass,
+  s3_world_writable, firebase_open_db, csti_template,
+  api_version_downgrade, grpc_reflection, saml_metadata_exposed,
+  webdav_writable, nginx_off_by_slash
 
 [SIMULATE - 2]  (hanya jika --simulate-attack)
   rate_limit, burst
