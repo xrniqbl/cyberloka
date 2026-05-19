@@ -739,6 +739,36 @@ def _build(doc_path: str, target: Target, config: ScanConfig, findings: list[Fin
             story.append(_para("Cara Reproduksi (Manual)", styles["h3"]))
             story.append(Preformatted(repro_text, styles["evidence"]))
 
+        # ==== Cara Akses Celah (Perintah Siap Pakai) ====
+        # Auto-generated oleh curl_active_verify post-processor.
+        # Menampilkan curl command yang sudah DIVALIDASI bisa mengakses celah.
+        curl_cmd = f.extra.get("curl_verify_cmd")
+        if curl_cmd:
+            curl_verified = f.extra.get("curl_verified", False)
+            verify_note = f.extra.get("curl_verify_note", "")
+            status_icon = "&#10004;" if curl_verified else "&#10060;"
+            status_text = (
+                "TERVERIFIKASI — celah terbuka saat scan"
+                if curl_verified else
+                "Tidak terverifikasi ulang (lihat catatan)"
+            )
+            story.append(_para(
+                f"Cara Akses Celah (Perintah Siap Pakai) {status_icon}",
+                styles["h3"],
+            ))
+            story.append(_para(
+                f"Status re-verifikasi: <b>{status_text}</b>. "
+                "Perintah di bawah dapat di-copy-paste langsung ke terminal "
+                "untuk membuktikan celah terbuka:",
+                styles["muted"],
+            ))
+            story.append(Preformatted(curl_cmd, styles["evidence"]))
+            if verify_note:
+                story.append(_para(
+                    f"<font color='#C0392B'>{verify_note}</font>",
+                    styles["muted"],
+                ))
+
         if f.references:
             story.append(_para("Referensi", styles["h3"]))
             for r in f.references:

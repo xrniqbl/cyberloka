@@ -86,6 +86,8 @@ class ScanConfig:
         "oauth_redirect_bypass", "s3_world_writable", "firebase_open_db",
         "csti_template", "api_version_downgrade", "grpc_reflection",
         "saml_metadata_exposed", "webdav_writable", "nginx_off_by_slash",
+        # v0.10.1 — deep validation scanners
+        "xss_deep", "login_bypass_deep", "curl_active_verify",
     )
 
     def resolve_modules(self) -> list[str]:

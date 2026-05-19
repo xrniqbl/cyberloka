@@ -167,6 +167,10 @@ MODULE_MAP: dict[str, str] = {
     "saml_metadata_exposed": "cyberloka.active.saml_metadata_exposed",
     "webdav_writable":       "cyberloka.active.webdav_writable",
     "nginx_off_by_slash":    "cyberloka.active.nginx_off_by_slash",
+    # ===== DEEP VALIDATION v0.10.1 =====
+    "xss_deep":              "cyberloka.active.xss_deep",
+    "login_bypass_deep":     "cyberloka.active.login_bypass_deep",
+    "curl_active_verify":    "cyberloka.active.curl_active_verify",
     # ===== SIMULATE =====
     "rate_limit": "cyberloka.simulate.rate_limit",
     "burst": "cyberloka.simulate.burst",
@@ -233,7 +237,17 @@ def run_scan(target: Target, config: ScanConfig, progress_cb=None) -> list[Findi
                 done += 1
                 if progress_cb:
                     progress_cb(future_to_name[fut], done, total)
-    return _enrich_findings(findings, target)
+    enriched = _enrich_findings(findings, target)
+
+    # Post-process: curl active verification untuk finding CRITICAL/HIGH.
+    # Menambah curl command siap pakai + re-validasi celah masih terbuka.
+    try:
+        from cyberloka.active.curl_active_verify import post_process
+        enriched = post_process(enriched, target, config)
+    except Exception as e:
+        log.warning("[curl_verify] post_process error: %s", e)
+
+    return enriched
 
 
 def _enrich_findings(findings: list[Finding], target: Target) -> list[Finding]:
