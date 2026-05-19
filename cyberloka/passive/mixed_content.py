@@ -71,8 +71,9 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                     evidence="\n".join(missing_sri[:15]),
                     cwe="CWE-353",
                     remediation=(
-                        "Tambahkan atribut `integrity=\"sha384-...\"` dan `crossorigin=\"anonymous\"` "
-                        "pada tag <script> dan <link rel=stylesheet> dari third-party CDN."
+                        "Tambahkan atribut integrity=\"sha384-...\" dan "
+                        "crossorigin=\"anonymous\" pada tag script dan tag "
+                        "link (rel=\"stylesheet\") dari third-party CDN."
                     ),
                     references=[
                         "https://developer.mozilla.org/docs/Web/Security/Subresource_Integrity"
