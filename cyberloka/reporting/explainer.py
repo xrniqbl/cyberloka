@@ -741,6 +741,42 @@ EXPLAIN: dict[str, dict[str, str]] = {
         ),
         "category": "login",
     },
+    "deep_login_audit": {
+        "friendly_name": "Audit Login Mendalam (Default Credentials Tervalidasi)",
+        "what_it_means": (
+            "Modul ini memetakan semua form login (admin maupun user), mencoba "
+            "kredensial paling umum dari daftar kebocoran publik, lalu memvalidasi "
+            "OTOMATIS apakah login berhasil. Validasi memakai kombinasi banyak "
+            "signal: redirect ke halaman privileged, Set-Cookie sesi, JSON token, "
+            "perbedaan body vs baseline, dan probe ke endpoint privileged setelah "
+            "login. Karena multi-signal, hasilnya tidak perlu cek manual."
+        ),
+        "business_impact": (
+            "Kalau ada finding di sini, akun admin / user Anda dapat diambil alih "
+            "oleh siapapun di internet hanya bermodal daftar password umum. "
+            "Setelah login admin = kontrol penuh aplikasi. Setelah login user = "
+            "akses data pribadi korban + dapat dipakai social engineering."
+        ),
+        "category": "login",
+    },
+    "root_access_check": {
+        "friendly_name": "Akses Setara Root via Service Terbuka",
+        "what_it_means": (
+            "Kami memvalidasi otomatis apakah ada port publik yang menjalankan "
+            "service kontrol-bidang (Docker daemon, Kubernetes API/kubelet, etcd, "
+            "Redis, MongoDB, Elasticsearch, CouchDB, Jenkins script console, dll.) "
+            "tanpa autentikasi. Validasi pakai signature respons API, bukan "
+            "sekadar 'port terbuka', sehingga false-positive minimal."
+        ),
+        "business_impact": (
+            "Service-service ini, kalau terbuka tanpa auth, = setara akses ROOT "
+            "ke server / cluster. Attacker dapat membuat container privileged, "
+            "exec ke pod, mengambil seluruh database, atau menjalankan kode "
+            "Groovy via Jenkins. Ini biasanya jadi pintu masuk insiden ransomware "
+            "/ data leak skala besar."
+        ),
+        "category": "infra",
+    },
     "balance": {
         "friendly_name": "Pengujian Manipulasi Saldo / E-wallet",
         "what_it_means": (
