@@ -140,6 +140,7 @@ OWASP_MAP: dict[str, str] = {
     # Simulate
     "rate_limit": "A07:2021 Identification & Authentication Failures",
     "burst": "A04:2021 Insecure Design",
+    "safe_poc": "A03:2021 Injection",
 }
 
 # --------------------------- MITRE ATT&CK --------------------------------
@@ -264,6 +265,7 @@ MITRE_MAP: dict[str, str] = {
     # Simulate
     "rate_limit": "T1110 Brute Force",
     "burst": "T1499 Endpoint Denial of Service",
+    "safe_poc": "T1190 / T1059 Verified Exploitation (safe PoC)",
 }
 
 # --------------------------- Cara Reproduksi -----------------------------
@@ -455,4 +457,10 @@ REPRO_MAP: dict[str, str] = {
         "2. Bila tidak ada lockout/CAPTCHA setelah N percobaan -> rate-limit absen."
     ),
     "burst": "# Kirim 100 request paralel dengan ab atau hey, lihat apakah ada throttle",
+    "safe_poc": (
+        "# Safe PoC mengkonfirmasi otomatis. Verifikasi manual:\n"
+        "# RCE : {url} -> sisipkan ;id  |id  `id`  $(id) ; cari output uid=...(...)\n"
+        "# SQLi: {url} -> ' UNION SELECT 'CYBERLOKADB~'||version()-- - ; versi DB bocor\n"
+        "#   atau (dengan izin): sqlmap -u '{url}' --batch --banner"
+    ),
 }
