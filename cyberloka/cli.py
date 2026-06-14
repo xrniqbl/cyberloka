@@ -81,6 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-verify-tls", action="store_true")
     p.add_argument("--proxy", help="HTTP proxy URL (mis. http://127.0.0.1:8080)")
     p.add_argument("--oob-url", help="URL collaborator OOB self-hosted (mis. http://oast.example.com:8088) untuk konfirmasi blind SSRF")
+    p.add_argument("--ports", help="Spesifikasi port untuk discan: 'all'/'full' (1-65535), daftar '22,80,443', atau range '1-1024' / '8000-8100'. Default: ~60 port umum.")
     p.add_argument("--json", dest="json_out", help="Path output JSON")
     p.add_argument("--html", dest="html_out", help="Path output HTML")
     p.add_argument("--sarif", dest="sarif_out", help="Path output SARIF 2.1.0 (kompatibel GitHub code scanning)")
@@ -162,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
         proxy=args.proxy,
         oob_url=args.oob_url,
         sarif_out=args.sarif_out,
+        ports=args.ports,
     )
 
     needs_intrusive = cfg.mode in ("active", "full") or cfg.simulate_attack
