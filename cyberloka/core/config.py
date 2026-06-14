@@ -36,6 +36,7 @@ class ScanConfig:
     html_out: str | None = None
     proxy: str | None = None
     oob_url: str | None = None
+    sarif_out: str | None = None
 
     RECON_MODULES = (
         "dns", "whois", "ports", "fingerprint", "subdomains",
