@@ -15,6 +15,7 @@ class Target:
     port: int
     path: str
     is_ip: bool
+    query: str = ""
 
     @property
     def base_url(self) -> str:
@@ -23,7 +24,7 @@ class Target:
             self.scheme == "https" and self.port != 443
         ):
             netloc = f"{self.host}:{self.port}"
-        return urlunparse((self.scheme, netloc, self.path or "/", "", "", ""))
+        return urlunparse((self.scheme, netloc, self.path or "/", "", self.query, ""))
 
     @property
     def origin(self) -> str:
@@ -78,4 +79,5 @@ def parse_target(raw: str) -> Target:
         port=port,
         path=path,
         is_ip=is_ip,
+        query=parsed.query or "",
     )

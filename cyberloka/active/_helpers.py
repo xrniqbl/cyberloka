@@ -1,7 +1,12 @@
 """Helpers shared by active checks."""
 from __future__ import annotations
 
+import difflib
 import re
+import statistics
+import time
+from dataclasses import dataclass
+from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 
@@ -103,3 +108,98 @@ def fuzz_forms(client, config, payload, *, max_forms=10, max_fields=12):
                     else client.get(action, params=data))
             if resp is not None:
                 yield target.get("name"), action, resp
+
+
+# ---------------------------------------------------------------------------
+# Verification primitives (verification-first active scanning)
+#
+# Tujuan: sebuah temuan hanya boleh dilaporkan bila bisa DIBUKTIKAN lewat
+# pembandingan terhadap respons baseline + permintaan kontrol — bukan sekadar
+# satu pola di satu respons. Ini menghilangkan false positive.
+# ---------------------------------------------------------------------------
+
+
+def param_items(url: str) -> list[tuple[str, str]]:
+    return parse_qsl(urlparse(url).query, keep_blank_values=True)
+
+
+def param_names(url: str) -> list[str]:
+    seen: list[str] = []
+    for k, _ in param_items(url):
+        if k not in seen:
+            seen.append(k)
+    return seen
+
+
+def get_param_value(url: str, param: str) -> str:
+    for k, v in param_items(url):
+        if k == param:
+            return v
+    return ""
+
+
+def replace_param(url: str, param: str, value: str) -> str:
+    """Return a copy of `url` with the first occurrence of `param` set to `value`,
+    round-tripping through proper URL encoding."""
+    parsed = urlparse(url)
+    done = False
+    new: list[tuple[str, str]] = []
+    for k, v in param_items(url):
+        if k == param and not done:
+            new.append((k, value))
+            done = True
+        else:
+            new.append((k, v))
+    return urlunparse(parsed._replace(query=urlencode(new, doseq=True)))
+
+
+def _normalise(text: str) -> str:
+    """Strip volatile bits (tokens, timestamps, nonces) so two renders of the same
+    logical page compare as near-identical — robust against benign dynamic content."""
+    text = re.sub(r"[0-9a-fA-F]{16,}", "", text)
+    text = re.sub(r"\b\d{10,}\b", "", text)
+    text = re.sub(r"csrf[-_]?token[\"'=:\s]+[\w\-]+", "", text, flags=re.I)
+    text = re.sub(r"nonce[\"'=:\s]+[\w\-]+", "", text, flags=re.I)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def similarity(a: str | None, b: str | None) -> float:
+    """Ratio 0..1 of how similar two response bodies are (after normalisation)."""
+    if not a and not b:
+        return 1.0
+    if a is None or b is None:
+        return 0.0
+    a2, b2 = _normalise(a), _normalise(b)
+    if not a2 and not b2:
+        return 1.0
+    return difflib.SequenceMatcher(None, a2, b2).ratio()
+
+
+@dataclass
+class Sample:
+    status: int
+    length: int
+    text: str
+    elapsed: float
+
+
+def fetch(client: Any, url: str, **kw: Any) -> "Sample | None":
+    """GET a URL and return a Sample (status, length, text, elapsed) or None."""
+    start = time.monotonic()
+    resp = client.get(url, **kw)
+    elapsed = time.monotonic() - start
+    if resp is None:
+        return None
+    text = resp.text or ""
+    return Sample(status=resp.status_code, length=len(text), text=text, elapsed=elapsed)
+
+
+def baseline_timing(client: Any, url: str, rounds: int = 3) -> float:
+    """Median benign response time — the latency floor a time-based injection must beat."""
+    times: list[float] = []
+    for _ in range(max(1, rounds)):
+        s = fetch(client, url)
+        if s is not None:
+            times.append(s.elapsed)
+    return statistics.median(times) if times else 0.0
