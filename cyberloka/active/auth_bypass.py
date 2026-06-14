@@ -7,6 +7,7 @@ from urllib.parse import urljoin
 from cyberloka.core import Finding, HttpClient, Severity, Target
 from cyberloka.core.config import ScanConfig
 from cyberloka.recon.crawler import get_state
+from cyberloka.core import probe
 
 # Common default credential pairs (small list — kami tidak brute-force)
 DEFAULT_CREDS = [
@@ -79,6 +80,10 @@ def _try_default_creds(client: HttpClient, form: dict) -> Finding | None:
           else client.get(action, params=bogus))
     baseline_len = len(r0.text or "") if r0 else 0
     baseline_status = r0.status_code if r0 else 0
+    # Cookie yang SUDAH di-set walau login gagal (CSRF/session kosong) bukan bukti
+    # login berhasil — catat agar tidak dihitung sebagai "sesi baru".
+    baseline_cookies = {c.name.lower() for c in (r0.cookies if r0 else [])}
+
 
     for u, p in DEFAULT_CREDS:
         data = {**base, user_field: u, pass_field: p}
@@ -94,12 +99,14 @@ def _try_default_creds(client: HttpClient, form: dict) -> Finding | None:
             (SUCCESS_HINT.search(body) and not FAIL_HINT.search(body[:500]))
             and abs(len(body) - baseline_len) > 100
         )
-        # Cookie sesi baru muncul = indikasi kuat login berhasil
+        # Cookie sesi BARU (tidak ada saat login gagal) = sinyal pendukung, bukan
+        # pemicu tunggal — mencegah false positive di situs yang selalu set cookie.
         new_session_cookie = any(
-            "sess" in c.name.lower() or "auth" in c.name.lower() or "token" in c.name.lower()
+            ("sess" in c.name.lower() or "auth" in c.name.lower() or "token" in c.name.lower())
+            and c.name.lower() not in baseline_cookies
             for c in r.cookies
         )
-        if login_likely or new_session_cookie:
+        if login_likely:
             return Finding(
                 module="auth_bypass",
                 title=f"Kredensial default berhasil login: {u}/{p}",
@@ -129,16 +136,16 @@ def _try_default_creds(client: HttpClient, form: dict) -> Finding | None:
 def _probe_admin_paths(client: HttpClient, target: Target) -> list[Finding]:
     findings: list[Finding] = []
     base = target.origin + "/"
+    # Penanda UI login/admin yang sesungguhnya (bukan kata "admin" generik di teks).
+    def _looks_admin(ctype: str, body: str) -> bool:
+        low = body.lower()
+        return any(k in low for k in ("login", "sign in", "username", "type=\"password\"", "type='password'"))
+
     for path in ADMIN_PATHS:
         url = urljoin(base, path.lstrip("/"))
-        r = client.get(url, allow_redirects=False)
-        if r is None or r.status_code >= 400:
-            continue
-        body = (r.text or "").lower()
-        # 200 OK without redirect = page accessible
-        if r.status_code == 200 and any(
-            k in body for k in ("login", "username", "password", "admin", "dashboard")
-        ):
+        # verify_real: harus 200, BUKAN catch-all/SPA fallback, DAN punya UI login/admin.
+        r = probe.verify_real(client, target, url, validator=_looks_admin)
+        if r is not None:
             findings.append(Finding(
                 module="auth_bypass",
                 title=f"Halaman admin/internal dapat diakses publik: {path}",

@@ -64,29 +64,36 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
             import secrets as _sec
             tag = _sec.token_hex(4)
             if user_field:
-                base[user_field] = f"cyberloka_{tag}@example.invalid"
+                base[user_field] = f"cyberloka_{tag}@example.com"
             if pass_field:
                 base[pass_field] = f"Cybr0loka!_{tag}"
 
+            method = (form.get("method") or "post").lower()
+            action = form["action"]
+            # Kontrol: submit TANPA field privilege. Bila field/nilai sudah muncul di
+            # sini, kemunculannya bukan akibat kita mengirimnya.
+            ctrl = (client.post(action, data=base) if method == "post"
+                    else client.get(action, params=base))
+            ctrl_body = (ctrl.text or "").lower() if ctrl is not None else ""
             for field, value in PRIVILEGE_FIELDS[:6]:
                 payload = {**base, field: value}
-                method = (form.get("method") or "post").lower()
-                action = form["action"]
                 r = (client.post(action, data=payload) if method == "post"
                      else client.get(action, params=payload))
                 if r is None:
                     continue
                 body = (r.text or "").lower()
-                # Indikasi sukses register
                 ok = (
                     r.status_code in (200, 201, 302) and
                     not any(s in body for s in ("error", "invalid", "gagal", "salah"))
                 )
-                # Cek apakah field privilege muncul di response (echoback)
-                echoback = field.lower() in body or (
-                    isinstance(value, str) and value.lower() in body
+                # Refleksi TERSTRUKTUR (`"field": value` / `field=value`) — bukan kata
+                # "admin"/"true" yang ada di mana-mana. Harus muncul pada respons payload
+                # TAPI absen pada kontrol → bukti field benar-benar diterima/disimpan.
+                pat = re.compile(
+                    r'["\']?' + re.escape(field) + r'["\']?\s*[:=]\s*["\']?' + re.escape(str(value)),
+                    re.I,
                 )
-                if ok and echoback:
+                if ok and pat.search(body) and not pat.search(ctrl_body):
                     findings.append(Finding(
                         module="mass_assignment",
                         title=f"Form {form['action']} menerima field tambahan `{field}={value}`",
