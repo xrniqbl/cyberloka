@@ -28,6 +28,18 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
         content = r.content
         if not content:
             return findings
+        # Pastikan ini benar-benar file ikon, bukan index.html fallback SPA.
+        ctype = (r.headers.get("Content-Type") or "").lower()
+        magic = (
+            content[:4] == b"\x00\x00\x01\x00"      # ICO
+            or content[:8] == b"\x89PNG\r\n\x1a\n"  # PNG
+            or content[:3] == b"GIF"                # GIF
+            or content[:2] == b"\xff\xd8"           # JPEG
+            or (content[:4] == b"RIFF" and content[8:12] == b"WEBP")  # WEBP
+            or content[:5].lower() == b"<?xml" or content[:4].lower() == b"<svg"  # SVG
+        )
+        if not (ctype.startswith("image/") or "icon" in ctype or magic):
+            return findings
         md5 = hashlib.md5(content).hexdigest()
         sha1 = hashlib.sha1(content).hexdigest()
         mmh3_hash = _shodan_mmh3(content)

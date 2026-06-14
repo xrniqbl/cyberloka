@@ -41,7 +41,15 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                 if r is None:
                     continue
                 body = r.text or ""
-                if any(k in body for k in ("kubernetes", "apiVersion", "kind", "namespaces")):
+                low = body.lower()
+                # Sinyal kuat khas API/kubelet k8s — bukan sekadar kata "kind" yang umum.
+                strong = (
+                    ("apiversion" in low and "kind" in low)
+                    or "kubernetes" in low
+                    or '"paths"' in low and "/api" in low
+                    or "\"major\"" in low and "\"minor\"" in low
+                )
+                if strong:
                     findings.append(Finding(
                         module="k8s_exposure", target=f"https://{host}:{port}{path}",
                         title=f"Kubernetes {label} dapat diakses",

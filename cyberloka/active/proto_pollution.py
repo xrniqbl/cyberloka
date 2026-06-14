@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import secrets
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from cyberloka.core import Finding, HttpClient, Severity, Target
@@ -51,32 +52,39 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
         state = get_state(config)
         urls = state.param_urls if state else []
         for url in urls[:5]:
+            token = "clk" + secrets.token_hex(3)
             parsed = urlparse(url)
-            for payload in PAYLOADS:
-                k, v = payload.split("=", 1)
-                params = list(parse_qsl(parsed.query, keep_blank_values=True)) + [(k, v)]
-                mutated = urlunparse(parsed._replace(query=urlencode(params)))
+            base_params = list(parse_qsl(parsed.query, keep_blank_values=True))
+            for tmpl in (f"__proto__[{token}]=clkval", f"constructor[prototype][{token}]=clkval"):
+                k, v = tmpl.split("=", 1)
+                mutated = urlunparse(parsed._replace(query=urlencode(base_params + [(k, v)])))
                 r2 = client.get(mutated)
                 if r2 is None:
                     continue
-                body = (r2.text or "").lower()
-                if "polluted" in body and "cyberloka" in body:
+                ctype = (r2.headers.get("Content-Type") or "").lower()
+                body = r2.text or ""
+                # Refleksi HTML biasa BUKAN bukti pollution. Hanya berarti bila key
+                # unik kita muncul di respons JSON (struktur objek menyerap key proto),
+                # DAN tidak muncul pada request kontrol tanpa payload.
+                if token in body and "json" in ctype:
+                    ctrl = client.get(url)
+                    if ctrl is not None and token in (ctrl.text or ""):
+                        continue
                     findings.append(Finding(
                         module="proto_pollution",
-                        title=f"Endpoint memantulkan key prototype-pollution: {payload}",
-                        severity=Severity.HIGH,
-                        description=("Server-side menerima dan memantulkan parameter "
-                                     "`__proto__` / `constructor[prototype]`. Sangat mungkin "
-                                     "rentan prototype pollution (DoS atau RCE di Node.js)."),
+                        title="Parameter prototype-pollution diterima & muncul di respons JSON",
+                        severity=Severity.MEDIUM,
+                        confidence="tentative",
+                        description=("Server menerima key `__proto__`/`constructor[prototype]` dan key "
+                                     "unik yang disuntik muncul di respons JSON (absen di kontrol). "
+                                     "Indikasi kuat prototype pollution — konfirmasi dampak (DoS/RCE) "
+                                     "secara manual via property gadget."),
                         target=mutated,
-                        evidence=payload,
+                        evidence=f"key unik `{token}` muncul di JSON, absen di kontrol",
                         cwe="CWE-1321",
-                        remediation=("Tolak key berbahaya di parser body/query. Update "
-                                     "framework body-parser ke versi yang sudah patched "
+                        remediation=("Tolak key berbahaya di parser body/query. Update body-parser/qs "
                                      "(qs >=6.10, lodash >=4.17.21)."),
-                        references=[
-                            "https://snyk.io/learn/prototype-pollution-attacks/"
-                        ],
+                        references=["https://snyk.io/learn/prototype-pollution-attacks/"],
                     ))
                     return findings
     finally:

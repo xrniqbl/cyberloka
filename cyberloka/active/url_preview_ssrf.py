@@ -22,12 +22,16 @@ COMMON_PATHS = [
     "/preview", "/unfurl",
 ]
 PROBES = [
-    ("http://169.254.169.254/latest/meta-data/", "AWS metadata", "ami-id"),
-    ("http://metadata.google.internal/computeMetadata/v1/", "GCP metadata", "instance/"),
-    ("http://127.0.0.1/", "loopback", ""),
-    ("http://localhost:80/", "localhost", ""),
-    ("file:///etc/passwd", "file scheme", "root:"),
+    ("http://169.254.169.254/latest/meta-data/iam/security-credentials/", "AWS IAM metadata",
+     ("ami-id", "instance-id", "accesskeyid", "secretaccesskey")),
+    ("http://metadata.google.internal/computeMetadata/v1/", "GCP metadata",
+     ("metadata-flavor", "service-accounts", "oauth2/token")),
+    ("file:///etc/passwd", "file scheme", ("root:x:0:0",)),
 ]
+
+# URL kontrol: host eksternal yang tak mungkin ter-resolve. Kalau penanda metadata
+# muncul juga di sini, berarti itu teks statis halaman, BUKAN hasil fetch SSRF.
+CONTROL_URL = "http://cyberloka-not-real-host.invalid/"
 
 
 def run(target: Target, config: ScanConfig) -> list[Finding]:
@@ -52,18 +56,22 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
             if r0 is None or r0.status_code in (404, 405):
                 continue
 
-            for probe_url, label, marker in PROBES[:3]:
-                # Coba kirim sebagai POST (paling umum) dan GET
+            for probe_url, label, markers in PROBES[:3]:
                 for method in ("POST", "GET"):
                     if method == "POST":
                         r = client.post(url, json={"url": probe_url, "link": probe_url})
+                        ctrl = client.post(url, json={"url": CONTROL_URL, "link": CONTROL_URL})
                     else:
                         r = client.get(url, params={"url": probe_url, "link": probe_url})
+                        ctrl = client.get(url, params={"url": CONTROL_URL, "link": CONTROL_URL})
                     if r is None or r.status_code >= 500:
                         continue
                     body = (r.text or "").lower()
-                    # Marker spesifik = berhasil mencapai metadata
-                    if marker and marker.lower() in body:
+                    ctrl_body = (ctrl.text or "").lower() if ctrl is not None else ""
+                    hit = next((m for m in markers if m in body), None)
+                    # Penanda metadata HARUS muncul pada probe internal TAPI absen pada
+                    # kontrol host-invalid → membuktikan server benar-benar mem-fetch URL.
+                    if hit and hit not in ctrl_body:
                         findings.append(Finding(
                             module="url_preview_ssrf",
                             target=url,
@@ -89,7 +97,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                             evidence=(
                                 f"Endpoint preview : {url}\n"
                                 f"Probe URL        : {probe_url}\n"
-                                f"Marker '{marker}' ditemukan di response\n"
+                                f"Marker '{hit}' ditemukan di response (absen di kontrol host-invalid)\n"
                                 f"Method           : {method}\n"
                                 f"Verifikasi manual: kirim POST {url} dengan "
                                 f"body `{{\"url\":\"{probe_url}\"}}` → response "

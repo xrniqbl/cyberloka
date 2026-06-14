@@ -5,6 +5,7 @@ import re
 from urllib.parse import urljoin
 
 from cyberloka.core import Finding, HttpClient, Severity, Target
+from cyberloka.core import probe
 from cyberloka.core.config import ScanConfig
 
 WP_PLUGIN_PATHS = [
@@ -28,6 +29,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
     client = HttpClient(config)
     base = target.origin + "/"
     try:
+        nb = probe.negative_baseline(client, target)
         # Detect WP
         is_wp = False
         wp_version = None
@@ -36,6 +38,8 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
             if r is None or r.status_code != 200:
                 continue
             body = r.text or ""
+            if nb.looks_like_catchall(r.status_code, body):
+                continue
             m = re.search(r"WordPress\s*([\d.]+)", body)
             if m:
                 wp_version = m.group(1); is_wp = True; break
@@ -61,6 +65,8 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                 if r is None or r.status_code != 200:
                     continue
                 body = r.text or ""
+                if nb.looks_like_catchall(r.status_code, body):
+                    continue
                 m = re.search(r"Stable tag:\s*([\d.]+)", body)
                 plugin_name = p.split("/")[3]
                 if m:
@@ -81,6 +87,8 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
             if r is None or r.status_code != 200:
                 continue
             body = r.text or ""
+            if nb.looks_like_catchall(r.status_code, body):
+                continue
             m = re.search(r"Drupal\s*([\d.]+)", body)
             if m:
                 findings.append(Finding(
@@ -99,6 +107,8 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
             if r is None or r.status_code != 200:
                 continue
             body = r.text or ""
+            if nb.looks_like_catchall(r.status_code, body):
+                continue
             m = re.search(r"<version>([\d.]+)</version>", body)
             if m:
                 findings.append(Finding(
