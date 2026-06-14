@@ -3,7 +3,12 @@ from __future__ import annotations
 
 import re
 
-from cyberloka.active._helpers import append_param, candidate_urls, iter_param_urls
+from cyberloka.active._helpers import (
+    append_param,
+    candidate_urls,
+    fuzz_forms,
+    iter_param_urls,
+)
 from cyberloka.core import Finding, HttpClient, Severity, Target
 from cyberloka.core.config import ScanConfig
 from cyberloka.core.util import truncate
@@ -61,6 +66,26 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                         )
                     )
                     return findings  # one finding is enough
+        for payload in PAYLOADS:
+            for field, action, resp in fuzz_forms(client, config, payload):
+                body = resp.text or ""
+                if PASSWD_RE.search(body) or WIN_INI_RE.search(body):
+                    findings.append(Finding(
+                        module="lfi",
+                        title=f"Local File Inclusion / Path Traversal pada field form `{field}`",
+                        severity=Severity.CRITICAL,
+                        confidence="confirmed",
+                        description="Konten file sistem berhasil diakses lewat field form.",
+                        target=action,
+                        evidence=truncate(body, 240),
+                        cwe="CWE-22",
+                        remediation=(
+                            "Jangan menerima path file dari user. Whitelist nama file + "
+                            "canonicalisasi path."
+                        ),
+                        references=["https://owasp.org/www-community/attacks/Path_Traversal"],
+                    ))
+                    return findings
     finally:
         client.close()
     return findings

@@ -3,7 +3,12 @@ from __future__ import annotations
 
 import re
 
-from cyberloka.active._helpers import append_param, candidate_urls, iter_param_urls
+from cyberloka.active._helpers import (
+    append_param,
+    candidate_urls,
+    fuzz_forms,
+    iter_param_urls,
+)
 from cyberloka.core import Finding, HttpClient, Severity, Target
 from cyberloka.core.config import ScanConfig
 from cyberloka.core.util import truncate
@@ -99,6 +104,32 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                     references=[
                         "https://owasp.org/www-community/attacks/SQL_Injection",
                         "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
+                    ],
+                )
+            )
+        for field, action, resp in fuzz_forms(client, config, "1" + QUOTE_PAYLOAD):
+            m = ERROR_RE.search(resp.text or "")
+            if not m:
+                continue
+            findings.append(
+                Finding(
+                    module="sqli",
+                    title=f"Kemungkinan SQL Injection (error-based) pada field form `{field}`",
+                    severity=Severity.CRITICAL,
+                    description=(
+                        "Form memuat error SQL setelah field disuntik payload. SQL "
+                        "Injection memungkinkan attacker membaca/menulis seluruh database."
+                    ),
+                    target=action,
+                    evidence=truncate(m.group(0), 120),
+                    cwe="CWE-89",
+                    confidence="firm",
+                    remediation=(
+                        "Gunakan parameterized query / prepared statements. Jangan "
+                        "concatenate input ke query."
+                    ),
+                    references=[
+                        "https://owasp.org/www-community/attacks/SQL_Injection",
                     ],
                 )
             )

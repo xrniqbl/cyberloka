@@ -1,8 +1,8 @@
 """Deliberately-vulnerable benchmark app for the test suite (LOCAL ONLY).
 
-Every vulnerable endpoint is linked from the homepage so the crawler discovers
-the parameters. Used to assert that detection modules find REAL bugs and do not
-flag the safe control endpoints.
+Every vulnerable surface is linked/embedded on the homepage so the crawler
+discovers the GET params AND the POST forms. Used to assert that detection
+modules find REAL bugs (GET and form-based) and skip safe / dangerous forms.
 """
 from __future__ import annotations
 
@@ -29,33 +29,39 @@ def create_app() -> Flask:
             "<a href='/product?id=1'>product</a> "
             "<a href='/ping?host=127.0.0.1'>ping</a> "
             "<a href='/safe?q=hello'>safe</a>"
+            # POST form: reflected XSS via the `body` field
+            "<form action='/comment' method='post'>"
+            "<input name='body'><input type='submit'></form>"
+            # POST form: error-based SQLi via the `user` field
+            "<form action='/login' method='post'>"
+            "<input name='user'><input name='password' type='password'>"
+            "<input type='submit'></form>"
+            # Dangerous form: the fuzzer must SKIP this (no request to /logout)
+            "<form action='/logout' method='post'>"
+            "<input name='confirm'><input type='submit'></form>"
             "</body></html>",
             content_type="text/html",
         )
 
     @app.route("/search")
     def search() -> Response:
-        # Reflected XSS: echoes q unescaped.
         q = request.args.get("q", "")
         return Response(f"<html><body>Results: {q}</body></html>",
                         content_type="text/html")
 
     @app.route("/item")
     def item() -> Response:
-        # SQLi (error-based, MySQL-style error string) — for the `sqli` module.
         item_id = request.args.get("id", "")
         if "'" in item_id or '"' in item_id:
             return Response(
                 "<html><body>You have an error in your SQL syntax; check the "
                 "manual that corresponds to your MySQL server version</body></html>",
-                content_type="text/html",
-            )
+                content_type="text/html")
         return Response(f"<html><body>Item {item_id}</body></html>",
                         content_type="text/html")
 
     @app.route("/product")
     def product() -> Response:
-        # REAL SQL injection into SQLite — for the Safe PoC SQLi prover.
         pid = request.args.get("id", "")
         q = f"SELECT id, name FROM items WHERE id = '{pid}'"
         try:
@@ -68,7 +74,6 @@ def create_app() -> Flask:
 
     @app.route("/ping")
     def ping() -> Response:
-        # REAL OS command injection — for the Safe PoC RCE prover.
         host = request.args.get("host", "")
         try:
             out = subprocess.run(
@@ -79,9 +84,33 @@ def create_app() -> Flask:
         return Response(f"<html><body><pre>{out}</pre></body></html>",
                         content_type="text/html")
 
+    @app.route("/comment", methods=["POST"])
+    def comment() -> Response:
+        # Reflected XSS via a POST form field.
+        body = request.form.get("body", "")
+        return Response(f"<html><body>Posted: {body}</body></html>",
+                        content_type="text/html")
+
+    @app.route("/login", methods=["POST"])
+    def login() -> Response:
+        # Error-based SQLi via a POST form field.
+        user = request.form.get("user", "")
+        if "'" in user or '"' in user:
+            return Response(
+                "<html><body>You have an error in your SQL syntax near "
+                "'%s' (MySQL)</body></html>" % user,
+                content_type="text/html")
+        return Response("<html><body>login failed</body></html>",
+                        content_type="text/html")
+
+    @app.route("/logout", methods=["POST"])
+    def logout() -> Response:
+        # If the fuzzer ever hits this, the safety guard failed.
+        return Response("<html><body>logged out</body></html>",
+                        content_type="text/html")
+
     @app.route("/safe")
     def safe() -> Response:
-        # SAFE control: properly escaped, must NOT be flagged.
         from markupsafe import escape
         q = request.args.get("q", "")
         return Response(f"<html><body>Results: {escape(q)}</body></html>",

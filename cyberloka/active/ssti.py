@@ -1,7 +1,12 @@
 """Server-Side Template Injection probe."""
 from __future__ import annotations
 
-from cyberloka.active._helpers import append_param, candidate_urls, iter_param_urls
+from cyberloka.active._helpers import (
+    append_param,
+    candidate_urls,
+    fuzz_forms,
+    iter_param_urls,
+)
 from cyberloka.core import Finding, HttpClient, Severity, Target
 from cyberloka.core.config import ScanConfig
 
@@ -49,6 +54,28 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                             ),
                         )
                     )
+                    return findings
+        for payload, expected in PROBES:
+            for field, action, resp in fuzz_forms(client, config, payload):
+                body = resp.text or ""
+                if expected in body and payload not in body:
+                    findings.append(Finding(
+                        module="ssti",
+                        title=f"Server-Side Template Injection pada field form `{field}`",
+                        severity=Severity.CRITICAL,
+                        confidence="confirmed",
+                        description=(
+                            f"Payload template `{payload}` dievaluasi server-side menjadi "
+                            f"`{expected}`. SSTI dapat berujung RCE."
+                        ),
+                        target=action,
+                        evidence=f"payload={payload!r} → output mengandung '{expected}'",
+                        cwe="CWE-94",
+                        remediation=(
+                            "Jangan render input user lewat template engine. Pakai engine "
+                            "auto-escape / sandbox."
+                        ),
+                    ))
                     return findings
     finally:
         client.close()

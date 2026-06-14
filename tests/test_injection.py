@@ -29,3 +29,36 @@ def test_no_false_positive_on_safe_endpoint(injection_url, scan):
     findings = scan(injection_url, ["crawler", "xss", "sqli"])
     for f in findings:
         assert "/safe?" not in f.target, f"false positive on safe endpoint: {f.title}"
+
+
+def test_form_based_xss_detected(injection_url, scan):
+    findings = scan(injection_url, ["crawler", "xss"])
+    xss = _modules(findings, "xss")
+    assert any("/comment" in f.target for f in xss), \
+        "reflected XSS via the POST /comment form should be detected"
+
+
+def test_form_based_sqli_detected(injection_url, scan):
+    findings = scan(injection_url, ["crawler", "sqli"])
+    sqli = _modules(findings, "sqli")
+    assert any("/login" in f.target for f in sqli), \
+        "error-based SQLi via the POST /login form should be detected"
+
+
+def test_dangerous_form_is_skipped(injection_url):
+    # fuzz_forms must never submit a destructive-looking form (e.g. /logout).
+    from cyberloka.active._helpers import fuzz_forms
+    from cyberloka.core import HttpClient
+    from cyberloka.core.config import ScanConfig
+    from cyberloka.core.target import parse_target
+    from cyberloka.recon import crawler
+
+    cfg = ScanConfig(target=injection_url, authorized=True, rate_limit=0.0)
+    tgt = parse_target(injection_url)
+    crawler.run(tgt, cfg)
+    client = HttpClient(cfg)
+    actions = [action for _f, action, _r in fuzz_forms(client, cfg, "probe")]
+    client.close()
+    assert actions, "expected at least one fuzzable form"
+    assert all("/logout" not in a for a in actions), \
+        "the /logout form must be skipped by the safety guard"
