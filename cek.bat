@@ -98,6 +98,7 @@ REM Remove port (everything after first :)
 for /f "tokens=1 delims=:" %%h in ("!RHOST!") do set "RHOST=%%h"
 set "RJSON=%REPORTDIR%\report-%RHOST%.json"
 set "RHTML=%REPORTDIR%\report-%RHOST%.html"
+set "RSARIF=%REPORTDIR%\report-%RHOST%.sarif"
 goto :eof
 
 REM =====================================================================
@@ -139,7 +140,7 @@ REM =====================================================================
 :quickscan
 :passive
 call :askTarget
-python -m cyberloka -t "%TARGET%" --mode passive --report-dir "%REPORTDIR%" --json "%RJSON%" --html "%RHTML%"
+python -m cyberloka -t "%TARGET%" --mode passive --report-dir "%REPORTDIR%" --json "%RJSON%" --html "%RHTML%" --sarif "%RSARIF%"
 echo.
 echo Laporan tersimpan di: %REPORTDIR%
 pause
@@ -151,7 +152,15 @@ REM =====================================================================
 :fullscan
 :full
 call :askTarget
-python -m cyberloka -t "%TARGET%" --mode full --authorized --report-dir "%REPORTDIR%" --json "%RJSON%" --html "%RHTML%"
+set "PORTS="
+set /p PORTS="Port scan (Enter=umum, 'all'=full 1-65535, atau range mis. 1-1024): "
+set "PORTARG="
+if not "%PORTS%"=="" set "PORTARG=--ports %PORTS%"
+set "OOBURL="
+set /p OOBURL="OOB collaborator URL (opsional, Enter=skip; isi untuk konfirmasi blind SSRF): "
+set "OOBARG="
+if not "%OOBURL%"=="" set "OOBARG=--oob-url %OOBURL%"
+python -m cyberloka -t "%TARGET%" --mode full --authorized --report-dir "%REPORTDIR%" --json "%RJSON%" --html "%RHTML%" --sarif "%RSARIF%" %PORTARG% %OOBARG%
 echo.
 echo Laporan tersimpan di: %REPORTDIR%
 pause
@@ -159,7 +168,15 @@ goto menu
 
 :active
 call :askTarget
-python -m cyberloka -t "%TARGET%" --mode active --authorized --report-dir "%REPORTDIR%" --json "%RJSON%" --html "%RHTML%"
+set "PORTS="
+set /p PORTS="Port scan (Enter=umum, 'all'=full 1-65535, atau range mis. 1-1024): "
+set "PORTARG="
+if not "%PORTS%"=="" set "PORTARG=--ports %PORTS%"
+set "OOBURL="
+set /p OOBURL="OOB collaborator URL (opsional, Enter=skip; isi untuk konfirmasi blind SSRF): "
+set "OOBARG="
+if not "%OOBURL%"=="" set "OOBARG=--oob-url %OOBURL%"
+python -m cyberloka -t "%TARGET%" --mode active --authorized --report-dir "%REPORTDIR%" --json "%RJSON%" --html "%RHTML%" --sarif "%RSARIF%" %PORTARG% %OOBARG%
 echo.
 echo Laporan tersimpan di: %REPORTDIR%
 pause
@@ -170,7 +187,7 @@ call :askTarget
 set "MODS="
 set /p MODS="Modul (comma, contoh: headers,tls,api_discovery,jwt): "
 if "%MODS%"=="" ( echo Modul wajib diisi. & pause & goto menu )
-python -m cyberloka -t "%TARGET%" --modules %MODS% --authorized --report-dir "%REPORTDIR%" --json "%RJSON%" --html "%RHTML%"
+python -m cyberloka -t "%TARGET%" --modules %MODS% --authorized --report-dir "%REPORTDIR%" --json "%RJSON%" --html "%RHTML%" --sarif "%RSARIF%"
 echo.
 echo Laporan tersimpan di: %REPORTDIR%
 pause

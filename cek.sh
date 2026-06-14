@@ -19,6 +19,7 @@ if [ $# -ge 1 ] && [[ "$1" != "-h" && "$1" != "--help" ]]; then
     RHOST=$(echo "$TARGET" | sed -E 's|^https?://||;s|[:/].*||')
     cyberloka -t "${TARGET}" --mode full --authorized --yes \
         --json "report-${RHOST}.json" --html "report-${RHOST}.html" \
+        --sarif "report-${RHOST}.sarif" \
         --threads 10 --rate 10 --timeout 12 "$@"
     exit $?
 fi
@@ -80,10 +81,16 @@ interactive_scan() {
     echo "================================================================"
     echo "  Menjalankan Cyberloka..."
     echo "================================================================"
+    echo
+    read -rp "Port scan (Enter=umum, 'all'=full 1-65535, atau range mis. 1-1024): " PORTS
+    PORT_ARGS=(); [ -n "$PORTS" ] && PORT_ARGS=(--ports "$PORTS")
+    read -rp "OOB collaborator URL (opsional, Enter=skip; isi untuk konfirmasi blind SSRF): " OOBURL
+    OOB_ARGS=(); [ -n "$OOBURL" ] && OOB_ARGS=(--oob-url "$OOBURL")
     cyberloka -t "$TARGET" --mode "$MODE_STR" --authorized --yes \
         --json "report-${RHOST}.json" --html "report-${RHOST}.html" \
+        --sarif "report-${RHOST}.sarif" \
         --threads 10 --rate 10 --timeout 12 \
-        "${AUTH_ARGS[@]}" || true
+        "${PORT_ARGS[@]}" "${OOB_ARGS[@]}" "${AUTH_ARGS[@]}" || true
     after_scan "$RHOST"
 }
 
@@ -94,6 +101,7 @@ quick_scan() {
     echo
     cyberloka -t "$TARGET" --mode passive --authorized --yes \
         --json "report-${RHOST}.json" --html "report-${RHOST}.html" \
+        --sarif "report-${RHOST}.sarif" \
         --threads 10 --rate 10 --timeout 10 || true
     after_scan "$RHOST"
 }
@@ -104,9 +112,15 @@ full_scan() {
     RHOST=$(echo "$TARGET" | sed -E 's|^https?://||;s|[:/].*||')
     read -rp "Apakah Anda berwenang men-scan target ini? [y/N]: " AUTHED
     case "$AUTHED" in y|Y|yes|YES) ;; *) echo "Dibatalkan."; return ;; esac
+    read -rp "Port scan (Enter=umum, 'all'=full 1-65535, atau range mis. 1-1024): " PORTS
+    PORT_ARGS=(); [ -n "$PORTS" ] && PORT_ARGS=(--ports "$PORTS")
+    read -rp "OOB collaborator URL (opsional, Enter=skip; isi untuk konfirmasi blind SSRF): " OOBURL
+    OOB_ARGS=(); [ -n "$OOBURL" ] && OOB_ARGS=(--oob-url "$OOBURL")
     cyberloka -t "$TARGET" --mode full --authorized --yes \
         --json "report-${RHOST}.json" --html "report-${RHOST}.html" \
-        --threads 10 --rate 10 --timeout 12 || true
+        --sarif "report-${RHOST}.sarif" \
+        --threads 10 --rate 10 --timeout 12 \
+        "${PORT_ARGS[@]}" "${OOB_ARGS[@]}" || true
     after_scan "$RHOST"
 }
 
