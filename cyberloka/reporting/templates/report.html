@@ -711,6 +711,7 @@
                 {% if f.cwe %} · <span>{{ f.cwe }}</span>{% endif %}
                 {% if f.owasp_category %} · <span>{{ f.owasp_category }}</span>{% endif %}
                 · <span>tingkat keyakinan: {{ f.confidence }}</span>
+                {% if f.exploitability %} · <span class="pill {{ 'crit' if f.exploitability.id=='verified' else 'high' if f.exploitability.id=='strong' else 'med' if f.exploitability.id=='prediction' else 'info' }}" style="font-size:9px; padding:1px 6px;">{{ f.exploitability.label }}</span>{% endif %}
               </div>
             </div>
             <div class="score">{{ f.risk_score }}</div>
@@ -746,6 +747,21 @@
             <div>
               <h4>Bukti</h4>
               <pre class="evidence">{{ f.evidence }}</pre>
+            </div>
+            {% endif %}
+
+            {% if f.exploitability %}
+            <div>
+              <h4>Status Celah</h4>
+              <div style="font-weight:700;">{{ f.exploitability.label }}</div>
+              <div style="color: var(--muted); margin-top:4px;">{{ f.exploitability.note }}</div>
+            </div>
+            {% endif %}
+
+            {% if f.how_to_exploit %}
+            <div>
+              <h4>Cara Menyusupi (Langkah Reproduksi)</h4>
+              <pre class="evidence">{{ f.how_to_exploit }}</pre>
             </div>
             {% endif %}
 

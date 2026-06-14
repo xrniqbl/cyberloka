@@ -1421,6 +1421,8 @@ def explain_finding(finding: dict[str, Any]) -> dict[str, Any]:
     out["business_impact"] = info.get("business_impact", "")
     out["category_id"] = info.get("category", "lain")
     out["category_name"] = CATEGORIES.get(out["category_id"], "Lainnya")
+    from cyberloka.reporting.exploitability import enrich
+    enrich(out)
     return out
 
 
