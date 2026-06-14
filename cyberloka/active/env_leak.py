@@ -155,22 +155,21 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                 break
 
         # 3. Debug endpoints
+        from cyberloka.core import probe
         for path in DEBUG_PATHS[:12]:
             url = urljoin(target.origin + "/", path.lstrip("/"))
-            r = client.get(url)
-            if r is None or r.status_code >= 400:
+            # Harus BUKAN catch-all/soft-404, DAN terlihat seperti output debug nyata
+            # (JSON, atau memuat penanda versi/konfigurasi) — bukan halaman SPA generik.
+            def _debug_valid(ctype: str, body: str) -> bool:
+                if probe.is_json_doc(ctype, body):
+                    return True
+                low = body.lower()
+                return len(body) > 100 and ("version" in low[:300] or "profiles" in low or "\"status\"" in low)
+            r = probe.verify_real(client, target, url, validator=_debug_valid)
+            if r is None:
                 continue
             body = r.text or ""
             ctype = r.headers.get("Content-Type", "").lower()
-            # Filter false positives: pastikan bukan halaman 404 generic
-            interesting = (
-                "json" in ctype or
-                len(body) > 100 and (
-                    "{" in body[:50] or "version" in body.lower()[:200]
-                )
-            )
-            if not interesting:
-                continue
             findings.append(Finding(
                 module="env_leak",
                 title=f"Endpoint debug/internal terbuka: {path}",

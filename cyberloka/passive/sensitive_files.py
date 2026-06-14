@@ -7,19 +7,32 @@ from urllib.parse import urljoin
 from cyberloka.core import Finding, HttpClient, Severity, Target
 from cyberloka.core.config import ScanConfig
 from cyberloka.core.util import load_data_lines, truncate
+from cyberloka.core import probe
+
+# Segmen path yang isinya BUKAN HTML. Bila path begini malah balik halaman HTML,
+# itu hampir pasti fallback SPA / soft-404, bukan file asli.
+_NON_HTML_HINTS = (
+    ".env", ".git", ".svn", ".sql", ".bak", ".old", ".backup", ".zip", ".tar",
+    ".gz", ".log", ".pem", ".key", "id_rsa", ".json", ".yml", ".yaml", ".ini",
+    ".conf", ".config", ".db", ".sqlite", "credentials", ".ds_store", ".htpasswd",
+)
 
 
-def _check(client: HttpClient, base: str, path: str) -> tuple[str, int, str] | None:
-    url = urljoin(base, path)
-    resp = client.get(url, allow_redirects=False)
-    if resp is None:
-        return None
-    if resp.status_code == 200 and resp.content:
-        ctype = resp.headers.get("Content-Type", "")
-        # filter out generic 200 SPA pages by checking small payload markers
-        body = resp.text[:512] if resp.text else ""
-        return url, resp.status_code, f"{ctype} | {truncate(body, 200)}"
+def _validator_for(path: str):
+    low = path.lower()
+    if any(h in low for h in _NON_HTML_HINTS):
+        return lambda ctype, body: not probe.looks_like_html(body)
     return None
+
+
+def _check(client: HttpClient, target, base: str, path: str) -> tuple[str, int, str] | None:
+    url = urljoin(base, path)
+    resp = probe.verify_real(client, target, url, validator=_validator_for(path))
+    if resp is None or not resp.content:
+        return None
+    ctype = resp.headers.get("Content-Type", "")
+    body = resp.text[:512] if resp.text else ""
+    return url, resp.status_code, f"{ctype} | {truncate(body, 200)}"
 
 
 def run(target: Target, config: ScanConfig) -> list[Finding]:
@@ -30,7 +43,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
     client = HttpClient(config)
     try:
         with ThreadPoolExecutor(max_workers=min(20, config.threads * 2)) as ex:
-            futures = [ex.submit(_check, client, target.origin + "/", p) for p in paths]
+            futures = [ex.submit(_check, client, target, target.origin + "/", p) for p in paths]
             for fut in as_completed(futures):
                 res = fut.result()
                 if not res:

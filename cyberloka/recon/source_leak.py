@@ -5,6 +5,7 @@ import re
 from urllib.parse import urljoin
 
 from cyberloka.core import Finding, HttpClient, Severity, Target
+from cyberloka.core import probe
 from cyberloka.core.config import ScanConfig
 from cyberloka.core.util import truncate
 
@@ -46,21 +47,23 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
     try:
         for path, label, sev, content_re in LEAK_PATHS:
             url = urljoin(base, path)
-            r = client.get(url)
-            if r is None or r.status_code != 200:
+
+            def _valid(ctype: str, body: str, _re=content_re) -> bool:
+                # Bila ada signature konten spesifik, wajib cocok.
+                if _re is not None:
+                    return bool(_re.search(body))
+                # Tanpa signature: file ini bukan HTML; respons HTML = fallback SPA.
+                return not probe.looks_like_html(body)
+
+            r = probe.verify_real(client, target, url, validator=_valid)
+            if r is None:
                 continue
             body = r.text or ""
-            ctype = r.headers.get("Content-Type", "").lower()
-            # Halaman 200 bisa "soft 404" — verifikasi via konten
-            if content_re and not content_re.search(body):
-                continue
-            if not content_re and ("text/html" in ctype and "<html" in body.lower()
-                                   and "404" in body.lower()):
-                continue
             findings.append(Finding(
                 module="source_leak",
                 title=f"Resource sensitif terbuka publik: {path} ({label})",
                 severity=sev,
+                confidence="confirmed",
                 description=(f"File {label} dapat diakses tanpa autentikasi. "
                              "Jika benar berisi data nyata, attacker bisa memperoleh "
                              "kredensial/source code/struktur internal."),
