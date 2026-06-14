@@ -105,6 +105,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--quiet", action="store_true")
     p.add_argument("--yes", action="store_true", help="Lewati prompt konfirmasi")
+    p.add_argument(
+        "--poc",
+        action="store_true",
+        help=(
+            "Aktifkan Safe Proof-of-Concept: buktikan RCE/SQLi dengan payload "
+            "JINAK & read-only (echo nonce, id, baca versi DB). Tidak merusak, "
+            "tidak menanam apa pun. Wajib bareng --authorized."
+        ),
+    )
     p.add_argument("--version", action="version", version=f"cyberloka {__version__}")
     return p
 
@@ -135,6 +144,7 @@ def main(argv: list[str] | None = None) -> int:
         headers=parse_headers(args.header),
         verify_tls=not args.no_verify_tls,
         authorized=args.authorized,
+        poc=args.poc,
         simulate_attack=args.simulate_attack,
         login_url=args.login_url,
         login_user_field=args.login_user_field,

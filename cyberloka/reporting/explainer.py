@@ -1315,6 +1315,7 @@ EXPLAIN: dict[str, dict[str, str]] = {
         "category": "data",
     },
     "web_cache_deception": {"friendly_name": "Kebocoran Halaman Akun via Cache (Web Cache Deception)", "what_it_means": ("Kami mengakses halaman akun saat login lalu memintanya kembali " "lewat alamat yang menyamar sebagai file statis (mis. " "`/akun/x.css`). Bila cache/CDN menyimpannya, pengunjung tanpa " "login bisa menerima halaman akun korban."), "business_impact": ("Data pribadi pelanggan (email, saldo, alamat, token) bisa bocor ke " "orang asing tanpa perlu password — berujung pengambilalihan akun, " "kebocoran data massal, dan pelanggaran privasi."), "category": "data"},
+    "safe_poc": {"friendly_name": "Bukti Eksploitasi Aman (Safe PoC: RCE/SQLi)", "what_it_means": ("Kami tidak sekadar menebak. Dengan izin Anda (flag --poc), scanner " "menjalankan payload JINAK read-only untuk MEMBUKTIKAN celah: untuk " "RCE menjalankan perintah `id`, untuk SQLi membaca versi database. " "Tidak ada data dirusak, dihapus, atau dicuri."), "business_impact": ("Temuan di sini sudah TERBUKTI bisa disusupi (bukan prediksi) — " "prioritas perbaikan tertinggi. RCE = server bisa diambil alih; " "SQLi = seluruh database pelanggan bisa dibaca attacker."), "category": "kode"},
 }
 
 # Action-plan time bucket per severity (untuk action plan di laporan).
