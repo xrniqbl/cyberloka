@@ -31,13 +31,25 @@ penyebabnya, serta memberikan rekomendasi perbaikan.
 - HTTP method enumeration (TRACE, PUT, DELETE, OPTIONS)
 - Sensitive file exposure (`.git/`, `.env`, `backup.zip`, `phpinfo.php`, dll.)
 
-### 3. Active Vulnerability Checks
-- SQL Injection (error-based & boolean-based, payload aman)
-- Cross-Site Scripting (Reflected XSS)
-- Open Redirect
-- Local File Inclusion (LFI) / Path Traversal
-- Command Injection (time-based & marker)
-- Directory Listing exposure
+### 3. Active Vulnerability Checks — *verification-first*
+Scanner inti injeksi tidak lagi **menebak/memprediksi**. Sebuah temuan hanya
+dilaporkan (`confidence: confirmed`) bila bisa **DIBUKTIKAN** lewat pembandingan
+terhadap respons *baseline* + permintaan kontrol — menghilangkan false positive.
+
+- **SQL Injection** — error-based: baseline bersih + petik tunggal memunculkan
+  error + kontrol tanpa-quote tetap bersih (error dipicu oleh quote yang memecah
+  konteks SQL, bukan input apa pun). Boolean-based: `1=1` ≈ baseline DAN `1=2`
+  berbeda nyata, pada 2 konteks (numerik & string).
+- **Reflected XSS** — hanya bila karakter pemecah markup dipantulkan MENTAH dan di
+  konteks yang dieksekusi browser (bukan di dalam `<textarea>` / komentar / `<title>`).
+- **Open Redirect** — hanya bila server benar-benar redirect 3xx ke host attacker
+  (termasuk uji protocol-relative `//host`).
+- **LFI / Path Traversal** — butuh ≥2 baris `user:x:uid:gid:` dari `/etc/passwd`
+  (atau signature `win.ini`) yang TIDAK ada di baseline.
+- **Command Injection** — marker **aritmatika** anti-refleksi (`$((A+B))` → shell
+  mengembalikan HASIL, bukan teks payload). Blind via *time-based diferensial*:
+  delay berskala linear dengan `sleep` dan dikonfirmasi dua kali (kebal jitter).
+- **Directory Listing** — butuh signature autoindex + struktur tautan file nyata.
 - Inspeksi `robots.txt` & `sitemap.xml`
 
 ### 4. Attack Simulation (Safe Mode)
