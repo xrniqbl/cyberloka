@@ -11,6 +11,7 @@ from cyberloka.core.target import parse_target
 from cyberloka.reporting import console as console_report
 from cyberloka.reporting.html_report import write_html
 from cyberloka.reporting.json_report import write_json
+from cyberloka.reporting.sarif import write_sarif
 from cyberloka.scanner import MODULE_MAP, run_scan
 
 ETHICS_NOTICE = (
@@ -82,6 +83,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--oob-url", help="URL collaborator OOB self-hosted (mis. http://oast.example.com:8088) untuk konfirmasi blind SSRF")
     p.add_argument("--json", dest="json_out", help="Path output JSON")
     p.add_argument("--html", dest="html_out", help="Path output HTML")
+    p.add_argument("--sarif", dest="sarif_out", help="Path output SARIF 2.1.0 (kompatibel GitHub code scanning)")
     p.add_argument(
         "--pdf",
         dest="pdf_out",
@@ -159,6 +161,7 @@ def main(argv: list[str] | None = None) -> int:
         html_out=args.html_out,
         proxy=args.proxy,
         oob_url=args.oob_url,
+        sarif_out=args.sarif_out,
     )
 
     needs_intrusive = cfg.mode in ("active", "full") or cfg.simulate_attack
@@ -199,6 +202,9 @@ def main(argv: list[str] | None = None) -> int:
     if cfg.html_out:
         write_html(cfg.html_out, target, cfg, findings)
         log.info("[green]HTML report ditulis ke %s[/green]", cfg.html_out)
+    if cfg.sarif_out:
+        write_sarif(cfg.sarif_out, target, cfg, findings)
+        log.info("[green]SARIF report ditulis ke %s[/green]", cfg.sarif_out)
 
     # PDF: enabled by default, disabled with --no-pdf
     if not args.no_pdf:
