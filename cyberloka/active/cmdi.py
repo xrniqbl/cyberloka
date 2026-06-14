@@ -50,6 +50,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                             module="cmdi",
                             title=f"Command Injection (marker) pada `{param}`",
                             severity=Severity.CRITICAL,
+                            confidence="confirmed",
                             description=(
                                 "Output marker `cyberlokaCMD` muncul pada respons setelah "
                                 "menyuntikkan command separator → command shell dieksekusi."
@@ -88,6 +89,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                             module="cmdi",
                             title=f"Command Injection (time-based) pada `{param}`",
                             severity=Severity.CRITICAL,
+                            confidence="firm",
                             description=(
                                 f"Respons tertunda ~{elapsed:.1f}s setelah menyuntikkan "
                                 f"`sleep {SLEEP_S}` — indikasi kuat command injection."

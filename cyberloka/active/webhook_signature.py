@@ -67,6 +67,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                     module="webhook_signature", target=url,
                     title=f"Webhook menerima payload tanpa verifikasi signature: {url}",
                     severity=Severity.CRITICAL,
+                    confidence="tentative",
                     description=("Endpoint webhook menerima payload payment-success tanpa "
                                  "header signature. Attacker dapat forge notifikasi 'transaksi "
                                  "sukses' palsu — saldo masuk tanpa pembayaran asli."),

@@ -34,6 +34,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                             module="ssti",
                             title=f"Server-Side Template Injection pada `{param}`",
                             severity=Severity.CRITICAL,
+                            confidence="confirmed",
                             description=(
                                 f"Payload template `{payload}` dievaluasi server-side menjadi "
                                 f"`{expected}`. SSTI dapat berujung RCE."

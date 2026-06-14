@@ -43,6 +43,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                         module="log_injection", target=target.base_url,
                         title=f"Header `{header}` mungkin diproses oleh log4j vulnerable",
                         severity=Severity.CRITICAL,
+                        confidence="tentative",
                         description=("Mengirim payload JNDI lewat header memicu error 500 dengan "
                                      "kata kunci JNDI/log4j. Bisa jadi target rentan Log4Shell."),
                         evidence=f"{header}: {payload} -> 500 with naming/lookup error",
@@ -77,6 +78,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                             module="log_injection", target=mutated,
                             title=f"Parameter `{k0}` memicu error log4j",
                             severity=Severity.CRITICAL,
+                            confidence="tentative",
                             description="Payload JNDI di param menyebabkan 500 + jejak log4j.",
                             evidence=f"{k0}={payload} -> 500", cwe="CWE-117",
                             remediation="Sama dengan Log4Shell: upgrade log4j.",

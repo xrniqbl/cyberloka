@@ -42,6 +42,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                     module="cache_poison",
                     title=f"Header `{h}` dipantulkan pada response yang cacheable",
                     severity=Severity.HIGH,
+                    confidence="tentative",
                     description=("Header non-standar dari klien dipantulkan ke response, "
                                  "sementara response bersifat cacheable. Berisiko cache "
                                  "poisoning: konten attacker ter-cache untuk korban lain."),
