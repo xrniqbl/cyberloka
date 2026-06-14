@@ -37,6 +37,7 @@ class ScanConfig:
     proxy: str | None = None
     oob_url: str | None = None
     sarif_out: str | None = None
+    min_confidence: str = "tentative"  # tentative | firm | confirmed (ambang tampil)
 
     RECON_MODULES = (
         "dns", "whois", "ports", "fingerprint", "subdomains",
