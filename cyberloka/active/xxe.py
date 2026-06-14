@@ -40,13 +40,16 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
             if r is None:
                 continue
             body = r.text or ""
+            # NOTE: "DOCTYPE is not allowed" means the parser REJECTED the DTD
+            # (server is SAFE) — it must NOT be treated as a vuln indicator.
             indicators = ("nonexistent-" + marker, "no such file or directory",
-                          "failed to load external entity", "DOCTYPE is not allowed")
+                          "failed to load external entity")
             if any(s in body for s in indicators):
                 findings.append(Finding(
                     module="xxe",
                     title=f"Endpoint memproses external entity XML: {url}",
                     severity=Severity.HIGH,
+                    confidence="firm",
                     description=("Server memproses entity XXE dan respons memuat hint dari "
                                  "parser XML. Berpotensi pembacaan file lokal & SSRF."),
                     target=url, evidence=body[:300],
