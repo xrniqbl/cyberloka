@@ -41,6 +41,11 @@ web = [
 pdf = [
     "weasyprint>=60.0",
 ]
+dev = [
+    "pytest>=8.0",
+    "flask>=3.0",
+    "markupsafe>=2.1",
+]
 
 [project.scripts]
 cyberloka = "cyberloka.cli:main"
@@ -59,3 +64,9 @@ cyberloka = [
     "web/templates/*.html",
     "web/static/*",
 ]
+
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
