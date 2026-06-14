@@ -1,0 +1,4 @@
+# Test-only dependencies (not needed to run cyberloka itself).
+pytest>=8.0
+flask>=3.0
+markupsafe>=2.1
