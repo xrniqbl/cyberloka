@@ -51,6 +51,43 @@ INSECURE_PLAINTEXT = {
 }
 
 
+def parse_ports(spec: str | None) -> list[int]:
+    """Parse a --ports spec into a sorted unique port list.
+
+    Accepts: 'all'/'full' (1-65535), comma lists, ranges, and a mix,
+    e.g. '22,80,8000-8100' or '1-1024'. Out-of-range values are clamped
+    away (only 1-65535 kept). Returns [] if nothing valid is found.
+    """
+    if not spec:
+        return []
+    s = spec.strip().lower()
+    if s in ("all", "full", "-", "1-65535"):
+        return list(range(1, 65536))
+    out: set[int] = set()
+    for part in s.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            lo_s, _, hi_s = part.partition("-")
+            try:
+                lo, hi = int(lo_s), int(hi_s)
+            except ValueError:
+                continue
+            if lo > hi:
+                lo, hi = hi, lo
+            for p in range(max(1, lo), min(65535, hi) + 1):
+                out.add(p)
+        else:
+            try:
+                p = int(part)
+            except ValueError:
+                continue
+            if 1 <= p <= 65535:
+                out.add(p)
+    return sorted(out)
+
+
 def _check_port(host: str, port: int, timeout: float) -> bool:
     try:
         with socket.create_connection((host, port), timeout=timeout):
@@ -422,17 +459,19 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
     findings: list[Finding] = []
     host = target.resolve_ip() or target.host
 
+    scan_ports = parse_ports(config.ports) or list(COMMON_PORTS)
+    workers = min(200, max(50, len(scan_ports) // 50))
     open_ports: dict[int, str] = {}
-    with ThreadPoolExecutor(max_workers=min(50, config.threads * 5)) as ex:
+    with ThreadPoolExecutor(max_workers=workers) as ex:
         future_map = {
             ex.submit(_check_port, host, p, min(config.timeout, 2.0)): p
-            for p in COMMON_PORTS
+            for p in scan_ports
         }
         for fut in as_completed(future_map):
             port = future_map[fut]
             try:
                 if fut.result():
-                    open_ports[port] = COMMON_PORTS[port]
+                    open_ports[port] = COMMON_PORTS.get(port, "unknown")
             except Exception:  # noqa: BLE001
                 continue
 
