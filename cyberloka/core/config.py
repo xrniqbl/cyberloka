@@ -35,6 +35,7 @@ class ScanConfig:
     json_out: str | None = None
     html_out: str | None = None
     proxy: str | None = None
+    oob_url: str | None = None
 
     RECON_MODULES = (
         "dns", "whois", "ports", "fingerprint", "subdomains",
@@ -58,7 +59,7 @@ class ScanConfig:
         "session", "voucher", "payment", "otp_check", "password_reset",
         "file_upload", "idor_generic", "host_header", "cache_poison",
         "web_cache_deception",
-        "safe_poc",
+        "safe_poc", "oob_probe",
         "hpp", "rfd", "dom_xss", "oauth_check", "pii_leak", "race_condition",
         "proto_pollution", "http_smuggling", "ws_check", "auth_bypass",
         "balance", "env_leak", "api_auth", "mass_assignment",
