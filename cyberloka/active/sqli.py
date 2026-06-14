@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from cyberloka.active._helpers import append_param, iter_param_urls
+from cyberloka.active._helpers import append_param, candidate_urls, iter_param_urls
 from cyberloka.core import Finding, HttpClient, Severity, Target
 from cyberloka.core.config import ScanConfig
 from cyberloka.core.util import truncate
@@ -73,9 +73,11 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
     findings: list[Finding] = []
     client = HttpClient(config)
     try:
-        url = target.base_url
-        hits = _scan_url(client, url)
-        for param, sig, ev in hits:
+        url_hits: list[tuple[str, str, str, str]] = []
+        for scan_url in candidate_urls(target, config, "id", "1"):
+            for param, sig, ev in _scan_url(client, scan_url):
+                url_hits.append((scan_url, param, sig, ev))
+        for url, param, sig, ev in url_hits:
             findings.append(
                 Finding(
                     module="sqli",

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 
-from cyberloka.active._helpers import append_param, iter_param_urls
+from cyberloka.active._helpers import append_param, candidate_urls, iter_param_urls
 from cyberloka.core import Finding, HttpClient, Severity, Target
 from cyberloka.core.config import ScanConfig
 
@@ -30,17 +30,21 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
     findings: list[Finding] = []
     client = HttpClient(config)
     try:
-        url = target.base_url
-        if "?" not in url:
-            url = append_param(url, "cmd", "ping")
+        urls = candidate_urls(target, config, "cmd", "ping")
 
         # Marker test
-        for payload in MARKER_PAYLOADS:
-            for param, mutated in iter_param_urls(url, "x" + payload):
+        marker_probes = [
+            (scan_url, payload)
+            for payload in MARKER_PAYLOADS
+            for scan_url in urls
+        ]
+        for scan_url, payload in marker_probes:
+            for param, mutated in iter_param_urls(scan_url, "x" + payload):
                 resp = client.get(mutated)
                 if resp is None:
                     continue
-                if "cyberlokaCMD" in (resp.text or ""):
+                text = resp.text or ""
+                if "cyberlokaCMD" in text and "echo cyberlokaCMD" not in text:
                     findings.append(
                         Finding(
                             module="cmdi",
@@ -66,8 +70,13 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                     return findings
 
         # Time-based test
-        for payload in SLEEP_PAYLOADS:
-            for param, mutated in iter_param_urls(url, "x" + payload):
+        sleep_probes = [
+            (scan_url, payload)
+            for payload in SLEEP_PAYLOADS
+            for scan_url in urls
+        ]
+        for scan_url, payload in sleep_probes:
+            for param, mutated in iter_param_urls(scan_url, "x" + payload):
                 start = time.monotonic()
                 resp = client.get(mutated)
                 elapsed = time.monotonic() - start

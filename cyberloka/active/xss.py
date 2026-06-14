@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import secrets
 
-from cyberloka.active._helpers import append_param, iter_param_urls
+from cyberloka.active._helpers import append_param, candidate_urls, iter_param_urls
 from cyberloka.core import Finding, HttpClient, Severity, Target
 from cyberloka.core.config import ScanConfig
 from cyberloka.core.util import truncate
@@ -13,13 +13,14 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
     findings: list[Finding] = []
     client = HttpClient(config)
     try:
-        url = target.base_url
-        if "?" not in url:
-            url = append_param(url, "q", "test")
-
         token = secrets.token_hex(4)
         payload = f"<sCript>cyberloka{token}</sCript>"
-        for param, mutated in iter_param_urls(url, payload):
+        pairs = [
+            (param, mutated)
+            for scan_url in candidate_urls(target, config, "q", "test")
+            for param, mutated in iter_param_urls(scan_url, payload)
+        ]
+        for param, mutated in pairs:
             resp = client.get(mutated)
             if resp is None:
                 continue
