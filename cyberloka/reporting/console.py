@@ -7,6 +7,7 @@ from rich.text import Text
 
 from cyberloka.core import Finding, Severity
 from cyberloka.core.logger import get_console
+from cyberloka.reporting.exploitability import classify, how_to_exploit
 
 SEV_STYLE = {
     Severity.CRITICAL: "bold white on red",
@@ -65,10 +66,18 @@ def render_finding_detail(f: Finding, idx: int) -> None:
     if f.cwe:
         body_parts.append(Text.assemble(("CWE   : ", "bold"), (f.cwe, "cyan")))
     body_parts.append(Text(""))
+    _d = f.to_dict()
+    _status = classify(_d)
+    body_parts.append(Text.assemble(("Status   : ", "bold"), (_status["label"], "magenta")))
+    body_parts.append(Text(_status["note"], style="dim"))
     body_parts.append(Text.assemble(("Deskripsi:\n", "bold"), (f.description, "")))
     if f.evidence:
         body_parts.append(Text(""))
         body_parts.append(Text.assemble(("Evidence:\n", "bold"), (f.evidence, "yellow")))
+    _steps = how_to_exploit(_d)
+    if _steps:
+        body_parts.append(Text(""))
+        body_parts.append(Text.assemble(("Cara Menyusupi (Reproduksi):\n", "bold"), (_steps, "magenta")))
     if f.remediation:
         body_parts.append(Text(""))
         body_parts.append(Text.assemble(("Remediasi:\n", "bold"), (f.remediation, "green")))
@@ -94,3 +103,9 @@ def render_summary(findings: list[Finding]) -> None:
         )
     table.add_row(Text("TOTAL", style="bold"), str(len(findings)))
     console.print(table)
+    intrudable = sum(1 for f in findings if classify(f.to_dict())["can_intrude"])
+    predictions = sum(1 for f in findings if classify(f.to_dict())["id"] == "prediction")
+    console.print(
+        f"[bold green]Bisa disusupi (terbukti/terverifikasi): {intrudable}[/bold green]   "
+        f"[yellow]Prediksi (wajib verifikasi manual): {predictions}[/yellow]"
+    )
