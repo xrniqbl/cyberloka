@@ -1314,6 +1314,7 @@ EXPLAIN: dict[str, dict[str, str]] = {
         ),
         "category": "data",
     },
+    "web_cache_deception": {"friendly_name": "Kebocoran Halaman Akun via Cache (Web Cache Deception)", "what_it_means": ("Kami mengakses halaman akun saat login lalu memintanya kembali " "lewat alamat yang menyamar sebagai file statis (mis. " "`/akun/x.css`). Bila cache/CDN menyimpannya, pengunjung tanpa " "login bisa menerima halaman akun korban."), "business_impact": ("Data pribadi pelanggan (email, saldo, alamat, token) bisa bocor ke " "orang asing tanpa perlu password — berujung pengambilalihan akun, " "kebocoran data massal, dan pelanggaran privasi."), "category": "data"},
 }
 
 # Action-plan time bucket per severity (untuk action plan di laporan).
