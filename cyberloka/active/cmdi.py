@@ -3,7 +3,12 @@ from __future__ import annotations
 
 import time
 
-from cyberloka.active._helpers import append_param, candidate_urls, iter_param_urls
+from cyberloka.active._helpers import (
+    append_param,
+    candidate_urls,
+    fuzz_forms,
+    iter_param_urls,
+)
 from cyberloka.core import Finding, HttpClient, Severity, Target
 from cyberloka.core.config import ScanConfig
 
@@ -106,6 +111,29 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                             ],
                         )
                     )
+                    return findings
+        for payload in MARKER_PAYLOADS:
+            for field, action, resp in fuzz_forms(client, config, "x" + payload):
+                text = resp.text or ""
+                if "cyberlokaCMD" in text and "echo cyberlokaCMD" not in text:
+                    findings.append(Finding(
+                        module="cmdi",
+                        title=f"Command Injection (marker) pada field form `{field}`",
+                        severity=Severity.CRITICAL,
+                        confidence="confirmed",
+                        description=(
+                            "Output marker `cyberlokaCMD` muncul setelah field form disuntik "
+                            "command separator → shell dieksekusi."
+                        ),
+                        target=action,
+                        evidence=f"payload={payload}",
+                        cwe="CWE-78",
+                        remediation=(
+                            "Jangan passing input user ke shell. Pakai API argumen-list + "
+                            "whitelist."
+                        ),
+                        references=["https://owasp.org/www-community/attacks/Command_Injection"],
+                    ))
                     return findings
     finally:
         client.close()

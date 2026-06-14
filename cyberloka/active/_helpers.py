@@ -1,6 +1,7 @@
 """Helpers shared by active checks."""
 from __future__ import annotations
 
+import re
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 
@@ -56,3 +57,49 @@ def candidate_urls(target, config, synth_key, synth_val, cap=25):
             _add(u)
     _add(target.base_url)
     return out[:cap]
+
+
+# Forms whose submission could trigger a destructive / side-effecting action.
+# We never fuzz these even under --authorized, to stay polite and safe.
+_DANGEROUS_FORM = re.compile(
+    r"(logout|sign[\-_]?out|delete|deactivate|remove|destroy|pay|checkout|"
+    r"purchase|order|transfer|withdraw|unsubscribe|close[\-_]?account)",
+    re.I,
+)
+_SKIP_INPUT_TYPES = {"submit", "button", "reset", "file", "hidden", "image"}
+
+
+def fuzz_forms(client, config, payload, *, max_forms=10, max_fields=12):
+    """Submit each crawler-discovered form with one field set to `payload`.
+
+    Yields (field_name, action, response) for every fuzzable field in every
+    discovered same-origin form. Non-target fields keep a benign default so the
+    request stays well-formed. Destructive-looking forms are skipped.
+    """
+    from cyberloka.recon.crawler import get_state
+
+    state = get_state(config)
+    if not state:
+        return
+    for form in state.forms[:max_forms]:
+        action = form.get("action") or ""
+        method = (form.get("method") or "get").lower()
+        inputs = form.get("inputs") or []
+        names = " ".join((i.get("name") or "") for i in inputs)
+        if _DANGEROUS_FORM.search(action) or _DANGEROUS_FORM.search(names):
+            continue
+        fuzzable = [
+            i for i in inputs
+            if i.get("name") and (i.get("type") or "text").lower() not in _SKIP_INPUT_TYPES
+        ][:max_fields]
+        for target in fuzzable:
+            data: dict[str, str] = {}
+            for i in inputs:
+                name = i.get("name")
+                if not name:
+                    continue
+                data[name] = payload if i is target else (i.get("value") or "test")
+            resp = (client.post(action, data=data) if method == "post"
+                    else client.get(action, params=data))
+            if resp is not None:
+                yield target.get("name"), action, resp
