@@ -47,6 +47,16 @@ def parse_headers(values: list[str] | None) -> dict[str, str]:
     return out
 
 
+CONFIDENCE_RANK = {"tentative": 0, "firm": 1, "confirmed": 2}
+
+
+def filter_by_confidence(findings, min_confidence: str):
+    """Keep findings whose confidence is at or above the threshold.
+    Unknown confidence defaults to 'firm' rank."""
+    m = CONFIDENCE_RANK.get(min_confidence, 0)
+    return [f for f in findings if CONFIDENCE_RANK.get(f.confidence, 1) >= m]
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="cyberloka",
@@ -117,6 +127,15 @@ def build_parser() -> argparse.ArgumentParser:
             "tidak menanam apa pun. Wajib bareng --authorized."
         ),
     )
+    p.add_argument(
+        "--min-confidence",
+        dest="min_confidence",
+        choices=("tentative", "firm", "confirmed"),
+        default="tentative",
+        help=("Tampilkan hanya temuan dengan confidence minimal ini. "
+              "`confirmed` = hanya celah terverifikasi (paling sedikit noise); "
+              "`firm` = sembunyikan tebakan lemah; `tentative` (default) = tampilkan semua."),
+    )
     p.add_argument("--version", action="version", version=f"cyberloka {__version__}")
     return p
 
@@ -162,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
         proxy=args.proxy,
         oob_url=args.oob_url,
         sarif_out=args.sarif_out,
+        min_confidence=args.min_confidence,
     )
 
     needs_intrusive = cfg.mode in ("active", "full") or cfg.simulate_attack
@@ -184,7 +204,16 @@ def main(argv: list[str] | None = None) -> int:
 
     console_report.render_banner(target.base_url, cfg.mode, cfg.resolve_modules())
 
-    findings = run_scan(target, cfg)
+    all_findings = run_scan(target, cfg)
+
+    # Filter berdasarkan ambang confidence (--min-confidence).
+    findings = filter_by_confidence(all_findings, cfg.min_confidence)
+    hidden = len(all_findings) - len(findings)
+    if hidden and not cfg.quiet:
+        console.print(
+            f"[dim]{hidden} temuan dengan confidence di bawah "
+            f"'{cfg.min_confidence}' disembunyikan (--min-confidence).[/dim]"
+        )
 
     console.print()
     console_report.render_findings(findings)
