@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================
 #   cek.sh - Cyberloka Interactive Menu (Linux/macOS)
-#   Versi: 0.9.0
+#   Versi: 0.9.1  (verification-first scanners)
 #
 #   Cara update:
 #     git pull && pip install -e .[web,pdf]
@@ -28,7 +28,7 @@ show_menu() {
     clear || true
     cat <<'BANNER'
 ================================================================
-  CYBERLOKA v0.9.0 - Web Vulnerability Scanner
+  CYBERLOKA v0.9.1 - Web Vulnerability Scanner  [verification-first]
 ================================================================
 
  APA YANG MAU DICOBA?  (pilih nomor)

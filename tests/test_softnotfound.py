@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from cyberloka.core.config import ScanConfig
 from cyberloka.core.target import parse_target
 from cyberloka.core import probe
-from cyberloka.recon import framework_default, source_leak, api_discovery
+from cyberloka.recon import framework_default, source_leak, api_discovery, cms_scan, dependency_confusion, favicon_hash
 from cyberloka.passive import sensitive_files
 
 SPA_HTML = ("<!doctype html><html><head><title>SnapTix</title></head>"
@@ -62,6 +62,8 @@ class _RealLeak(BaseHTTPRequestHandler):
             return self._send(200, "APP_KEY=base64:abcd\nDB_PASSWORD=s3cret\nDB_HOST=localhost\n")
         if p == "/.git/config":
             return self._send(200, "[core]\n\trepositoryformatversion = 0\n[remote \"origin\"]\n\turl = git@x\n")
+        if p == "/package.json":
+            return self._send(200, '{"name":"app","version":"1.0.0","dependencies":{"@acme-internal/secret":"^1.0.0","react":"^18"}}', "application/json")
         return self._send(404, "<html><body>Not Found</body></html>", "text/html")
 
 
@@ -81,7 +83,7 @@ def test_spa_catchall_produces_no_false_positives():
     time.sleep(0.3)
     base = "http://127.0.0.1:8801"
     try:
-        for mod in (framework_default, source_leak, api_discovery, sensitive_files):
+        for mod in (framework_default, source_leak, api_discovery, sensitive_files, cms_scan, dependency_confusion, favicon_hash):
             findings = mod.run(parse_target(base), _cfg(base))
             assert findings == [], f"{mod.__name__} false-positive on SPA catch-all: {[f.title for f in findings]}"
     finally:
@@ -99,6 +101,9 @@ def test_real_exposed_files_are_detected():
         assert any(".git/config" in f.target for f in sl), "real exposed .git/config must be detected"
         fd = framework_default.run(parse_target(base), _cfg(base))
         assert any("/.env" in f.target for f in fd), "framework_default must detect real .env"
+        dc = dependency_confusion.run(parse_target(base), _cfg(base))
+        assert any("internal" in f.evidence.lower() or "package.json" in f.target for f in dc), \
+            "dependency_confusion must detect real exposed package.json"
     finally:
         srv.shutdown()
 

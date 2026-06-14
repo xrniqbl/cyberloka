@@ -8,7 +8,7 @@ REM  ditanya untuk update. Pilihan #8 di menu adalah update manual
 REM  (git pull + pip install) yang sama.
 REM =====================================================================
 setlocal EnableDelayedExpansion
-title Cyberloka v0.9.0 - Web Vulnerability Scanner
+title Cyberloka v0.9.1 - Web Vulnerability Scanner (verification-first)
 chcp 65001 >nul 2>&1
 
 REM Pindah ke folder script ini
@@ -44,7 +44,7 @@ if not errorlevel 1 (
 :menu
 cls
 echo ======================================================================
-echo   CYBERLOKA v0.9.0 - Web Vulnerability Scanner
+echo   CYBERLOKA v0.9.1 - Web Vulnerability Scanner  [verification-first]
 echo ======================================================================
 echo.
 echo   APA YANG MAU DICOBA?   ^(pilih nomor^)

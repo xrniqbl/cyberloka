@@ -6,6 +6,7 @@ import re
 from urllib.parse import urljoin
 
 from cyberloka.core import Finding, HttpClient, Severity, Target
+from cyberloka.core import probe
 from cyberloka.core.config import ScanConfig
 
 PATHS = ["/package.json", "/composer.json", "/Pipfile", "/pyproject.toml"]
@@ -19,25 +20,30 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
     try:
         for p in PATHS:
             url = urljoin(base, p.lstrip("/"))
-            r = client.get(url)
-            if r is None or r.status_code != 200:
-                continue
-            ctype = (r.headers.get("Content-Type") or "").lower()
-            if "html" in ctype:
+            # Harus bukan catch-all/SPA dan bukan HTML (manifest = JSON/TOML).
+            r = probe.verify_real(client, target, url,
+                                  validator=lambda c, b: not probe.looks_like_html(b))
+            if r is None:
                 continue
             body = r.text or ""
             if not body or len(body) > 100000:
                 continue
 
+            manifest_shaped = False
+
             internal_pkgs: list[str] = []
             try:
                 if p.endswith(".json"):
                     data = json.loads(body)
+                    if not isinstance(data, dict):
+                        continue
                     deps = {}
                     deps.update(data.get("dependencies") or {})
                     deps.update(data.get("devDependencies") or {})
                     deps.update(data.get("require") or {})
                     deps.update(data.get("require-dev") or {})
+                    # Benar-benar manifest: punya deps ATAU pasangan name+version.
+                    manifest_shaped = bool(deps) or ("name" in data and "version" in data)
                     for name in deps:
                         if INTERNAL_HINTS.search(name):
                             internal_pkgs.append(name)
@@ -66,7 +72,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                                  "(4) Jangan publish package.json ke webroot."),
                     references=["https://medium.com/@alex.birsan/dependency-confusion-4a5d60fec610"],
                 ))
-            elif p.endswith(".json") and r.status_code == 200:
+            elif p.endswith(".json") and manifest_shaped:
                 # File manifest publik = info disclosure
                 findings.append(Finding(
                     module="dependency_confusion", target=url,
