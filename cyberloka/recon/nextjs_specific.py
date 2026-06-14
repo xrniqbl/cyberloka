@@ -5,6 +5,7 @@ import re
 from urllib.parse import urljoin
 
 from cyberloka.core import Finding, HttpClient, Severity, Target
+from cyberloka.core import probe
 from cyberloka.core.config import ScanConfig
 
 NEXT_PATHS = [
@@ -45,8 +46,9 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
             ))
             # Try fetching a known data route
             data_url = urljoin(target.base_url, f"/_next/data/{m.group(1)}/index.json")
-            rd = client.get(data_url)
-            if rd is not None and rd.status_code == 200 and "json" in rd.headers.get("Content-Type", "").lower():
+            rd = probe.verify_real(client, target, data_url,
+                                   validator=lambda c, b: probe.is_json_doc(c, b))
+            if rd is not None:
                 findings.append(Finding(
                     module="nextjs_specific",
                     title="Next.js _next/data JSON dapat di-fetch publik",
@@ -78,8 +80,9 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                 break
 
         # Stack frame leak (dev mode)
-        sf = client.get(urljoin(target.base_url, "/__nextjs_original-stack-frame"))
-        if sf is not None and sf.status_code == 200:
+        sf = probe.verify_real(client, target, urljoin(target.base_url, "/__nextjs_original-stack-frame"),
+                               validator=lambda c, b: not probe.looks_like_html(b))
+        if sf is not None:
             findings.append(Finding(
                 module="nextjs_specific",
                 title="Next.js dev endpoint aktif (`__nextjs_original-stack-frame`)",
