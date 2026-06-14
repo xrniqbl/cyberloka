@@ -79,6 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--header", action="append", default=[], help="Tambah header `Name: value` (boleh diulang)")
     p.add_argument("--no-verify-tls", action="store_true")
     p.add_argument("--proxy", help="HTTP proxy URL (mis. http://127.0.0.1:8080)")
+    p.add_argument("--oob-url", help="URL collaborator OOB self-hosted (mis. http://oast.example.com:8088) untuk konfirmasi blind SSRF")
     p.add_argument("--json", dest="json_out", help="Path output JSON")
     p.add_argument("--html", dest="html_out", help="Path output HTML")
     p.add_argument(
@@ -157,6 +158,7 @@ def main(argv: list[str] | None = None) -> int:
         json_out=args.json_out,
         html_out=args.html_out,
         proxy=args.proxy,
+        oob_url=args.oob_url,
     )
 
     needs_intrusive = cfg.mode in ("active", "full") or cfg.simulate_attack
