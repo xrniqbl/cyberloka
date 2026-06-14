@@ -12,7 +12,7 @@ URL_PARAM_HINTS = ("url", "uri", "redirect", "next", "image", "fetch", "dest", "
 PROBES = [
     ("http://169.254.169.254/latest/meta-data/", "AWS metadata", "ami-id"),
     ("http://metadata.google.internal/computeMetadata/v1/", "GCP metadata", "instance/"),
-    ("http://169.254.169.254/metadata/instance?api-version=2021-02-01", "Azure metadata", "compute"),
+    ("http://169.254.169.254/metadata/instance?api-version=2021-02-01", "Azure metadata", "azenvironment"),
     ("http://[::1]/", "IPv6 loopback", ""),
     ("http://0.0.0.0/", "wildcard 0.0.0.0", ""),
 ]
@@ -61,6 +61,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                             module="ssrf_metadata",
                             title=f"SSRF berhasil mencapai endpoint cloud metadata ({label})",
                             severity=Severity.CRITICAL,
+                            confidence="firm",
                             description=("Server fetch URL yang diset attacker dan mengembalikan "
                                          f"respons dari {label}. Ini bisa membocorkan IAM "
                                          "credential dan mengarah ke RCE / takeover akun cloud."),
