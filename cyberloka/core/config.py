@@ -56,6 +56,7 @@ class ScanConfig:
         "dirlist", "ssrf", "ssrf_metadata", "ssti", "xxe", "forms",
         "session", "voucher", "payment", "otp_check", "password_reset",
         "file_upload", "idor_generic", "host_header", "cache_poison",
+        "web_cache_deception",
         "hpp", "rfd", "dom_xss", "oauth_check", "pii_leak", "race_condition",
         "proto_pollution", "http_smuggling", "ws_check", "auth_bypass",
         "balance", "env_leak", "api_auth", "mass_assignment",

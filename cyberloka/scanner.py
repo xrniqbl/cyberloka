@@ -77,6 +77,7 @@ MODULE_MAP: dict[str, str] = {
     "idor_generic": "cyberloka.active.idor_generic",
     "host_header": "cyberloka.active.host_header",
     "cache_poison": "cyberloka.active.cache_poison",
+    "web_cache_deception": "cyberloka.active.web_cache_deception",
     "hpp": "cyberloka.active.hpp",
     "rfd": "cyberloka.active.rfd",
     "dom_xss": "cyberloka.active.dom_xss",
