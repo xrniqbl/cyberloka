@@ -56,6 +56,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                             module="ssrf",
                             title=f"Potensi SSRF pada parameter `{k}`",
                             severity=Severity.HIGH,
+                            confidence="tentative",
                             description=(
                                 "Server tampaknya fetch URL yang dikontrol klien. Penyerang "
                                 "bisa menyentuh service internal (mis. metadata cloud)."

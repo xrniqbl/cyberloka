@@ -42,6 +42,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                             module="lfi",
                             title=f"Local File Inclusion / Path Traversal pada `{param}`",
                             severity=Severity.CRITICAL,
+                            confidence="confirmed",
                             description=(
                                 "Konten file sistem (mis. /etc/passwd atau win.ini) berhasil "
                                 "diakses lewat parameter aplikasi."

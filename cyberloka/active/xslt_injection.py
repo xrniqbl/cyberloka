@@ -34,6 +34,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                     module="xslt_injection", target=url,
                     title="Endpoint mengevaluasi XSLT yang dikirim klien",
                     severity=Severity.CRITICAL,
+                    confidence="confirmed",
                     description="Server processor XSLT dapat dimanipulasi attacker — sering RCE.",
                     evidence="XSLT marker reflected", cwe="CWE-91",
                     remediation="Jangan terima XSL stylesheet dari user. Pakai stylesheet hardcoded.",

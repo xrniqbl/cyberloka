@@ -52,6 +52,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                 target=target.base_url,
                 title=f"{len(bad)} endpoint sosial menerima POST tanpa CSRF guard",
                 severity=Severity.HIGH,
+                confidence="tentative",
                 description=(
                     "Endpoint follow/like/share/post tidak memvalidasi token "
                     "CSRF atau header Origin/Referer.\n\n"

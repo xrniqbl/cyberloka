@@ -45,6 +45,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                         module="deserialization", target=url,
                         title=f"Format serialisasi terdeteksi di response: {label}",
                         severity=sev,
+                        confidence="tentative",
                         description=("Server tampak menerima/mengirim object terserialisasi. "
                                      "Insecure deserialization sering jadi vektor RCE."),
                         evidence=m.group(0)[:120],
