@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-from cyberloka.active._helpers import append_param, iter_param_urls
+from cyberloka.active._helpers import append_param, candidate_urls, iter_param_urls
 from cyberloka.core import (
     Finding,
     HttpClient,
@@ -149,41 +149,49 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
     findings: list[Finding] = []
     client = HttpClient(config)
     awam_summary, awam_steps = get_awam("sqli")
+    seen_points: set[tuple[str, str]] = set()
     try:
-        url = target.base_url
-        hits = _scan_url(client, url)
-        for param, sig, ev, proof in hits:
-            findings.append(
-                Finding(
-                    module="sqli",
-                    title=f"Kemungkinan SQL Injection ({sig}) pada parameter `{param}`",
-                    severity=Severity.CRITICAL,
-                    description=(
-                        "Respons aplikasi berubah / memuat error SQL setelah disuntik payload, "
-                        "sudah divalidasi dengan kontrol fetch (error-based) atau "
-                        "double-run (boolean-based)."
-                    ),
-                    target=url,
-                    evidence=ev,
-                    cwe="CWE-89",
-                    confidence="confirmed",
-                    urls=[url],
-                    remediation=(
-                        "Gunakan parameterized query / prepared statements. JANGAN concatenate "
-                        "input ke query. Untuk ORM, hindari raw SQL dengan input user. Tambahkan "
-                        "validasi tipe + WAF sebagai lapis pertahanan tambahan."
-                    ),
-                    references=[
-                        "https://owasp.org/www-community/attacks/SQL_Injection",
-                        "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
-                    ],
-                    extra=build_extra(
-                        proof=proof,
-                        awam_steps=awam_steps,
-                        awam_summary=awam_summary,
-                    ),
+        # Smart targeting: uji base_url + SEMUA endpoint berparameter hasil crawl.
+        for url in candidate_urls(target, config, fallback_param="id", fallback_value="1"):
+            hits = _scan_url(client, url)
+            for param, sig, ev, proof in hits:
+                # Dedup lintas-URL berdasarkan (path-shape, param).
+                from urllib.parse import urlparse
+                dedup = (urlparse(url).path, param)
+                if dedup in seen_points:
+                    continue
+                seen_points.add(dedup)
+                findings.append(
+                    Finding(
+                        module="sqli",
+                        title=f"Kemungkinan SQL Injection ({sig}) pada parameter `{param}`",
+                        severity=Severity.CRITICAL,
+                        description=(
+                            "Respons aplikasi berubah / memuat error SQL setelah disuntik payload, "
+                            "sudah divalidasi dengan kontrol fetch (error-based) atau "
+                            "double-run (boolean-based)."
+                        ),
+                        target=url,
+                        evidence=ev,
+                        cwe="CWE-89",
+                        confidence="confirmed",
+                        urls=[url],
+                        remediation=(
+                            "Gunakan parameterized query / prepared statements. JANGAN concatenate "
+                            "input ke query. Untuk ORM, hindari raw SQL dengan input user. Tambahkan "
+                            "validasi tipe + WAF sebagai lapis pertahanan tambahan."
+                        ),
+                        references=[
+                            "https://owasp.org/www-community/attacks/SQL_Injection",
+                            "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
+                        ],
+                        extra=build_extra(
+                            proof=proof,
+                            awam_steps=awam_steps,
+                            awam_summary=awam_summary,
+                        ),
+                    )
                 )
-            )
     finally:
         client.close()
     return findings

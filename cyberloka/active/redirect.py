@@ -28,7 +28,7 @@ from __future__ import annotations
 import secrets
 from urllib.parse import urlparse
 
-from cyberloka.active._helpers import iter_param_urls
+from cyberloka.active._helpers import candidate_urls, iter_param_urls
 from cyberloka.core import (
     Finding,
     HttpClient,
@@ -50,15 +50,9 @@ def _evil_url(host: str) -> str:
     return f"https://{host}/cyberloka-{secrets.token_hex(3)}"
 
 
-def run(target: Target, config: ScanConfig) -> list[Finding]:
+def _scan_url(client, url, target, awam_summary, awam_steps):
     findings: list[Finding] = []
-    client = HttpClient(config)
-    awam_summary, awam_steps = get_awam("redirect")
-    try:
-        url = target.base_url
-        if "?" not in url:
-            return findings
-
+    if True:
         candidate_params = [
             p for p, _u in iter_param_urls(url, "PLACEHOLDER")
             if any(h in p.lower() for h in REDIRECT_PARAM_HINTS)
@@ -158,6 +152,25 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                 )
             )
             break
+    return findings
+
+
+def run(target: Target, config: ScanConfig) -> list[Finding]:
+    findings: list[Finding] = []
+    client = HttpClient(config)
+    awam_summary, awam_steps = get_awam("redirect")
+    seen_points: set[tuple] = set()
+    try:
+        from urllib.parse import urlparse
+        # fallback_param=None: open-redirect hanya relevan pada parameter nyata.
+        for url in candidate_urls(target, config, fallback_param=None):
+            path = urlparse(url).path
+            for f in _scan_url(client, url, target, awam_summary, awam_steps):
+                key = (path, f.title)
+                if key in seen_points:
+                    continue
+                seen_points.add(key)
+                findings.append(f)
     finally:
         client.close()
     return findings

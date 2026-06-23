@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 import secrets
 
-from cyberloka.active._helpers import append_param, iter_param_urls
+from cyberloka.active._helpers import append_param, candidate_urls, iter_param_urls
 from cyberloka.core import (
     Finding,
     HttpClient,
@@ -49,14 +49,9 @@ def _has_signature(body: str) -> str | None:
     return None
 
 
-def run(target: Target, config: ScanConfig) -> list[Finding]:
+def _scan_url(client, url, awam_summary, awam_steps):
     findings: list[Finding] = []
-    client = HttpClient(config)
-    awam_summary, awam_steps = get_awam("lfi")
-    try:
-        url = target.base_url
-        if "?" not in url:
-            url = append_param(url, "file", "index")
+    if True:
         for payload in PAYLOADS:
             for param, mutated in iter_param_urls(url, payload):
                 resp = client.get(mutated)
@@ -129,6 +124,23 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                     )
                 )
                 return findings  # one strong finding is enough
+    return findings
+
+
+def run(target: Target, config: ScanConfig) -> list[Finding]:
+    findings: list[Finding] = []
+    client = HttpClient(config)
+    awam_summary, awam_steps = get_awam("lfi")
+    seen_paths: set[str] = set()
+    try:
+        from urllib.parse import urlparse
+        for url in candidate_urls(target, config, fallback_param="file", fallback_value="index"):
+            path = urlparse(url).path
+            if path in seen_paths:
+                continue
+            for f in _scan_url(client, url, awam_summary, awam_steps):
+                seen_paths.add(path)
+                findings.append(f)
     finally:
         client.close()
     return findings

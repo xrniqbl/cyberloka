@@ -16,7 +16,7 @@ yang flag setiap response yang memuat angka ``49`` (dari ``7*7``):
 """
 from __future__ import annotations
 
-from cyberloka.active._helpers import append_param, iter_param_urls
+from cyberloka.active._helpers import append_param, candidate_urls, iter_param_urls
 from cyberloka.core import (
     Finding,
     HttpClient,
@@ -49,14 +49,9 @@ def _format(tpl: str, a: int, b: int) -> str:
     return tpl.replace("{a}", str(a)).replace("{b}", str(b))
 
 
-def run(target: Target, config: ScanConfig) -> list[Finding]:
+def _scan_url(client, url):
     findings: list[Finding] = []
-    client = HttpClient(config)
-    try:
-        url = target.base_url
-        if "?" not in url:
-            url = append_param(url, "q", "test")
-
+    if True:
         baseline = client.get(url)
         baseline_body = (baseline.text or "") if baseline is not None else ""
 
@@ -138,6 +133,22 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                     )
                 )
                 return findings
+    return findings
+
+
+def run(target: Target, config: ScanConfig) -> list[Finding]:
+    findings: list[Finding] = []
+    client = HttpClient(config)
+    seen_paths: set[str] = set()
+    try:
+        from urllib.parse import urlparse
+        for url in candidate_urls(target, config, fallback_param="q", fallback_value="test"):
+            path = urlparse(url).path
+            if path in seen_paths:
+                continue
+            for f in _scan_url(client, url):
+                seen_paths.add(path)
+                findings.append(f)
     finally:
         client.close()
     return findings

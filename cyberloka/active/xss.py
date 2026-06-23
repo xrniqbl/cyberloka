@@ -40,7 +40,7 @@ import re
 import secrets
 from html import escape as html_escape
 
-from cyberloka.active._helpers import append_param, iter_param_urls
+from cyberloka.active._helpers import append_param, candidate_urls, iter_param_urls
 from cyberloka.core import (
     Finding,
     HttpClient,
@@ -90,15 +90,9 @@ def _make_token(prefix: str) -> str:
     return f"{prefix}{secrets.token_hex(4)}"
 
 
-def run(target: Target, config: ScanConfig) -> list[Finding]:
+def _scan_url(client, url, awam_summary, awam_steps):
     findings: list[Finding] = []
-    client = HttpClient(config)
-    awam_summary, awam_steps = get_awam("xss")
-    try:
-        url = target.base_url
-        if "?" not in url:
-            url = append_param(url, "q", "test")
-
+    if True:
         # ==== Step 0: baseline (URL tanpa value sensitive) ====
         baseline_token = _make_token("base")
         baseline_url = next(
@@ -215,6 +209,25 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                 )
             )
             break
+    return findings
+
+
+def run(target: Target, config: ScanConfig) -> list[Finding]:
+    findings: list[Finding] = []
+    client = HttpClient(config)
+    awam_summary, awam_steps = get_awam("xss")
+    seen_points: set[tuple] = set()
+    try:
+        from urllib.parse import urlparse
+        # Smart targeting: uji base_url + SEMUA endpoint berparameter hasil crawl.
+        for url in candidate_urls(target, config, fallback_param="q", fallback_value="test"):
+            path = urlparse(url).path
+            for f in _scan_url(client, url, awam_summary, awam_steps):
+                key = (path, f.title)
+                if key in seen_points:
+                    continue
+                seen_points.add(key)
+                findings.append(f)
     finally:
         client.close()
     return findings

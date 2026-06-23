@@ -12,7 +12,7 @@ from __future__ import annotations
 import secrets
 import time
 
-from cyberloka.active._helpers import append_param, iter_param_urls
+from cyberloka.active._helpers import append_param, candidate_urls, iter_param_urls
 from cyberloka.core import (
     Finding,
     HttpClient,
@@ -46,15 +46,9 @@ SLEEP_PAYLOADS = [
 ]
 
 
-def run(target: Target, config: ScanConfig) -> list[Finding]:
+def _scan_url(client, url, awam_summary, awam_steps):
     findings: list[Finding] = []
-    client = HttpClient(config)
-    awam_summary, awam_steps = get_awam("cmdi")
-    try:
-        url = target.base_url
-        if "?" not in url:
-            url = append_param(url, "cmd", "ping")
-
+    if True:
         # ---------------- Marker test (double-marker cross-check) ----------------
         marker_a = f"cyberlokaA{secrets.token_hex(3)}"
         marker_b = f"cyberlokaB{secrets.token_hex(3)}"
@@ -197,6 +191,23 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                     )
                 )
                 return findings
+    return findings
+
+
+def run(target: Target, config: ScanConfig) -> list[Finding]:
+    findings: list[Finding] = []
+    client = HttpClient(config)
+    awam_summary, awam_steps = get_awam("cmdi")
+    seen_paths: set[str] = set()
+    try:
+        from urllib.parse import urlparse
+        for url in candidate_urls(target, config, fallback_param="cmd", fallback_value="ping"):
+            path = urlparse(url).path
+            if path in seen_paths:
+                continue
+            for f in _scan_url(client, url, awam_summary, awam_steps):
+                seen_paths.add(path)
+                findings.append(f)
     finally:
         client.close()
     return findings
