@@ -41,6 +41,7 @@ Lapor hanya bila ketiganya berperilaku sesuai hipotesis injeksi, lalu set
 | **Reflected XSS** | Karakter pemecah markup dipantulkan **MENTAH** (tidak di-encode) DAN di konteks yang **dieksekusi** (bukan `<textarea>`/komentar/`<title>`). |
 | **LFI / Path Traversal** | ≥2 baris berformat `user:x:uid:gid:` dari `/etc/passwd` (atau signature `win.ini`) yang **TIDAK ada di baseline**. |
 | **Open Redirect** | Server benar-benar balas **3xx** ke host attacker (uji absolut & protocol-relative `//host`). |
+| **XSLT injection** | Stylesheet menghitung perkalian acak via `<xsl:value-of select="A*B"/>` dibungkus `CLK<hasil>END`. Lapor hanya bila respons memuat HASIL (mis. `CLK670592745END`) DAN ekspresi `A*B`/markup `<xsl:value-of` TIDAK terpantul. Marker literal di dalam payload (mis. `CYBERLOKA-XSLT-OK`) DILARANG — server yang memantulkan body memunculkannya tanpa eksekusi. |
 
 Helper bersama: `cyberloka/active/_helpers.py` → `fetch`, `similarity`,
 `replace_param`, `baseline_timing`, `param_names`, `get_param_value`.
@@ -98,6 +99,7 @@ Contoh acuan:
 
 - `tests/test_verification.py` — matriks injeksi (aman vs rentan untuk 6 modul).
 - `tests/test_softnotfound.py` — SPA catch-all (0 temuan) vs file asli terekspos (terdeteksi).
+- `tests/test_xslt.py` — server reflektif/echo (0 temuan) vs XSLT engine asli (terdeteksi).
 
 Sebuah modul dianggap "pintar" hanya jika lulus **kedua** sisi: tidak menandai yang
 aman, dan tetap menangkap yang nyata.
