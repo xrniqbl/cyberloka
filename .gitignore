@@ -17,7 +17,9 @@ env/
 # Reports
 reports/
 *.json.bak
-report*.html
+# Generated reports — but keep template in cyberloka/reporting/templates/
+/report*.html
+report.json
 report*.json
 
 # Cache

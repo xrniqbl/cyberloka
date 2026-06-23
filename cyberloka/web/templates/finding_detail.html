@@ -1,0 +1,48 @@
+{% extends "_base.html" %}
+{% block title %}Finding #{{ f.id }}{% endblock %}
+{% block heading %}Finding #{{ f.id }}{% endblock %}
+
+{% block body %}
+<a href="/scans/{{ f.scan_id }}" class="text-sm text-brand-500 hover:underline">← Kembali ke scan</a>
+<section class="bg-ink-800 border border-ink-600 rounded-2xl p-6 mt-3 space-y-4">
+  <div class="flex items-center gap-3">
+    <span class="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full {{ sev_pill[f.severity] }}">{{ f.severity }}</span>
+    <h2 class="text-xl font-bold flex-1">{{ f.title }}</h2>
+    <span class="text-2xl font-extrabold">{{ f.risk_score }}</span>
+  </div>
+  <div class="text-xs text-slate-400">
+    module <span class="font-mono">{{ f.module }}</span>
+    {% if f.cwe %} · {{ f.cwe }}{% endif %}
+    {% if f.owasp_category %} · {{ f.owasp_category }}{% endif %}
+    · confidence {{ f.confidence }}
+  </div>
+  <div>
+    <div class="text-xs uppercase tracking-wider text-slate-400 mb-1">Target</div>
+    <div class="break-all">{{ f.target }}</div>
+  </div>
+  <div>
+    <div class="text-xs uppercase tracking-wider text-slate-400 mb-1">Deskripsi</div>
+    <div>{{ f.description }}</div>
+  </div>
+  {% if f.evidence %}
+  <div>
+    <div class="text-xs uppercase tracking-wider text-slate-400 mb-1">Evidence</div>
+    <pre class="bg-black/40 text-amber-200 p-3 rounded-lg text-xs whitespace-pre-wrap break-words">{{ f.evidence }}</pre>
+  </div>
+  {% endif %}
+  {% if f.remediation %}
+  <div>
+    <div class="text-xs uppercase tracking-wider text-slate-400 mb-1">Remediasi</div>
+    <div class="text-emerald-300">{{ f.remediation }}</div>
+  </div>
+  {% endif %}
+  {% if f.references %}
+  <div>
+    <div class="text-xs uppercase tracking-wider text-slate-400 mb-1">Referensi</div>
+    <ul class="list-disc list-inside text-cyan-300 text-sm space-y-1">
+      {% for r in f.references %}<li><a class="hover:underline" target="_blank" rel="noopener" href="{{ r }}">{{ r }}</a></li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

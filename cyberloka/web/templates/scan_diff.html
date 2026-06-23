@@ -1,0 +1,56 @@
+{% extends "_base.html" %}
+{% block title %}Diff — Scan #{{ curr.id }} vs #{{ prev.id }}{% endblock %}
+{% block heading %}Diff: Scan #{{ prev.id }} → #{{ curr.id }}{% endblock %}
+
+{% block body %}
+<section class="grid grid-cols-3 gap-4">
+  <div class="bg-ink-800 border border-ink-600 rounded-2xl p-5">
+    <div class="text-xs uppercase tracking-wider text-slate-400">Baru</div>
+    <div class="text-3xl font-extrabold mt-1 text-red-400">{{ diff.summary.added }}</div>
+    <div class="text-xs text-slate-400 mt-1">finding muncul setelah scan terakhir</div>
+  </div>
+  <div class="bg-ink-800 border border-ink-600 rounded-2xl p-5">
+    <div class="text-xs uppercase tracking-wider text-slate-400">Hilang</div>
+    <div class="text-3xl font-extrabold mt-1 text-emerald-400">{{ diff.summary.fixed }}</div>
+    <div class="text-xs text-slate-400 mt-1">finding lama yang sudah tidak terdeteksi</div>
+  </div>
+  <div class="bg-ink-800 border border-ink-600 rounded-2xl p-5">
+    <div class="text-xs uppercase tracking-wider text-slate-400">Tetap</div>
+    <div class="text-3xl font-extrabold mt-1 text-slate-200">{{ diff.summary.unchanged }}</div>
+    <div class="text-xs text-slate-400 mt-1">muncul di kedua scan</div>
+  </div>
+</section>
+
+<section class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
+  <div class="bg-ink-800 border border-ink-600 rounded-2xl">
+    <div class="px-6 py-4 border-b border-ink-700 font-semibold text-red-300">+ Baru</div>
+    <ul class="divide-y divide-ink-700">
+      {% for f in diff.added %}
+        <li class="px-6 py-3 flex gap-3 items-center">
+          <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full {{ sev_pill[f.severity] }}">{{ f.severity }}</span>
+          <span class="flex-1 truncate text-sm">{{ f.title }}</span>
+          <span class="text-xs text-slate-400 font-mono">{{ f.module }}</span>
+        </li>
+      {% else %}
+        <li class="px-6 py-6 text-center text-slate-400 text-sm">Tidak ada finding baru.</li>
+      {% endfor %}
+    </ul>
+  </div>
+  <div class="bg-ink-800 border border-ink-600 rounded-2xl">
+    <div class="px-6 py-4 border-b border-ink-700 font-semibold text-emerald-300">− Hilang</div>
+    <ul class="divide-y divide-ink-700">
+      {% for f in diff.fixed %}
+        <li class="px-6 py-3 flex gap-3 items-center">
+          <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full {{ sev_pill[f.severity] }}">{{ f.severity }}</span>
+          <span class="flex-1 truncate text-sm">{{ f.title }}</span>
+          <span class="text-xs text-slate-400 font-mono">{{ f.module }}</span>
+        </li>
+      {% else %}
+        <li class="px-6 py-6 text-center text-slate-400 text-sm">Tidak ada finding yang hilang.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+
+<a href="/scans/{{ curr.id }}" class="text-sm text-brand-500 hover:underline mt-6 inline-block">← kembali ke scan #{{ curr.id }}</a>
+{% endblock %}

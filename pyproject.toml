@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cyberloka"
-version = "0.1.0"
-description = "Cyberloka - Web vulnerability scanner & remediation advisor (Python)"
+version = "0.10.3"
+description = "Cyberloka - Web vulnerability scanner, remediation advisor, and dashboard (Python)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [{ name = "Cyberloka contributors" }]
-keywords = ["security", "pentest", "scanner", "vulnerability", "owasp"]
+keywords = ["security", "pentest", "scanner", "vulnerability", "owasp", "dashboard"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -29,10 +29,22 @@ dependencies = [
     "jinja2>=3.1.2",
     "beautifulsoup4>=4.12.0",
     "tldextract>=5.0.0",
+    "reportlab>=4.0.0",
+]
+
+[project.optional-dependencies]
+web = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "python-multipart>=0.0.9",
+]
+pdf = [
+    "weasyprint>=60.0",
 ]
 
 [project.scripts]
 cyberloka = "cyberloka.cli:main"
+cyberloka-web = "cyberloka.web.server:main"
 
 [project.urls]
 Homepage = "https://github.com/xrniqbl/cyberloka"
@@ -41,4 +53,9 @@ Homepage = "https://github.com/xrniqbl/cyberloka"
 include = ["cyberloka*"]
 
 [tool.setuptools.package-data]
-cyberloka = ["data/*.txt", "reporting/templates/*.html"]
+cyberloka = [
+    "data/*.txt",
+    "reporting/templates/*.html",
+    "web/templates/*.html",
+    "web/static/*",
+]

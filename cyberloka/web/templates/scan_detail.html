@@ -1,0 +1,170 @@
+{% extends "_base.html" %}
+{% block title %}Scan #{{ scan.id }} — {{ scan.target_url }}{% endblock %}
+{% block heading %}Scan #{{ scan.id }}{% endblock %}
+
+{% block header_actions %}
+  <a href="/api/scans/{{ scan.id }}" class="px-3 py-2 text-sm rounded-lg bg-ink-700 border border-ink-600 hover:border-brand-500">JSON</a>
+  <a href="/scans/{{ scan.id }}/report.html" target="_blank" class="px-3 py-2 text-sm rounded-lg bg-ink-700 border border-ink-600 hover:border-brand-500">HTML report</a>
+  <a href="/scans/{{ scan.id }}/report.pdf" class="px-3 py-2 text-sm rounded-lg bg-ink-700 border border-ink-600 hover:border-brand-500">PDF</a>
+  {% if previous_scans %}
+    <form action="/scans/{{ scan.id }}/diff" method="get" class="inline-flex items-center gap-2">
+      <select name="previous" class="bg-ink-700 border border-ink-600 rounded-lg px-2 py-2 text-sm">
+        {% for p in previous_scans %}
+          <option value="{{ p.id }}">vs scan #{{ p.id }} ({{ p.finished_at | format_dt }})</option>
+        {% endfor %}
+      </select>
+      <button class="px-3 py-2 text-sm rounded-lg bg-brand-600 hover:bg-brand-500 text-white">Diff</button>
+    </form>
+  {% endif %}
+{% endblock %}
+
+{% block body %}
+<section class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+  <div class="lg:col-span-3 bg-ink-800 border border-ink-600 rounded-2xl p-6">
+    <div class="flex items-center justify-between gap-4 flex-wrap">
+      <div>
+        <div class="text-xs uppercase tracking-wider text-slate-400">Target</div>
+        <div class="text-lg font-semibold break-all">{{ scan.target_label or scan.target_url }}</div>
+        {% if scan.target_label %}<div class="text-sm text-slate-400 break-all">{{ scan.target_url }}</div>{% endif %}
+      </div>
+      <div class="text-right text-sm">
+        <div class="text-xs uppercase tracking-wider text-slate-400">Mode</div>
+        <div class="capitalize font-semibold">{{ scan.mode }}</div>
+        <div class="text-xs text-slate-400 mt-2">Mulai {{ scan.created_at | format_dt }}</div>
+      </div>
+    </div>
+
+    <div id="progress-wrap"
+         {% if scan.status in ['queued','running'] %}
+           hx-get="/scans/{{ scan.id }}/progress"
+           hx-trigger="every 2s"
+           hx-swap="outerHTML"
+         {% endif %}>
+      {% include "_progress.html" %}
+    </div>
+  </div>
+
+  <div class="bg-ink-800 border border-ink-600 rounded-2xl p-6">
+    <div class="text-xs uppercase tracking-wider text-slate-400">Risk Score</div>
+    <div class="text-5xl font-extrabold mt-1
+      {% if scan.risk_score >= 75 %}text-red-400
+      {% elif scan.risk_score >= 50 %}text-orange-400
+      {% elif scan.risk_score >= 25 %}text-amber-400
+      {% elif scan.risk_score > 0 %}text-blue-400
+      {% else %}text-emerald-400{% endif %}">{{ scan.risk_score or 0 }}</div>
+    <div class="text-sm text-slate-400 mt-1">{{ scan.risk_label or '—' }}</div>
+    {% if scan.summary %}
+    <div class="grid grid-cols-5 gap-1 mt-5 text-xs text-center">
+      {% for sev, color in [
+        ('critical','bg-red-600'),
+        ('high','bg-orange-500'),
+        ('medium','bg-amber-500'),
+        ('low','bg-blue-500'),
+        ('info','bg-slate-500')] %}
+        <div>
+          <div class="rounded-md py-1 font-bold text-white {{ color }}">{{ scan.summary.by_severity[sev] }}</div>
+          <div class="mt-1 text-slate-400 capitalize">{{ sev }}</div>
+        </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+{% if scan.status == 'done' %}
+<section class="bg-ink-800 border border-ink-600 rounded-2xl">
+  <div class="px-6 py-4 border-b border-ink-700 flex items-center justify-between flex-wrap gap-3">
+    <h2 class="font-semibold">Findings ({{ findings|length }})</h2>
+    <div class="flex gap-2 text-xs" id="filters">
+      {% for sev in ['all','critical','high','medium','low','info'] %}
+        <button data-sev="{{ sev }}"
+                class="filter-btn px-3 py-1 rounded-full border border-ink-600 hover:border-brand-500
+                  {% if sev == 'all' %}bg-brand-600 border-brand-600 text-white{% endif %}">{{ sev }}</button>
+      {% endfor %}
+      <input id="q" type="search" placeholder="Cari..." class="ml-2 bg-ink-700 border border-ink-600 rounded-full px-3 py-1 outline-none focus:border-brand-500"/>
+    </div>
+  </div>
+  <div class="divide-y divide-ink-700">
+    {% if not findings %}
+      <div class="px-6 py-10 text-center text-emerald-400">✓ Tidak ada finding terdeteksi.</div>
+    {% endif %}
+    {% for f in findings %}
+      <details class="finding group" data-sev="{{ f.severity }}"
+               data-haystack="{{ (f.title ~ ' ' ~ f.module ~ ' ' ~ (f.description or ''))|lower }}">
+        <summary class="px-6 py-4 cursor-pointer flex items-center gap-4 hover:bg-ink-700/40">
+          <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full {{ sev_pill[f.severity] }}">
+            {{ f.severity }}
+          </span>
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold truncate">{{ f.title }}</div>
+            <div class="text-xs text-slate-400 truncate">
+              <span class="font-mono">{{ f.module }}</span>
+              {% if f.cwe %} · {{ f.cwe }}{% endif %}
+              {% if f.owasp_category %} · {{ f.owasp_category }}{% endif %}
+              · confidence {{ f.confidence }}
+            </div>
+          </div>
+          <div class="font-bold tabular-nums">{{ f.risk_score }}</div>
+        </summary>
+        <div class="px-6 pb-5 pt-0 grid gap-3 text-sm bg-ink-900/40">
+          <div>
+            <div class="text-xs uppercase tracking-wider text-slate-400 mb-1">Target</div>
+            <div class="break-all">{{ f.target }}</div>
+          </div>
+          {% if f.description %}
+          <div>
+            <div class="text-xs uppercase tracking-wider text-slate-400 mb-1">Deskripsi</div>
+            <div class="text-slate-200">{{ f.description }}</div>
+          </div>
+          {% endif %}
+          {% if f.evidence %}
+          <div>
+            <div class="text-xs uppercase tracking-wider text-slate-400 mb-1">Evidence</div>
+            <pre class="bg-black/40 text-amber-200 p-3 rounded-lg text-xs whitespace-pre-wrap break-words border border-ink-600">{{ f.evidence }}</pre>
+          </div>
+          {% endif %}
+          {% if f.remediation %}
+          <div>
+            <div class="text-xs uppercase tracking-wider text-slate-400 mb-1">Remediasi</div>
+            <div class="text-emerald-300">{{ f.remediation }}</div>
+          </div>
+          {% endif %}
+          {% set refs = f.references %}
+          {% if refs %}
+          <div>
+            <div class="text-xs uppercase tracking-wider text-slate-400 mb-1">Referensi</div>
+            <ul class="list-disc list-inside text-cyan-300 text-xs space-y-1">
+              {% for r in refs %}<li><a href="{{ r }}" target="_blank" rel="noopener" class="hover:underline">{{ r }}</a></li>{% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+        </div>
+      </details>
+    {% endfor %}
+  </div>
+</section>
+
+<script>
+  let activeSev = 'all';
+  document.querySelectorAll('#filters .filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeSev = btn.dataset.sev;
+      document.querySelectorAll('#filters .filter-btn').forEach(b => {
+        b.classList.remove('bg-brand-600','border-brand-600','text-white');
+      });
+      btn.classList.add('bg-brand-600','border-brand-600','text-white');
+      apply();
+    });
+  });
+  document.getElementById('q').addEventListener('input', apply);
+  function apply() {
+    const q = (document.getElementById('q').value || '').toLowerCase();
+    document.querySelectorAll('details.finding').forEach(el => {
+      const sevOk = activeSev === 'all' || el.dataset.sev === activeSev;
+      const qOk = !q || (el.dataset.haystack || '').includes(q);
+      el.style.display = (sevOk && qOk) ? '' : 'none';
+    });
+  }
+</script>
+{% endif %}
+{% endblock %}
