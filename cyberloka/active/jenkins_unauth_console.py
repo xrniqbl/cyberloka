@@ -8,7 +8,15 @@ from __future__ import annotations
 
 from urllib.parse import urljoin
 
-from cyberloka.core import Finding, HttpClient, Severity, Target
+from cyberloka.core import (
+    Finding,
+    HttpClient,
+    Severity,
+    Target,
+    catch_all_control,
+    is_catch_all_response,
+    is_soft_200,
+)
 from cyberloka.core.config import ScanConfig
 
 PATHS = [
@@ -24,6 +32,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
     findings: list[Finding] = []
     client = HttpClient(config)
     seen = False
+    control_body = catch_all_control(client, target.origin + "/")
     try:
         for path, signatures in PATHS:
             if seen:
@@ -32,7 +41,16 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
             r = client.get(url, allow_redirects=False)
             if r is None or r.status_code != 200:
                 continue
+            # Tolak soft-404 / SPA shell / catch-all (akar false-positive).
+            if is_soft_200(r) or is_catch_all_response(r.text or "", control_body):
+                continue
             body = (r.text or "")[:8192]
+            # Endpoint /api/json WAJIB benar-benar JSON (bukan HTML yang
+            # kebetulan memuat substring), agar tidak salah-deteksi.
+            if path.endswith("/api/json"):
+                ctype = (r.headers.get("Content-Type") or "").lower()
+                if "json" not in ctype and not body.lstrip().startswith(("{", "[")):
+                    continue
             if not any(s in body for s in signatures):
                 continue
             sev = Severity.CRITICAL if path == "/script" else Severity.HIGH

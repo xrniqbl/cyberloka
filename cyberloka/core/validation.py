@@ -125,6 +125,41 @@ def is_soft_200(resp: requests.Response | None) -> bool:
     return False
 
 
+def catch_all_control(client: "HttpClient", base: str) -> str | None:
+    """Ambil body dari path yang DIPASTIKAN tidak ada (kontrol negatif).
+
+    Mengembalikan body bila server membalas 200 untuk path acak (artinya
+    server "catch-all 200" / SPA fallback). Bila server membalas 4xx/3xx
+    yang benar untuk path tak-ada, kembalikan ``None`` (tidak ada catch-all).
+
+    Modul probe-path memakai ini untuk menolak temuan yang sebetulnya hanya
+    halaman catch-all yang sama untuk URL apa pun (akar false-positive
+    soft-404 SPA, mis. /administrator atau /.env yang balas beranda).
+    """
+    import secrets as _secrets
+    from urllib.parse import urljoin as _urljoin
+
+    url = _urljoin(base.rstrip("/") + "/", f"cyberloka_{_secrets.token_hex(6)}_nx")
+    r = client.get(url, allow_redirects=False)
+    if r is not None and r.status_code == 200 and (r.text or ""):
+        return r.text or ""
+    return None
+
+
+def is_catch_all_response(
+    body: str, control_body: str | None, threshold: float = 0.95
+) -> bool:
+    """True bila ``body`` pada dasarnya sama dengan body kontrol negatif.
+
+    Dipakai bersama :func:`catch_all_control`. Bila skor kemiripan
+    (``body_similarity``) >= threshold, response ini hanyalah halaman
+    catch-all yang sama untuk URL apa pun → BUKAN temuan nyata.
+    """
+    if not control_body:
+        return False
+    return body_similarity(body or "", control_body) >= threshold
+
+
 # ---------------------------------------------------------------------------
 # Baseline stability + double confirmation
 # ---------------------------------------------------------------------------

@@ -5,9 +5,17 @@ bila bypass benar-benar mengembalikan 200/3xx + content yang berbeda.
 """
 from __future__ import annotations
 
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
-from cyberloka.core import Finding, HttpClient, Severity, Target
+from cyberloka.core import (
+    Finding,
+    HttpClient,
+    Severity,
+    Target,
+    catch_all_control,
+    is_catch_all_response,
+    is_soft_200,
+)
 from cyberloka.core.config import ScanConfig
 
 PROTECTED_PATHS = [
@@ -52,6 +60,10 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
     findings: list[Finding] = []
     client = HttpClient(config)
     seen: set[str] = set()
+    # Kontrol negatif: bila server "catch-all 200" (SPA fallback), body path
+    # acak ini dipakai untuk menolak "bypass" palsu yang sebenarnya hanya
+    # halaman beranda/404-SPA yang sama untuk URL apa pun.
+    control_body = catch_all_control(client, target.origin + "/")
     try:
         for path in PROTECTED_PATHS:
             url = urljoin(target.origin + "/", path.lstrip("/"))
@@ -68,7 +80,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                 r = client.get(url, allow_redirects=False, **kwargs)
                 if r is None:
                     continue
-                if _is_bypass(r, base_status):
+                if _is_bypass(r, base_status, control_body):
                     key = f"{path}|{label}"
                     if key in seen:
                         continue
@@ -81,7 +93,7 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
                 r = client.get(mutated, allow_redirects=False)
                 if r is None:
                     continue
-                if _is_bypass(r, base_status):
+                if _is_bypass(r, base_status, control_body):
                     key = f"{path}|{label}"
                     if key in seen:
                         continue
@@ -96,8 +108,36 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
     return findings
 
 
-def _is_bypass(r, base_status: int) -> bool:
-    return r.status_code != base_status and r.status_code < 400
+_REDIRECT_NOT_BYPASS = ("login", "signin", "sign-in", "auth", "sso", "logout")
+
+
+def _is_bypass(r, base_status: int, control_body: str | None = None) -> bool:
+    """True hanya bila bypass BENAR-BENAR membuka resource terlindungi.
+
+    Penolakan false-positive (v0.10.6):
+      * status sama dengan baseline atau >= 400 → bukan bypass.
+      * 2xx tapi response = soft-404 / SPA shell → bukan bypass.
+      * 2xx tapi response = halaman catch-all (sama dengan kontrol acak) →
+        bukan bypass (server balas beranda untuk URL apa pun).
+      * 3xx menuju /login, /auth, dsb. → masih terlindungi, bukan bypass.
+    """
+    if r.status_code == base_status or r.status_code >= 400:
+        return False
+    if 300 <= r.status_code < 400:
+        loc = (r.headers.get("Location") or "").lower()
+        # redirect ke halaman login/SSO/root = tetap terproteksi.
+        if not loc:
+            return False
+        path = urlparse(loc).path or loc
+        if path in ("", "/") or any(k in loc for k in _REDIRECT_NOT_BYPASS):
+            return False
+        return True
+    # 2xx: wajib konten resource nyata, bukan soft-404 / catch-all SPA.
+    if is_soft_200(r):
+        return False
+    if is_catch_all_response(r.text or "", control_body):
+        return False
+    return True
 
 
 def _finding(url: str, label: str, base_status: int, new_status: int) -> Finding:
