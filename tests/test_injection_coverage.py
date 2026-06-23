@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from cyberloka.active import lfi, sqli, xss
+from cyberloka.active import forms, lfi, sqli, xss
 from cyberloka.core.config import ScanConfig
 from cyberloka.core.target import parse_target
 from cyberloka.recon import crawler
@@ -24,6 +24,9 @@ HOME = (
     '<a href="/search?q=test">search</a>'
     '<a href="/item?id=1">item</a>'
     '<a href="/view?file=index">view</a>'
+    '<form action="/comment" method="post">'
+    '<input type="text" name="msg"><input type="submit" value="kirim">'
+    "</form>"
     "</body></html>"
 )
 
@@ -62,6 +65,18 @@ class _Handler(BaseHTTPRequestHandler):
                     "root:x:0:0:root:/root:/bin/bash\n", ctype="text/plain"
                 )
             return self._send(f"<html><body>File: {val}</body></html>")
+        self.send_response(404)
+        self.end_headers()
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        raw = self.rfile.read(length).decode() if length else ""
+        q = parse_qs(raw, keep_blank_values=True)
+        p = urlparse(self.path)
+        if p.path == "/comment":
+            val = q.get("msg", [""])[0]
+            # Reflected XSS: echoes msg raw into HTML body (executable context).
+            return self._send(f"<html><body><p>Komentar: {val}</p></body></html>")
         self.send_response(404)
         self.end_headers()
 
@@ -112,3 +127,12 @@ def test_lfi_finds_crawled_endpoint(vuln_server):
     assert any("view" in f.target and f.confidence == "confirmed" for f in findings), (
         "LFI harus menemukan path-traversal di /view?file= hasil crawl"
     )
+
+
+def test_forms_finds_post_form_xss(vuln_server):
+    tgt, cfg = _setup(vuln_server)
+    findings = forms.run(tgt, cfg)
+    assert any(
+        "comment" in f.target and f.cwe == "CWE-79" and f.confidence == "confirmed"
+        for f in findings
+    ), "forms harus menemukan reflected XSS terverifikasi di form POST /comment"
