@@ -167,15 +167,42 @@ def double_confirm(probe: Callable[[], bool]) -> bool:
 def looks_like_html_shell(body: str) -> bool:
     """True bila body terlihat seperti SPA/HTML generic, bukan file plain.
 
-    Berguna untuk source_leak / sensitive_files: kalau /backup.sql balas
-    HTML SPA, JANGAN dilaporkan sebagai "SQL dump bocor".
+    Berguna untuk source_leak / sensitive_files: kalau /backup.sql atau /.env
+    balas HTML SPA (catch-all 200), JANGAN dilaporkan sebagai "file bocor".
+
+    Detektor diperkuat (v0.10.6): tidak lagi bergantung pada marker sempit
+    ``<div id="__next">`` saja. Banyak app modern (Next.js App Router, Nuxt,
+    Remix, Angular) tidak menulis marker itu sehingga dulu lolos dan memicu
+    false-positive ``confirmed``. Sekarang kita kenali:
+      * Pembuka dokumen HTML asli (`<!doctype html`, `<html`).
+      * Marker hidrasi framework SPA (`/_next/`, `self.__next_f`, `__NUXT__`,
+        `window.__remixContext`, `data-reactroot`, `ng-version`).
+      * Heuristik generik: >=2 tag struktur HTML (`<head>`, `<body>`,
+        `<meta>`, `<script>`, `<title>`, `<div>`).
     """
     if not body:
         return False
-    low = body.lower()
-    if "<html" in low and ("<div id=\"__next\"" in low or "<div id=\"root\"" in low
-                            or "<noscript>" in low):
+    head = body[:4096].lower()
+
+    # 1) Pembuka dokumen HTML asli — sinyal kuat tunggal.
+    if "<!doctype html" in head or "<html" in head:
         return True
+
+    # 2) Marker hidrasi SPA meski <html> tidak ada di 4KB pertama.
+    spa_markers = (
+        "/_next/", "self.__next_f", "__next_data__",
+        "__nuxt__", "window.__nuxt", "window.__remix", "data-reactroot",
+        "ng-version", "<app-root", "id=\"__next\"", "id=\"root\"", "id=\"app\"",
+    )
+    if any(m in head for m in spa_markers):
+        return True
+
+    # 3) Heuristik generik: >=2 tag struktur HTML ⇒ ini halaman, bukan file.
+    structural = ("<head", "<body", "<meta ", "<script", "<title>",
+                  "<div", "<link ", "<style", "<noscript>")
+    if sum(1 for m in structural if m in head) >= 2:
+        return True
+
     return False
 
 
