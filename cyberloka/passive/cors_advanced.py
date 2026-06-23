@@ -34,7 +34,11 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
             evil = "https://cyberloka-evil.invalid"
             aco, acc = _test_origin(client, url, evil)
             if aco and aco == evil:
-                sev = Severity.CRITICAL if (acc or "").lower() == "true" else Severity.HIGH
+                # Reflect origin attacker + credentials=true => pencurian data
+                # terotentikasi (HIGH). Tanpa credentials, dampak terbatas:
+                # attacker bisa baca data yang toh non-credentialed => MEDIUM,
+                # bukan HIGH (selaras passive/cors.py & PortSwigger).
+                sev = Severity.HIGH if (acc or "").lower() == "true" else Severity.MEDIUM
                 findings.append(Finding(
                     module="cors_advanced", target=url,
                     title="CORS memantulkan Origin attacker",

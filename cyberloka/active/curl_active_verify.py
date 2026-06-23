@@ -21,7 +21,14 @@ import re
 import secrets
 from urllib.parse import urlparse, urljoin
 
-from cyberloka.core import Finding, HttpClient, Severity, Target
+from cyberloka.core import (
+    Finding,
+    HttpClient,
+    Severity,
+    Target,
+    is_catch_all_response,
+    is_soft_200,
+)
 from cyberloka.core.config import ScanConfig
 
 # Mapping module -> resep verifikasi presisi.
@@ -192,7 +199,7 @@ def _negative_control(client: HttpClient, target: Target):
     if r is None:
         return None
     body = r.text or ""
-    return r.status_code, len(body), body[:256]
+    return r.status_code, len(body), body[:256], body
 
 
 # Pola "evidence" yang umum dipakai modul scanner kami untuk reproduce
@@ -305,12 +312,25 @@ def _verify_finding(client: HttpClient, finding: Finding, target: Target,
             matched = signature.lower() in resp_headers_str.lower()
         else:
             matched = signature in resp_body
+            # Centralized catch-all guard: signature yang muncul di halaman
+            # catch-all / SPA shell BUKAN bukti celah. Tolak bila response
+            # adalah soft-200 atau identik dengan path random kontrol.
+            if matched:
+                ctrl_body = ctrl[3] if (ctrl and len(ctrl) > 3) else None
+                if is_soft_200(resp) or is_catch_all_response(resp_body, ctrl_body):
+                    matched = False
+        note_fail = (
+            f"signature `{signature[:30]}` muncul tetapi response = catch-all/"
+            "SPA shell (sama dengan kontrol) -> bukan bukti, perlu review manual"
+            if (signature in resp_body and not matched and not (check_cookies or check_headers))
+            else f"signature `{signature[:30]}` tidak ditemukan"
+        )
         return {
             "verified": matched and resp.status_code < 500,
             "curl_cmd": _build_curl_cmd(method, url, headers, body, content_type, comment),
             "response_status": resp.status_code,
             "response_match": matched,
-            "note": "" if matched else f"signature `{signature[:30]}` tidak ditemukan",
+            "note": "" if matched else note_fail,
         }
 
     # ====== FALLBACK MODE (v0.10.3 strict) ======
@@ -341,7 +361,7 @@ def _verify_finding(client: HttpClient, finding: Finding, target: Target,
 
     # Step 2: bandingkan dengan negative-control (path random)
     if ctrl is not None:
-        ctrl_status, ctrl_len, ctrl_first = ctrl
+        ctrl_status, ctrl_len, ctrl_first = ctrl[0], ctrl[1], ctrl[2]
         if ctrl_status == status and abs(len(body) - ctrl_len) <= 32 and body[:128] == ctrl_first[:128]:
             return {"verified": False, "curl_cmd": curl_cmd,
                     "response_status": status, "response_match": False,
