@@ -61,13 +61,20 @@ def _try_ws(host: str, port: int, path: str, use_tls: bool, origin: str, timeout
     try:
         sock.settimeout(timeout)
         req, key = _build_handshake(host, path, origin)
-        sock.sendall(req)
-        resp = b""
-        while b"\r\n\r\n" not in resp and len(resp) < 4096:
-            chunk = sock.recv(1024)
-            if not chunk:
-                break
-            resp += chunk
+        try:
+            sock.sendall(req)
+            resp = b""
+            while b"\r\n\r\n" not in resp and len(resp) < 4096:
+                chunk = sock.recv(1024)
+                if not chunk:
+                    break
+                resp += chunk
+        except (TimeoutError, OSError, ssl.SSLError):
+            # Server menerima koneksi tapi tidak menyelesaikan handshake HTTP
+            # dalam batas waktu (atau koneksi putus) -> bukan endpoint WebSocket
+            # yang valid. Perlakukan sebagai "tidak ter-upgrade", JANGAN crash
+            # modul (dulu TimeoutError dari recv menggagalkan seluruh scan).
+            return None
         if not resp.startswith(b"HTTP/1.1 101"):
             return {"status": resp[:80].decode("latin-1", errors="replace"), "upgraded": False}
 
