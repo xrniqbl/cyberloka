@@ -50,6 +50,25 @@ INSECURE_PLAINTEXT = {
     512: "rexec", 513: "rlogin", 514: "rsh", 873: "rsync",
 }
 
+# Tanda-tangan banner untuk MENGKONFIRMASI layanan plaintext (bukan asumsi
+# dari nomor port). Hanya yang cocok yang dilaporkan HIGH+confirmed.
+_PLAINTEXT_BANNER_SIG: dict[int, tuple[str, ...]] = {
+    21: ("220 ", "220-", "ftp"),
+    23: ("\xff\xfb", "\xff\xfd", "\xff\xfe", "login:"),  # Telnet IAC / prompt
+    25: ("220 ", "esmtp", "smtp"),
+    110: ("+OK",),
+    143: ("* OK", "* PREAUTH"),
+    873: ("@RSYNCD",),
+}
+
+
+def _plaintext_confirmed(port: int, banner: str) -> bool:
+    sigs = _PLAINTEXT_BANNER_SIG.get(port)
+    if not sigs or not banner:
+        return False
+    low = banner.lower()
+    return any(s.lower() in low for s in sigs)
+
 
 def _check_port(host: str, port: int, timeout: float) -> bool:
     try:
@@ -153,17 +172,20 @@ def _probe_smtp_relay(host: str, port: int) -> tuple[str, Finding | None]:
                 s.sendall(b"QUIT\r\n")
             except OSError:
                 pass
-            if rt.strip().startswith("250"):
+            if mf.strip().startswith("250") and rt.strip().startswith("250"):
                 finding = Finding(
                     module="ports", target=f"{host}:{port}",
                     title="SMTP server tampak menerima relay ke domain eksternal",
                     severity=Severity.HIGH,
+                    confidence="firm",
                     description=(
-                        "Server SMTP menerima `RCPT TO` ke domain di luar yang seharusnya. "
-                        "Spammer dapat mengabuse server ini untuk mengirim email atas nama "
-                        "anda — IP server akan masuk blacklist."
+                        "Server SMTP menerima `MAIL FROM` eksternal DAN `RCPT TO` ke "
+                        "domain di luar tanpa autentikasi (keduanya balas 250). "
+                        "Indikasi kuat open-relay. Konfirmasi final (kirim DATA) "
+                        "TIDAK dilakukan agar tidak mengirim email nyata — verifikasi "
+                        "manual disarankan sebelum eskalasi."
                     ),
-                    evidence=f"EHLO: {ehlo[:100]}\nMAIL: {mf[:100]}\nRCPT: {rt[:100]}",
+                    evidence=f"EHLO: {ehlo[:80]}\nMAIL(250): {mf[:80]}\nRCPT(250): {rt[:80]}",
                     cwe="CWE-942",
                     remediation=(
                         "Konfigurasi MTA agar hanya menerima relay untuk domain yang "
@@ -385,15 +407,37 @@ def _probe_kibana(host: str, port: int) -> tuple[str, Finding | None]:
 
 
 def _probe_rdp(host: str, port: int) -> tuple[str, Finding | None]:
-    return "RDP service responding", Finding(
+    """Buktikan port 3389 benar-benar RDP via X.224 Connection Request.
+
+    Dulu: HIGH hanya dari port terbuka (asumsi dari nomor port). Sekarang kirim
+    X.224 CR standar (non-destruktif) dan wajib server membalas TPKT (0x03 0x00)
+    sebelum melaporkan. Bila tidak membalas seperti RDP → tidak ada finding.
+    """
+    # Cookie + RDP Negotiation Request (RFC 2126 / MS-RDPBCGR), aman/non-destruktif.
+    x224_cr = bytes.fromhex("030000130ee000000000000100080003000000")
+    data = b""
+    try:
+        with socket.create_connection((host, port), timeout=3.0) as s:
+            s.settimeout(3.0)
+            s.sendall(x224_cr)
+            data = s.recv(64)
+    except OSError:
+        return "", None
+    # TPKT header 0x03 0x00 = respons protokol RDP/X.224 yang sah.
+    if data[:2] != b"\x03\x00":
+        return "", None
+    return "RDP X.224 response (TPKT)", Finding(
         module="ports", target=f"{host}:{port}",
         title="RDP (Remote Desktop) terbuka di internet",
         severity=Severity.HIGH,
+        confidence="confirmed",
         description=(
-            "Port 3389 RDP yang publik adalah salah satu vektor brute-force paling "
-            "umum (cth. ransomware operator BlueKeep / Dharma)."
+            "Port 3389 membalas handshake X.224 RDP (terkonfirmasi sebagai RDP, "
+            "bukan sekadar port terbuka). RDP publik adalah salah satu vektor "
+            "brute-force paling umum (cth. BlueKeep / ransomware Dharma)."
         ),
-        evidence="RDP port responding", cwe="CWE-284",
+        evidence="X.224 Connection Confirm (TPKT 0x0300) diterima",
+        cwe="CWE-284",
         remediation=(
             "Jangan publikasikan RDP. Pakai VPN, RDP Gateway, atau Network Level "
             "Authentication + 2FA. Batasi IP source via firewall."
@@ -504,16 +548,40 @@ def run(target: Target, config: ScanConfig) -> list[Finding]:
         if p in INSECURE_PLAINTEXT and not any(
             f.target == f"{host}:{p}" for f in findings
         ):
+            banner = banners.get(p, "")
+            confirmed = _plaintext_confirmed(p, banner)
+            if confirmed:
+                # Layanan terkonfirmasi via banner → klaim plaintext sah.
+                sev, conf = Severity.HIGH, "confirmed"
+                desc = (
+                    f"Service {INSECURE_PLAINTEXT[p]} pada port {p} TERKONFIRMASI "
+                    "via banner dan mengirim data tanpa enkripsi. Kredensial dan "
+                    "konten dapat disadap di jaringan."
+                )
+                ev = f"banner terkonfirmasi: {banner[:120]!r}"
+            else:
+                # Port terbuka tetapi layanan HANYA diasumsikan dari nomor port —
+                # belum terverifikasi. Turunkan ke INFO/tentative, bukan HIGH.
+                sev, conf = Severity.INFO, "tentative"
+                desc = (
+                    f"Port {p} terbuka. Layanan DIASUMSIKAN '{INSECURE_PLAINTEXT[p]}' "
+                    "dari nomor port standar, tetapi BELUM terkonfirmasi via banner. "
+                    "Verifikasi manual sebelum menyimpulkan layanan plaintext."
+                )
+                ev = f"port terbuka; banner tidak konklusif: {banner[:120]!r}"
             findings.append(
                 Finding(
                     module="ports",
-                    title=f"Service plaintext / tidak terenkripsi: {p}/{INSECURE_PLAINTEXT[p]}",
-                    severity=Severity.HIGH,
-                    description=(
-                        f"Service {INSECURE_PLAINTEXT[p]} pada port {p} mengirim data "
-                        "tanpa enkripsi. Kredensial dan konten dapat disadap di jaringan."
+                    title=(
+                        f"Service plaintext / tidak terenkripsi: {p}/{INSECURE_PLAINTEXT[p]}"
+                        if confirmed else
+                        f"Port terbuka (layanan belum terverifikasi): {p}/{INSECURE_PLAINTEXT[p]}?"
                     ),
+                    severity=sev,
+                    confidence=conf,
+                    description=desc,
                     target=f"{host}:{p}",
+                    evidence=ev,
                     cwe="CWE-319",
                     remediation=(
                         "Migrasi ke alternatif terenkripsi: SFTP (SSH-22) untuk file, "
